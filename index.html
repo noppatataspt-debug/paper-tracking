@@ -977,10 +977,20 @@ function showErrorModal(barcode, reasons) {
 }
 function hideErrorModal() {
   document.getElementById('error-modal').classList.remove('show');
-  // Refocus scan input
+  // Refocus scan input + process pending barcode if any
   setTimeout(() => {
     const si = document.getElementById('scan-input');
-    if (si) { si.value = ''; si.focus(); }
+    if (si) {
+      si.value = '';
+      si.focus();
+      // ถ้ามี barcode รออยู่ (จากกรณี 2 ตัวติดกัน) → ใส่กลับและ process
+      if (window._pendingBarcode) {
+        const pending = window._pendingBarcode;
+        window._pendingBarcode = null;
+        si.value = pending;
+        si.dispatchEvent(new Event('input'));
+      }
+    }
   }, 50);
 }
 document.getElementById('err-btn-close').addEventListener('click', hideErrorModal);
@@ -1376,21 +1386,51 @@ function renderProductSelector() {
 }
 
 function handleScan() {
-  const bc = scanInput.value.trim();
-  if (!bc) return;
+  const raw = scanInput.value.trim();
+  if (!raw) return;
 
-  // First check: parse + structure
+  // ตรวจว่ามี barcode หลายตัวติดกันหรือไม่
+  const parts = raw.split('_');
+  let currentBarcode, remaining = '';
+
+  if (parts.length > 5) {
+    // มีมากกว่า 1 barcode — ตัดเฉพาะ 5 ส่วนแรก
+    currentBarcode = parts.slice(0, 5).join('_');
+    remaining = parts.slice(5).join('_');
+  } else {
+    currentBarcode = raw;
+  }
+
+  // Process barcode แรก
+  const wasModalShown = processOneBarcode(currentBarcode);
+
+  // Clear input + ถ้ามี remaining ให้ process ต่อ
+  scanInput.value = '';
+  if (remaining) {
+    if (wasModalShown) {
+      // Modal เปิดอยู่ — เก็บ remaining ไว้ ให้ใส่ใหม่หลังปิด modal
+      window._pendingBarcode = remaining;
+    } else {
+      // No modal — process ต่อทันที
+      setTimeout(() => {
+        scanInput.value = remaining;
+        scanInput.dispatchEvent(new Event('input'));
+      }, 50);
+    }
+  }
+}
+
+function processOneBarcode(bc) {
+  // returns true if error modal was shown
   const parsed = parseBarcode(bc);
   const validation = validateBarcode(bc);
 
-  // Fatal = ผิดโครงสร้าง → show modal + error sound
   if (!parsed || validation.fatal) {
     const reasons = validation.warnings.length > 0
       ? validation.warnings
       : ['โครงสร้าง Barcode ผิดรูปแบบ'];
     showErrorModal(bc, reasons);
-    scanInput.value = '';
-    return;
+    return true;  // modal was shown
   }
 
   const currentProduct = state.products[state.currentProductIdx];
@@ -1409,13 +1449,12 @@ function handleScan() {
     showToast('✓ ' + currentProduct.name + ' · ' + parsed.paper_type);
     playBeep('success');
   } else {
-    // Non-fatal warnings — บันทึกได้ แต่ mark
     showToast('⚠️ บันทึกแล้ว แต่ Barcode ผิด format: ' + validation.warnings[0], 'warning');
     playBeep('warning');
   }
-  scanInput.value = '';
   renderScans();
   renderProductSelector();
+  return false;  // no modal
 }
 
 scanInput.addEventListener('keydown', e => {
@@ -1432,36 +1471,15 @@ scanInput.addEventListener('input', () => {
 
   const underscoreCount = (v.match(/_/g) || []).length;
 
-  // Case 1: มี _ ครบ 4 ตัว (5 ส่วน) = 1 barcode พอดี → submit ทันทีหลัง 80ms
-  if (underscoreCount === 4) {
+  // ถ้ามี _ ครบ 4 ตัวขึ้นไป = มี barcode อย่างน้อย 1 ตัวที่ครบรูปแบบ
+  // → submit ทันที (handleScan จะจัดการเก็บส่วนเกินไว้ให้เอง)
+  if (underscoreCount >= 4) {
     scanTimer = setTimeout(handleScan, 80);
     return;
   }
 
-  // Case 2: มี _ เกิน 4 ตัว = 2 barcodes ต่อกัน → จัดการเดี๋ยวนี้เลย
-  // ตัดเฉพาะ barcode แรก (5 ส่วนแรก) → ส่วนที่เหลือกลับใส่ช่อง
-  if (underscoreCount > 4) {
-    const parts = v.split('_');
-    const firstBarcode = parts.slice(0, 5).join('_');
-    const remaining = parts.slice(5).join('_');
-    scanInput.value = firstBarcode;
-    handleScan();
-    // ส่วนที่เหลือ - ใส่กลับเข้าช่องเพื่อรอ barcode ถัดไป (หรือ submit ถ้าครบเอง)
-    if (remaining) {
-      // เติม _ กลับข้างหน้า เพราะถูก split ออก
-      // (ตัวที่ตามมาน่าจะเริ่มด้วยตัวอักษรของ paper_type ใหม่)
-      // ไม่ต้องเติม _ เพราะ split เอาออก แต่ remaining เป็นจุดเริ่มต้น barcode ใหม่
-      setTimeout(() => {
-        scanInput.value = remaining;
-        // Trigger input event อีกครั้งเพื่อเช็คว่า remaining เป็น barcode สมบูรณ์ไหม
-        scanInput.dispatchEvent(new Event('input'));
-      }, 50);
-    }
-    return;
-  }
-
-  // Case 3: _ ยังไม่ครบ 4 → รอดูว่าจบไหม
-  // ลดเวลาเหลือ 200ms (กระชับขึ้น ลดโอกาสที่ QR ถัดไปจะพิมพ์ติดกัน)
+  // ถ้า _ น้อยกว่า 4 → รอ 200ms ดูว่ามี barcode เข้ามาอีกไหม
+  // ถ้าไม่มี → ถือว่าผิดรูปแบบ → handleScan จะเด้ง modal
   scanIdleTimer = setTimeout(() => {
     if (scanInput.value.trim() === v) {
       handleScan();
