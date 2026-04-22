@@ -720,12 +720,15 @@ const fDate = document.getElementById('f-date');
 fDate.valueAsDate = new Date();
 
 // --- Machines with DP tabs ---
-const departments = [...new Set(DATA.machines.map(m => m.dp))];
 const dpTabs = document.getElementById('dp-tabs');
 const machineGrid = document.getElementById('machine-grid');
-let selectedDp = departments[0];
+let selectedDp = null;  // Set when data loads
 
 function renderDpTabs() {
+  const departments = [...new Set(DATA.machines.map(m => m.dp))];
+  if (!selectedDp && departments.length > 0) {
+    selectedDp = departments[0];
+  }
   dpTabs.innerHTML = departments.map(dp => {
     const count = DATA.machines.filter(m => m.dp === dp).length;
     const isActive = dp === selectedDp;
