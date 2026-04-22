@@ -501,8 +501,27 @@
   <!-- VIEW 3: Batch history -->
   <div class="view" id="view-history">
     <div class="panel">
-      <div class="panel-title">📋 ประวัติการบันทึก 50 รายการล่าสุด</div>
-      <div class="panel-sub">รายการที่พนักงานบันทึก — คลิกเพื่อดูรายละเอียด</div>
+      <div class="panel-title">📋 ประวัติการบันทึก</div>
+      <div class="panel-sub">ค้นหาตามช่วงเวลา + เครื่อง เพื่อดูและ Export ข้อมูล</div>
+
+      <div class="form-grid" style="grid-template-columns: 1fr 1fr 1fr auto auto;">
+        <div>
+          <label class="field-label">จากวันที่</label>
+          <input type="date" id="h-from">
+        </div>
+        <div>
+          <label class="field-label">ถึงวันที่</label>
+          <input type="date" id="h-to">
+        </div>
+        <div>
+          <label class="field-label">เครื่องจักร</label>
+          <select id="h-machine">
+            <option value="">(ทุกเครื่อง)</option>
+          </select>
+        </div>
+        <button class="btn btn-ghost" id="btn-h-preset">⏱ 30 วัน</button>
+        <button class="btn" id="btn-h-search">🔍 ค้นหา</button>
+      </div>
 
       <div class="stats" id="stats-box" style="display:none;">
         <div class="stat">
@@ -524,9 +543,10 @@
       </div>
 
       <div id="h-result">
-        <div class="loading">
-          <div class="spinner-small"></div>
-          <div style="margin-top:10px;">กำลังโหลด...</div>
+        <div class="empty">
+          <span class="emoji">📅</span>
+          <div class="empty-title">เลือกช่วงเวลาแล้วกดค้นหา</div>
+          <div>ค่าเริ่มต้น: 30 วันล่าสุด — หรือปรับ &quot;จากวันที่&quot; และ &quot;ถึงวันที่&quot; ตามต้องการ</div>
         </div>
       </div>
     </div>
@@ -857,7 +877,10 @@ document.querySelectorAll('.tab').forEach(t => {
     document.querySelectorAll('.view').forEach(x => x.classList.remove('active'));
     t.classList.add('active');
     document.getElementById('view-' + t.dataset.view).classList.add('active');
-    if (t.dataset.view === 'history') loadHistory();
+    if (t.dataset.view === 'history' && !window._historyAutoLoaded) {
+      window._historyAutoLoaded = true;
+      loadHistory();
+    }
     if (t.dataset.view === 'access') loadAccessLog();
   });
 });
@@ -873,11 +896,15 @@ async function loadMaster() {
     if (productsRes.error) throw productsRes.error;
 
     const tMachine = document.getElementById('t-machine');
+    const hMachine = document.getElementById('h-machine');
     machinesRes.data.forEach(m => {
       const opt = document.createElement('option');
       opt.value = m.id;
       opt.textContent = `${m.name} (${m.dp})`;
       tMachine.appendChild(opt);
+      // Also populate history filter
+      const opt2 = opt.cloneNode(true);
+      hMachine.appendChild(opt2);
     });
 
     const tProduct = document.getElementById('t-product');
@@ -892,6 +919,12 @@ async function loadMaster() {
 
     // Default date = today
     document.getElementById('t-date').valueAsDate = new Date();
+
+    // Default history filter: last 30 days
+    const today = new Date();
+    const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+    document.getElementById('h-from').valueAsDate = thirtyDaysAgo;
+    document.getElementById('h-to').valueAsDate = today;
   } catch (err) {
     console.error(err);
     setConnStatus(false, '✗ เชื่อมต่อ DB ไม่ได้');
@@ -1184,16 +1217,27 @@ document.getElementById('l-input').addEventListener('keydown', e => {
 });
 
 // ==================== VIEW 3: HISTORY ====================
-let historyLoaded = false;
 async function loadHistory() {
-  if (historyLoaded) return;
-  historyLoaded = true;
+  const fromDate = document.getElementById('h-from').value;
+  const toDate = document.getElementById('h-to').value;
+  const machineId = document.getElementById('h-machine').value;
+
+  if (!fromDate || !toDate) {
+    alert('กรุณาเลือกช่วงวันที่');
+    return;
+  }
+  if (fromDate > toDate) {
+    alert('วันที่ "จาก" ต้องน้อยกว่าหรือเท่ากับ "ถึง"');
+    return;
+  }
 
   const container = document.getElementById('h-result');
+  container.innerHTML = '<div class="loading"><div class="spinner-small"></div><div style="margin-top:10px;">กำลังค้นหา...</div></div>';
+  document.getElementById('stats-box').style.display = 'none';
 
   try {
-    // Get last 50 batches with join info
-    const { data: batches, error: bErr } = await supabase
+    // Get batches with filter
+    let batchQuery = supabase
       .from('production_batches')
       .select(`
         id,
@@ -1203,9 +1247,20 @@ async function loadHistory() {
         machines (name, dp),
         batch_products (product_name, is_new_product, sequence)
       `)
-      .order('submitted_at', { ascending: false })
-      .limit(50);
+      .gte('production_date', fromDate)
+      .lte('production_date', toDate)
+      .order('production_date', { ascending: false })
+      .order('submitted_at', { ascending: false });
+
+    if (machineId) batchQuery = batchQuery.eq('machine_id', parseInt(machineId));
+
+    const { data: batches, error: bErr } = await batchQuery;
     if (bErr) throw bErr;
+
+    if (!batches || batches.length === 0) {
+      container.innerHTML = '<div class="empty"><span class="emoji">📭</span><div class="empty-title">ไม่พบ batch ในช่วงเวลานี้</div><div>ลองขยายช่วงวันที่ หรือเปลี่ยนเครื่อง</div></div>';
+      return;
+    }
 
     // Get scan counts per batch
     const batchIds = batches.map(b => b.id);
@@ -1301,7 +1356,10 @@ async function loadHistory() {
 
         const rows = details.map(scanToRow);
         const csv = rowsToCSV(SCAN_CSV_HEADERS, rows);
-        downloadCSV(csv, `history_recent_${batches.length}batches_${timestamp()}.csv`);
+        const machineLabel = machineId
+          ? document.getElementById('h-machine').options[document.getElementById('h-machine').selectedIndex].text.replace(/\s.*$/, '')
+          : 'all';
+        downloadCSV(csv, `history_${fromDate}_to_${toDate}_${machineLabel}_${timestamp()}.csv`);
         btn.innerHTML = '✓ บันทึกแล้ว';
         setTimeout(() => {
           btn.innerHTML = orig;
@@ -1317,9 +1375,19 @@ async function loadHistory() {
   } catch (err) {
     console.error(err);
     container.innerHTML = `<div class="empty"><span class="emoji">⚠️</span><div class="empty-title">โหลดไม่สำเร็จ</div><div>${escapeHtml(err.message)}</div></div>`;
-    historyLoaded = false;
   }
 }
+
+// ==================== Setup History Tab Handlers ====================
+document.getElementById('btn-h-search').addEventListener('click', loadHistory);
+document.getElementById('btn-h-preset').addEventListener('click', () => {
+  const today = new Date();
+  const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+  document.getElementById('h-from').valueAsDate = thirtyDaysAgo;
+  document.getElementById('h-to').valueAsDate = today;
+  document.getElementById('h-machine').value = '';
+  loadHistory();
+});
 
 // ==================== VIEW 4: ACCESS LOG ====================
 let accessLogLoaded = false;
