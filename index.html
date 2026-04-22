@@ -1423,12 +1423,50 @@ scanInput.addEventListener('keydown', e => {
 });
 
 let scanTimer;
+let scanIdleTimer;
 scanInput.addEventListener('input', () => {
   clearTimeout(scanTimer);
+  clearTimeout(scanIdleTimer);
   const v = scanInput.value.trim();
-  if (v.split('_').length >= 5) {
-    scanTimer = setTimeout(handleScan, 100);
+  if (!v) return;
+
+  const underscoreCount = (v.match(/_/g) || []).length;
+
+  // Case 1: มี _ ครบ 4 ตัว (5 ส่วน) = 1 barcode พอดี → submit ทันทีหลัง 80ms
+  if (underscoreCount === 4) {
+    scanTimer = setTimeout(handleScan, 80);
+    return;
   }
+
+  // Case 2: มี _ เกิน 4 ตัว = 2 barcodes ต่อกัน → จัดการเดี๋ยวนี้เลย
+  // ตัดเฉพาะ barcode แรก (5 ส่วนแรก) → ส่วนที่เหลือกลับใส่ช่อง
+  if (underscoreCount > 4) {
+    const parts = v.split('_');
+    const firstBarcode = parts.slice(0, 5).join('_');
+    const remaining = parts.slice(5).join('_');
+    scanInput.value = firstBarcode;
+    handleScan();
+    // ส่วนที่เหลือ - ใส่กลับเข้าช่องเพื่อรอ barcode ถัดไป (หรือ submit ถ้าครบเอง)
+    if (remaining) {
+      // เติม _ กลับข้างหน้า เพราะถูก split ออก
+      // (ตัวที่ตามมาน่าจะเริ่มด้วยตัวอักษรของ paper_type ใหม่)
+      // ไม่ต้องเติม _ เพราะ split เอาออก แต่ remaining เป็นจุดเริ่มต้น barcode ใหม่
+      setTimeout(() => {
+        scanInput.value = remaining;
+        // Trigger input event อีกครั้งเพื่อเช็คว่า remaining เป็น barcode สมบูรณ์ไหม
+        scanInput.dispatchEvent(new Event('input'));
+      }, 50);
+    }
+    return;
+  }
+
+  // Case 3: _ ยังไม่ครบ 4 → รอดูว่าจบไหม
+  // ลดเวลาเหลือ 200ms (กระชับขึ้น ลดโอกาสที่ QR ถัดไปจะพิมพ์ติดกัน)
+  scanIdleTimer = setTimeout(() => {
+    if (scanInput.value.trim() === v) {
+      handleScan();
+    }
+  }, 200);
 });
 
 function renderScans() {
