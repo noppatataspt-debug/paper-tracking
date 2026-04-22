@@ -213,6 +213,22 @@
     font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
   }
   .copy-btn:hover { background: var(--accent); color: white; }
+
+  .export-btn {
+    padding: 8px 16px; background: var(--success-bg); color: var(--success);
+    border: 1.5px solid var(--success); border-radius: 8px;
+    font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px;
+    margin-left: 8px;
+    transition: all 0.15s;
+  }
+  .export-btn:hover { background: var(--success); color: white; }
+  .export-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .panel-actions {
+    display: flex; justify-content: flex-end; gap: 8px;
+    margin-bottom: 14px; flex-wrap: wrap;
+  }
   .report-content {
     font-family: var(--mono); font-size: 12px; line-height: 1.7;
     white-space: pre-wrap; color: var(--text); max-height: 400px; overflow-y: auto;
@@ -752,6 +768,88 @@ function setConnStatus(online, label) {
   document.getElementById('conn-label').textContent = label;
 }
 
+// ==================== CSV EXPORT ====================
+
+function csvEscape(val) {
+  if (val == null) return '';
+  const s = String(val);
+  // ถ้ามี comma, quote, newline ต้อง wrap ด้วย quotes และ escape quotes
+  if (/[",\n\r]/.test(s)) {
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+  return s;
+}
+
+function rowsToCSV(headers, rows) {
+  const lines = [headers.map(csvEscape).join(',')];
+  rows.forEach(r => lines.push(r.map(csvEscape).join(',')));
+  return lines.join('\r\n');
+}
+
+function downloadCSV(csv, filename) {
+  // Add BOM for Excel UTF-8 compatibility (ให้ภาษาไทยไม่เพี้ยน)
+  const BOM = '\uFEFF';
+  const blob = new Blob([BOM + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// Format YYYYMMDD_HHmmss สำหรับ filename
+function timestamp() {
+  const d = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+}
+
+// แปลง scan record เป็น CSV row (ตรงกับ format เดิมของบริษัท + field ใหม่)
+function scanToRow(s) {
+  // วันที่ผลิตแบบ ว-ด-ป (DD-MM-YY)
+  const prodDate = s.production_date
+    ? (() => {
+        const [y, m, d] = s.production_date.split('-');
+        return `${d}-${m}-${y.slice(2)}`;
+      })()
+    : '';
+
+  return [
+    s.barcode_raw || '',
+    prodDate,
+    s.machine_name || '',
+    s.product_name || '',
+    s.paper_type || '',
+    s.cut_date || '',
+    s.roll_no || '',
+    s.slitter || '',
+    s.jumbo_lot || '',
+    s.is_new_product ? 'ใช่' : '',
+    s.barcode_valid === false ? 'ผิด' : '',
+    s.barcode_warnings || '',
+    s.scanned_at ? new Date(s.scanned_at).toLocaleString('th-TH') : ''
+  ];
+}
+
+const SCAN_CSV_HEADERS = [
+  'Barcode',
+  'วันที่ใช้ (ว-ด-ป)',
+  'เครื่องที่ผลิต',
+  'สินค้า',
+  'ประเภทกระดาษ',
+  'วันที่ตัดกระดาษ',
+  'ม้วนที่',
+  'Slitter',
+  'ล็อตจัมโบ้',
+  'สินค้าใหม่?',
+  'Barcode ผิด?',
+  'หมายเหตุ Barcode',
+  'เวลาที่สแกน'
+];
+
 // ==================== TABS ====================
 document.querySelectorAll('.tab').forEach(t => {
   t.addEventListener('click', () => {
@@ -826,6 +924,8 @@ async function runTrace() {
     const { data, error } = await query;
     if (error) throw error;
 
+    window._traceData = data;  // เก็บไว้สำหรับ export
+    window._traceParams = { date, machineId, product };
     renderTraceResult(container, data, { date, machineId, product });
   } catch (err) {
     console.error(err);
@@ -857,7 +957,10 @@ function renderTraceResult(container, data, params) {
   const totalLots = new Set(data.map(s => s.jumbo_lot)).size;
   const totalProducts = new Set(data.map(s => s.product_name)).size;
 
-  let html = `<div class="stats">
+  let html = `<div class="panel-actions">
+    <button class="export-btn" id="btn-export-trace">📥 Export CSV (${totalRolls} rows)</button>
+  </div>
+  <div class="stats">
     <div class="stat"><div class="stat-label">สินค้า</div><div class="stat-value">${totalProducts}</div></div>
     <div class="stat"><div class="stat-label">ประเภทกระดาษ</div><div class="stat-value blue">${totalTypes}</div></div>
     <div class="stat"><div class="stat-label">Jumbo Lots</div><div class="stat-value accent">${totalLots}</div></div>
@@ -957,6 +1060,22 @@ function renderTraceResult(container, data, params) {
       setTimeout(() => btn.textContent = orig, 2000);
     });
   });
+
+  // Export CSV button
+  document.getElementById('btn-export-trace').addEventListener('click', () => {
+    const rows = window._traceData
+      .sort((a, b) => (a.product_name || '').localeCompare(b.product_name || '') ||
+                      (a.paper_type || '').localeCompare(b.paper_type || '') ||
+                      (a.jumbo_lot || '').localeCompare(b.jumbo_lot || ''))
+      .map(scanToRow);
+    const csv = rowsToCSV(SCAN_CSV_HEADERS, rows);
+    const p = window._traceParams;
+    const machineName = p.machineId
+      ? document.getElementById('t-machine').options[document.getElementById('t-machine').selectedIndex].text.replace(/\s.*$/, '')
+      : 'all';
+    const fname = `trace_${p.date}_${machineName}${p.product ? '_' + p.product : ''}_${timestamp()}.csv`;
+    downloadCSV(csv, fname);
+  });
 }
 
 document.getElementById('btn-trace').addEventListener('click', runTrace);
@@ -988,6 +1107,9 @@ async function runLotLookup() {
       return;
     }
 
+    window._lotData = data;
+    window._lotQuery = q;
+
     // Group by date+machine+product
     const byDay = {};
     data.forEach(s => {
@@ -1011,7 +1133,10 @@ async function runLotLookup() {
     const uniqueDays = new Set(data.map(d => d.production_date)).size;
     const uniqueProducts = new Set(data.map(d => d.product_name)).size;
 
-    let html = `<div class="lot-summary">
+    let html = `<div class="panel-actions">
+      <button class="export-btn" id="btn-export-lot">📥 Export CSV (${totalScans} rows)</button>
+    </div>
+    <div class="lot-summary">
       <div class="lot-summary-card"><div class="lot-summary-label">Lots ที่ match</div><div class="lot-summary-value">${uniqueLots}</div></div>
       <div class="lot-summary-card"><div class="lot-summary-label">วันที่ใช้</div><div class="lot-summary-value">${uniqueDays}</div></div>
       <div class="lot-summary-card"><div class="lot-summary-label">สินค้าที่ผลิต</div><div class="lot-summary-value">${uniqueProducts}</div></div>
@@ -1036,6 +1161,17 @@ async function runLotLookup() {
     });
 
     container.innerHTML = html;
+
+    // Export handler
+    document.getElementById('btn-export-lot').addEventListener('click', () => {
+      const rows = window._lotData
+        .sort((a, b) => (b.production_date || '').localeCompare(a.production_date || '') ||
+                        (a.jumbo_lot || '').localeCompare(b.jumbo_lot || ''))
+        .map(scanToRow);
+      const csv = rowsToCSV(SCAN_CSV_HEADERS, rows);
+      const safeQ = window._lotQuery.replace(/[^a-zA-Z0-9\-_]/g, '_');
+      downloadCSV(csv, `lot_search_${safeQ}_${timestamp()}.csv`);
+    });
   } catch (err) {
     console.error(err);
     container.innerHTML = `<div class="empty"><span class="emoji">⚠️</span><div class="empty-title">ค้นหาไม่สำเร็จ</div><div>${escapeHtml(err.message)}</div></div>`;
@@ -1104,7 +1240,28 @@ async function loadHistory() {
       return;
     }
 
-    let html = '<div class="batch-list">';
+    // Store for export
+    window._historyBatches = batches;
+    window._historyScans = scans;
+
+    // Build lookup maps for export
+    const batchMap = {};
+    batches.forEach(b => {
+      batchMap[b.id] = {
+        production_date: b.production_date,
+        machine_name: b.machines ? b.machines.name : null,
+        submitted_at: b.submitted_at,
+        products: {}
+      };
+      (b.batch_products || []).forEach(bp => {
+        // not directly usable since batch_products doesn't have id in this join
+      });
+    });
+
+    let html = `<div class="panel-actions">
+      <button class="export-btn" id="btn-export-history">📥 Export CSV (ทุกม้วนใน ${batches.length} batches)</button>
+    </div>
+    <div class="batch-list">`;
     batches.forEach(b => {
       const productNames = (b.batch_products || [])
         .sort((a, b) => a.sequence - b.sequence)
@@ -1125,6 +1282,38 @@ async function loadHistory() {
     });
     html += '</div>';
     container.innerHTML = html;
+
+    // Export handler — need to fetch detailed scan info
+    document.getElementById('btn-export-history').addEventListener('click', async () => {
+      const btn = document.getElementById('btn-export-history');
+      const orig = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '⏳ กำลังโหลด...';
+      try {
+        const batchIds = batches.map(b => b.id);
+        const { data: details, error } = await supabase
+          .from('v_scan_details')
+          .select('*')
+          .in('batch_id', batchIds)
+          .order('production_date', { ascending: false })
+          .order('scanned_at', { ascending: true });
+        if (error) throw error;
+
+        const rows = details.map(scanToRow);
+        const csv = rowsToCSV(SCAN_CSV_HEADERS, rows);
+        downloadCSV(csv, `history_recent_${batches.length}batches_${timestamp()}.csv`);
+        btn.innerHTML = '✓ บันทึกแล้ว';
+        setTimeout(() => {
+          btn.innerHTML = orig;
+          btn.disabled = false;
+        }, 2000);
+      } catch (err) {
+        console.error(err);
+        alert('Export ไม่สำเร็จ: ' + err.message);
+        btn.innerHTML = orig;
+        btn.disabled = false;
+      }
+    });
   } catch (err) {
     console.error(err);
     container.innerHTML = `<div class="empty"><span class="emoji">⚠️</span><div class="empty-title">โหลดไม่สำเร็จ</div><div>${escapeHtml(err.message)}</div></div>`;
