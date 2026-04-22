@@ -289,23 +289,128 @@
     .batch-item { grid-template-columns: 1fr; gap: 6px; }
     .header h1 { font-size: 22px; }
   }
+
+  /* ============ Login Screen ============ */
+  .login-screen {
+    position: fixed; inset: 0; z-index: 999;
+    background: linear-gradient(135deg, #fff7ed 0%, #fed7aa 100%);
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .login-box {
+    background: white; padding: 40px 36px; border-radius: 20px;
+    max-width: 420px; width: 100%;
+    box-shadow: 0 20px 60px rgba(194,65,12,0.2);
+  }
+  .login-icon {
+    width: 72px; height: 72px; margin: 0 auto 16px;
+    background: var(--accent-bg); color: var(--accent);
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 36px;
+  }
+  .login-title {
+    font-size: 24px; font-weight: 800; text-align: center; margin-bottom: 6px;
+  }
+  .login-sub {
+    font-size: 14px; color: var(--text-dim); text-align: center; margin-bottom: 24px;
+    font-weight: 500;
+  }
+  .login-input {
+    width: 100%; padding: 16px 18px; background: white;
+    border: 2px solid var(--border); border-radius: 12px;
+    font-family: var(--mono); font-size: 22px; font-weight: 700;
+    text-align: center; letter-spacing: 8px;
+    margin-bottom: 14px;
+  }
+  .login-input:focus {
+    outline: none; border-color: var(--accent);
+    box-shadow: 0 0 0 4px var(--accent-bg);
+  }
+  .login-input.shake { animation: shake 0.4s ease; border-color: var(--danger); }
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-8px); }
+    75% { transform: translateX(8px); }
+  }
+  .login-btn {
+    width: 100%; padding: 14px; background: var(--accent); color: white;
+    border: none; border-radius: 12px; font-family: inherit;
+    font-size: 16px; font-weight: 700; cursor: pointer;
+    transition: all 0.15s;
+  }
+  .login-btn:hover { background: #9a3412; }
+  .login-error {
+    color: var(--danger); font-size: 13px; font-weight: 600;
+    text-align: center; margin-top: 10px; min-height: 20px;
+  }
+  .login-footer {
+    margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border);
+    text-align: center;
+  }
+  .login-footer a {
+    color: var(--text-dim); font-size: 13px; text-decoration: none;
+    font-weight: 600;
+  }
+  .login-footer a:hover { color: var(--accent); }
+
+  /* ============ Access Log Table ============ */
+  .log-table {
+    width: 100%; border-collapse: collapse; font-size: 13px;
+  }
+  .log-table thead th {
+    background: var(--panel-2); padding: 12px 14px; text-align: left;
+    font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--text-dim); font-weight: 700;
+    border-bottom: 2px solid var(--border);
+  }
+  .log-table tbody td {
+    padding: 10px 14px; border-bottom: 1px solid var(--border);
+    font-family: var(--mono); font-size: 13px;
+  }
+  .log-table tbody tr:hover td { background: var(--panel-2); }
+  .log-success {
+    display: inline-block; padding: 2px 8px; background: var(--success-bg);
+    color: var(--success); border-radius: 4px; font-weight: 700; font-size: 11px;
+  }
+  .log-fail {
+    display: inline-block; padding: 2px 8px; background: var(--danger-bg);
+    color: var(--danger); border-radius: 4px; font-weight: 700; font-size: 11px;
+  }
 </style>
 </head>
 <body>
+
+<!-- Login Screen -->
+<div class="login-screen" id="login-screen">
+  <div class="login-box">
+    <div class="login-icon">🔐</div>
+    <div class="login-title">Dashboard สอบกลับวัตถุดิบ</div>
+    <div class="login-sub">สำหรับหัวหน้างานเท่านั้น กรุณาใส่รหัสเพื่อเข้าใช้งาน</div>
+    <input type="password" class="login-input" id="login-input"
+           placeholder="••••" maxlength="20" autocomplete="off">
+    <button class="login-btn" id="login-btn">เข้าสู่ระบบ</button>
+    <div class="login-error" id="login-error"></div>
+    <div class="login-footer">
+      <a href="./">← กลับหน้าบันทึก</a>
+    </div>
+  </div>
+</div>
 
 <div class="conn-status online" id="conn-status">
   <span class="dot"></span>
   <span id="conn-label">เชื่อมต่อ DB</span>
 </div>
 
-<div class="container">
+<div class="container" id="main-container" style="display:none;">
   <div class="header">
     <div class="header-top">
       <div>
         <h1>📊 Dashboard <span>สอบกลับวัตถุดิบ</span></h1>
         <p>สำหรับหัวหน้างาน — ค้นหาข้อมูลการใช้กระดาษ และสอบกลับจาก Jumbo Lot</p>
       </div>
-      <a href="./" class="nav-link">📱 กลับหน้าบันทึก</a>
+      <div style="display:flex; gap:8px;">
+        <a href="./" class="nav-link">📱 กลับหน้าบันทึก</a>
+        <button class="nav-link" id="btn-logout" style="border:none;cursor:pointer;background:var(--panel);">🚪 ออก</button>
+      </div>
     </div>
   </div>
 
@@ -313,6 +418,7 @@
     <button class="tab active" data-view="trace">🔍 สอบกลับวัตถุดิบ</button>
     <button class="tab" data-view="lot">↩️ ย้อนหา Jumbo Lot</button>
     <button class="tab" data-view="history">📋 ประวัติการบันทึก</button>
+    <button class="tab" data-view="access">🔐 Access Log</button>
   </div>
 
   <!-- VIEW 1: Trace by date/product/machine -->
@@ -408,6 +514,39 @@
       </div>
     </div>
   </div>
+  <!-- VIEW 4: Access Log -->
+  <div class="view" id="view-access">
+    <div class="panel">
+      <div class="panel-title">🔐 ประวัติการเข้าใช้ Dashboard</div>
+      <div class="panel-sub">บันทึกทุกครั้งที่มีการพยายามเข้าระบบ (100 รายการล่าสุด)</div>
+
+      <div class="stats" id="access-stats" style="display:none;">
+        <div class="stat">
+          <div class="stat-label">ครั้งทั้งหมด</div>
+          <div class="stat-value" id="ac-total">0</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">สำเร็จ</div>
+          <div class="stat-value" style="color:var(--success);" id="ac-ok">0</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">ล้มเหลว</div>
+          <div class="stat-value" style="color:var(--danger);" id="ac-fail">0</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">IP ที่ไม่ซ้ำ</div>
+          <div class="stat-value accent" id="ac-ips">0</div>
+        </div>
+      </div>
+
+      <div id="access-result">
+        <div class="loading">
+          <div class="spinner-small"></div>
+          <div style="margin-top:10px;">กำลังโหลด...</div>
+        </div>
+      </div>
+    </div>
+  </div>
 
 </div>
 
@@ -418,6 +557,105 @@ const SUPABASE_URL = 'https://lfrwghrlxaordpxrqyij.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxmcndnaHJseGFvcmRweHJxeWlqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MzQ5MjgsImV4cCI6MjA5MjQxMDkyOH0.M13hI5TUqEL8iVmGM3pWcjbyULSx_n7VPgI2TcHnNZA';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ==================== AUTH CONFIG ====================
+const DASHBOARD_PASSWORD = '9999';
+
+// Fetch client IP (best-effort, from public IP API)
+async function getClientIP() {
+  try {
+    const res = await fetch('https://api.ipify.org?format=json');
+    const data = await res.json();
+    return data.ip || 'unknown';
+  } catch (e) {
+    return 'unknown';
+  }
+}
+
+async function logAccess(success, note) {
+  try {
+    const ip = await getClientIP();
+    await supabase.from('dashboard_access_logs').insert({
+      ip_address: ip,
+      user_agent: navigator.userAgent.substring(0, 200),
+      success: success,
+      note: note || null
+    });
+  } catch (e) {
+    console.warn('Failed to log access', e);
+  }
+}
+
+// ==================== LOGIN HANDLING ====================
+const loginScreen = document.getElementById('login-screen');
+const loginInput = document.getElementById('login-input');
+const loginBtn = document.getElementById('login-btn');
+const loginError = document.getElementById('login-error');
+const mainContainer = document.getElementById('main-container');
+
+let failedAttempts = 0;
+
+async function doLogin() {
+  const val = loginInput.value.trim();
+  if (!val) {
+    loginInput.focus();
+    return;
+  }
+
+  loginBtn.disabled = true;
+  loginBtn.textContent = 'กำลังตรวจสอบ...';
+
+  if (val === DASHBOARD_PASSWORD) {
+    // Success
+    await logAccess(true, 'Login success');
+    loginScreen.style.display = 'none';
+    mainContainer.style.display = 'block';
+    initDashboard();
+  } else {
+    // Failed
+    failedAttempts++;
+    await logAccess(false, `Wrong password (attempt #${failedAttempts})`);
+    loginInput.classList.add('shake');
+    loginError.textContent = `รหัสไม่ถูกต้อง (พยายาม ${failedAttempts} ครั้ง)`;
+    setTimeout(() => loginInput.classList.remove('shake'), 500);
+    loginInput.value = '';
+    loginBtn.disabled = false;
+    loginBtn.textContent = 'เข้าสู่ระบบ';
+    loginInput.focus();
+
+    // If too many attempts, force delay
+    if (failedAttempts >= 3) {
+      loginBtn.disabled = true;
+      loginBtn.textContent = 'รอ 5 วิ...';
+      let sec = 5;
+      const timer = setInterval(() => {
+        sec--;
+        if (sec > 0) {
+          loginBtn.textContent = `รอ ${sec} วิ...`;
+        } else {
+          clearInterval(timer);
+          loginBtn.disabled = false;
+          loginBtn.textContent = 'เข้าสู่ระบบ';
+        }
+      }, 1000);
+    }
+  }
+}
+
+loginBtn.addEventListener('click', doLogin);
+loginInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') doLogin();
+});
+document.getElementById('btn-logout').addEventListener('click', () => {
+  if (confirm('ต้องการออกจากระบบ?')) {
+    location.reload();
+  }
+});
+
+// Focus input on load
+setTimeout(() => loginInput.focus(), 100);
+
+// ==================== UTILS ====================
 
 function escapeHtml(s) {
   if (s == null) return '';
@@ -440,6 +678,7 @@ document.querySelectorAll('.tab').forEach(t => {
     t.classList.add('active');
     document.getElementById('view-' + t.dataset.view).classList.add('active');
     if (t.dataset.view === 'history') loadHistory();
+    if (t.dataset.view === 'access') loadAccessLog();
   });
 });
 
@@ -811,8 +1050,88 @@ async function loadHistory() {
   }
 }
 
+// ==================== VIEW 4: ACCESS LOG ====================
+let accessLogLoaded = false;
+async function loadAccessLog() {
+  const container = document.getElementById('access-result');
+  container.innerHTML = '<div class="loading"><div class="spinner-small"></div><div style="margin-top:10px;">กำลังโหลด...</div></div>';
+
+  try {
+    const { data, error } = await supabase
+      .from('dashboard_access_logs')
+      .select('*')
+      .order('accessed_at', { ascending: false })
+      .limit(100);
+    if (error) throw error;
+
+    if (!data || data.length === 0) {
+      container.innerHTML = '<div class="empty"><span class="emoji">📭</span><div class="empty-title">ยังไม่มีประวัติ</div></div>';
+      document.getElementById('access-stats').style.display = 'none';
+      return;
+    }
+
+    // Stats
+    const total = data.length;
+    const ok = data.filter(d => d.success).length;
+    const fail = total - ok;
+    const uniqueIPs = new Set(data.map(d => d.ip_address).filter(Boolean)).size;
+
+    document.getElementById('ac-total').textContent = total;
+    document.getElementById('ac-ok').textContent = ok;
+    document.getElementById('ac-fail').textContent = fail;
+    document.getElementById('ac-ips').textContent = uniqueIPs;
+    document.getElementById('access-stats').style.display = 'grid';
+
+    // Table
+    let html = `<table class="log-table">
+      <thead>
+        <tr>
+          <th>วันเวลา</th>
+          <th>IP Address</th>
+          <th>สถานะ</th>
+          <th>Device</th>
+          <th>หมายเหตุ</th>
+        </tr>
+      </thead>
+      <tbody>`;
+
+    data.forEach(log => {
+      const d = new Date(log.accessed_at);
+      const dateStr = d.toLocaleString('th-TH', {
+        day: '2-digit', month: 'short', year: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit'
+      });
+      // Detect device from user agent (simple)
+      let device = 'Desktop';
+      const ua = (log.user_agent || '').toLowerCase();
+      if (ua.includes('mobile') || ua.includes('android') || ua.includes('iphone')) device = '📱 Mobile';
+      else if (ua.includes('ipad') || ua.includes('tablet')) device = '📱 Tablet';
+      else device = '💻 Desktop';
+
+      html += `<tr>
+        <td>${escapeHtml(dateStr)}</td>
+        <td><strong>${escapeHtml(log.ip_address || '-')}</strong></td>
+        <td>${log.success
+          ? '<span class="log-success">✓ สำเร็จ</span>'
+          : '<span class="log-fail">✗ ล้มเหลว</span>'}</td>
+        <td>${device}</td>
+        <td style="color:var(--text-dim);font-size:12px;">${escapeHtml(log.note || '-')}</td>
+      </tr>`;
+    });
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+  } catch (err) {
+    console.error(err);
+    container.innerHTML = `<div class="empty"><span class="emoji">⚠️</span><div class="empty-title">โหลดไม่สำเร็จ</div><div>${escapeHtml(err.message)}</div></div>`;
+  }
+}
+
 // ==================== INIT ====================
-loadMaster();
+function initDashboard() {
+  loadMaster();
+}
+// (initDashboard จะถูกเรียกหลัง login สำเร็จ)
 </script>
 </body>
 </html>
