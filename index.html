@@ -331,6 +331,99 @@
   }
   .toast.show { opacity: 1; }
   .toast.error { background: var(--danger); }
+  .toast.warning { background: #d97706; }
+
+  /* Error Modal (สำหรับ Barcode ผิดโครงสร้าง) */
+  .error-modal {
+    position: fixed; inset: 0; background: rgba(15,23,42,0.55);
+    display: none; align-items: center; justify-content: center;
+    z-index: 300; padding: 20px; backdrop-filter: blur(3px);
+  }
+  .error-modal.show { display: flex; animation: fadeIn 0.2s ease; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  .error-modal-box {
+    background: white; border-radius: 20px; max-width: 520px; width: 100%;
+    overflow: hidden;
+    box-shadow: 0 25px 60px rgba(0,0,0,0.3);
+    animation: pop 0.3s ease;
+  }
+  @keyframes pop {
+    0% { transform: scale(0.9); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  .error-modal-header {
+    background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+    padding: 28px 24px; text-align: center;
+    border-bottom: 3px solid var(--danger);
+  }
+  .error-modal-icon {
+    width: 72px; height: 72px; margin: 0 auto 12px;
+    background: var(--danger); color: white;
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 40px; font-weight: 800;
+    animation: shake-icon 0.6s ease;
+  }
+  @keyframes shake-icon {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-8px) rotate(-5deg); }
+    75% { transform: translateX(8px) rotate(5deg); }
+  }
+  .error-modal-title {
+    font-size: 22px; font-weight: 800; color: var(--danger);
+    margin-bottom: 4px;
+  }
+  .error-modal-sub {
+    font-size: 14px; color: #991b1b; font-weight: 600;
+  }
+  .error-modal-body { padding: 24px; }
+  .error-modal-barcode {
+    padding: 14px 16px; background: #fef2f2;
+    border: 2px solid #fecaca; border-radius: 10px;
+    font-family: var(--mono); font-size: 14px; font-weight: 700;
+    word-break: break-all; color: var(--danger);
+    margin-bottom: 16px; text-align: center;
+  }
+  .error-reasons-title {
+    font-size: 14px; font-weight: 700; color: var(--text);
+    margin-bottom: 10px;
+  }
+  .error-reason-list {
+    background: var(--panel-2); border-radius: 10px; padding: 12px 14px;
+    margin-bottom: 16px;
+  }
+  .error-reason {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 8px 0; border-bottom: 1px dashed var(--border);
+    font-size: 14px; font-weight: 500; color: var(--text);
+  }
+  .error-reason:last-child { border-bottom: none; }
+  .error-reason-icon {
+    flex-shrink: 0; color: var(--danger); font-weight: 700; font-size: 16px;
+    margin-top: 1px;
+  }
+  .error-modal-hint {
+    padding: 12px 14px; background: #eff6ff;
+    border-left: 3px solid var(--accent-2); border-radius: 0 8px 8px 0;
+    font-size: 13px; color: #1e3a8a; font-weight: 500;
+    margin-bottom: 20px;
+  }
+  .error-modal-footer {
+    display: flex; gap: 10px; padding: 0 24px 24px;
+  }
+  .error-modal-btn {
+    flex: 1; padding: 14px; border: none; border-radius: 10px;
+    font-family: inherit; font-size: 15px; font-weight: 700;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .error-modal-btn.primary {
+    background: var(--danger); color: white;
+  }
+  .error-modal-btn.primary:hover { background: #991b1b; }
+  .error-modal-btn.ghost {
+    background: var(--panel); color: var(--text);
+    border: 1.5px solid var(--border);
+  }
+  .error-modal-btn.ghost:hover { background: var(--panel-2); }
 
   /* Loading overlay */
   .loading-overlay {
@@ -482,6 +575,33 @@
 </head>
 <body>
 <div class="toast" id="toast"></div>
+
+<!-- Error Modal (Barcode ผิดโครงสร้าง) -->
+<div class="error-modal" id="error-modal">
+  <div class="error-modal-box">
+    <div class="error-modal-header">
+      <div class="error-modal-icon">⚠</div>
+      <div class="error-modal-title">Barcode ผิดโครงสร้าง</div>
+      <div class="error-modal-sub">ไม่สามารถบันทึกได้ กรุณาตรวจสอบ</div>
+    </div>
+    <div class="error-modal-body">
+      <div class="error-modal-barcode" id="err-barcode"></div>
+      <div class="error-reasons-title">เหตุผล:</div>
+      <div class="error-reason-list" id="err-reasons"></div>
+      <div class="error-modal-hint">
+        💡 <strong>แนะนำ:</strong> ตรวจสอบ QR ที่ม้วน slit — ควรมีรูปแบบ<br>
+        <code style="font-family: var(--mono); font-size: 12px; background: white; padding: 2px 6px; border-radius: 4px; margin-top: 4px; display: inline-block;">
+          ประเภท_วันตัด_ม้วน_slitter_ล็อต
+        </code><br>
+        เช่น <code style="font-family: var(--mono); font-size: 12px;">CPS450_030125_6_1_77-4-A7914-4G</code>
+      </div>
+    </div>
+    <div class="error-modal-footer">
+      <button class="error-modal-btn ghost" id="err-btn-close">ปิด</button>
+      <button class="error-modal-btn primary" id="err-btn-retry">สแกนใหม่</button>
+    </div>
+  </div>
+</div>
 
 <div class="conn-status online" id="conn-status">
   <span class="dot"></span>
@@ -690,12 +810,187 @@ function parseBarcode(bc) {
   };
 }
 
-function showToast(msg, isError) {
+// Validate barcode format — returns { valid: bool, warnings: [] }
+function validateBarcode(bc) {
+  const warnings = [];
+
+  if (!bc || !bc.trim()) {
+    return { valid: false, warnings: ['Barcode ว่างเปล่า'], fatal: true };
+  }
+
+  // 1. Must have exactly 5 parts
+  const parts = bc.split('_');
+  if (parts.length < 5) {
+    warnings.push(`โครงสร้างผิด: มี "_" เพียง ${parts.length - 1} ตัว (ต้องมี 4 ตัว)`);
+    warnings.push('รูปแบบที่ถูก: ประเภท_วันตัด_ม้วน_slitter_ล็อต');
+    return { valid: false, warnings, fatal: true };
+  }
+  if (parts.length > 5) {
+    warnings.push(`โครงสร้างผิด: มี "_" มากเกินไป (${parts.length - 1} ตัว ต้องมี 4 ตัว)`);
+    warnings.push('อาจสแกน 2 ม้วนติดกัน หรือล็อตมี "_" ในชื่อ');
+    return { valid: false, warnings, fatal: true };
+  }
+
+  const [paperType, cutDate, rollNo, slitter, jumboLot] = parts;
+
+  // 2. No part should be empty
+  const emptyFields = [];
+  if (!paperType) emptyFields.push('ประเภทกระดาษ');
+  if (!cutDate) emptyFields.push('วันที่ตัด');
+  if (!rollNo) emptyFields.push('ม้วนที่');
+  if (!slitter) emptyFields.push('Slitter');
+  if (!jumboLot) emptyFields.push('ล็อตจัมโบ้');
+
+  if (emptyFields.length > 0) {
+    warnings.push(`ข้อมูลว่าง: ${emptyFields.join(', ')}`);
+    return { valid: false, warnings, fatal: true };
+  }
+
+  // 3. cut_date should be 5-6 digits
+  if (!/^\d{5,6}$/.test(cutDate)) {
+    if (/[\/\-]/.test(cutDate)) {
+      warnings.push(`วันที่ตัด "${cutDate}" มี / หรือ - (ควรเป็นเลขล้วน 6 หลัก)`);
+    } else if (cutDate.length < 5) {
+      warnings.push(`วันที่ตัด "${cutDate}" สั้นเกินไป (ควร 5-6 หลัก)`);
+    } else if (cutDate.length > 6) {
+      warnings.push(`วันที่ตัด "${cutDate}" ยาวเกินไป (ควร 5-6 หลัก)`);
+    } else {
+      warnings.push(`วันที่ตัด "${cutDate}" ไม่ใช่ตัวเลข`);
+    }
+  }
+
+  // 4. roll_no should be 1-2 digit number
+  if (!/^\d{1,2}$/.test(rollNo)) {
+    warnings.push(`ม้วนที่ "${rollNo}" ควรเป็นตัวเลข 1-2 หลัก`);
+  }
+
+  // 5. slitter should be 1-2 digit number
+  if (!/^\d{1,2}$/.test(slitter)) {
+    warnings.push(`Slitter "${slitter}" ควรเป็นตัวเลข 1-2 หลัก`);
+  }
+
+  // 6. Warn if barcode looks like 2 concatenated ones
+  if (bc.length > 60) {
+    warnings.push('Barcode ยาวผิดปกติ อาจสแกนติดกัน 2 ม้วน');
+  }
+
+  return {
+    valid: warnings.length === 0,
+    warnings,
+    fatal: false
+  };
+}
+
+function showToast(msg, type) {
   const t = document.getElementById('toast');
   t.textContent = msg;
-  t.className = 'toast show' + (isError ? ' error' : '');
-  setTimeout(() => t.classList.remove('show'), 1500);
+  let cls = 'toast show';
+  if (type === true || type === 'error') cls += ' error';
+  else if (type === 'warning') cls += ' warning';
+  t.className = cls;
+  setTimeout(() => t.classList.remove('show'), type === 'warning' ? 3000 : 1500);
 }
+
+// ===== Sound feedback using Web Audio API =====
+let audioCtx = null;
+function getAudioContext() {
+  if (!audioCtx) {
+    try {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    } catch (e) {
+      console.warn('Audio not supported');
+    }
+  }
+  return audioCtx;
+}
+
+function playBeep(type) {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  // Resume context if suspended (browser autoplay policy)
+  if (ctx.state === 'suspended') ctx.resume();
+
+  const now = ctx.currentTime;
+
+  if (type === 'success') {
+    // Quick single beep (เสียงสั้น สูง)
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = 'sine';
+    osc.frequency.value = 1000;
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(0.3, now + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+    osc.start(now);
+    osc.stop(now + 0.15);
+  } else if (type === 'error') {
+    // Low buzz x3 (เสียงต่ำ ดัง ซ้ำ 3 ครั้ง)
+    for (let i = 0; i < 3; i++) {
+      const start = now + i * 0.18;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = 'square';
+      osc.frequency.value = 180;
+      gain.gain.setValueAtTime(0, start);
+      gain.gain.linearRampToValueAtTime(0.25, start + 0.01);
+      gain.gain.linearRampToValueAtTime(0.25, start + 0.12);
+      gain.gain.linearRampToValueAtTime(0, start + 0.15);
+      osc.start(start);
+      osc.stop(start + 0.15);
+    }
+  } else if (type === 'warning') {
+    // Two quick beeps (เตือน 2 ครั้งกลาง ๆ)
+    for (let i = 0; i < 2; i++) {
+      const start = now + i * 0.15;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.value = 600;
+      gain.gain.setValueAtTime(0, start);
+      gain.gain.linearRampToValueAtTime(0.25, start + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.01, start + 0.1);
+      osc.start(start);
+      osc.stop(start + 0.12);
+    }
+  }
+}
+
+// ===== Error Modal =====
+function showErrorModal(barcode, reasons) {
+  document.getElementById('err-barcode').textContent = barcode || '(ว่าง)';
+  const list = document.getElementById('err-reasons');
+  list.innerHTML = reasons.map(r =>
+    `<div class="error-reason">
+      <span class="error-reason-icon">✕</span>
+      <span>${escapeHtml(r)}</span>
+    </div>`
+  ).join('');
+  document.getElementById('error-modal').classList.add('show');
+  playBeep('error');
+}
+function hideErrorModal() {
+  document.getElementById('error-modal').classList.remove('show');
+  // Refocus scan input
+  setTimeout(() => {
+    const si = document.getElementById('scan-input');
+    if (si) { si.value = ''; si.focus(); }
+  }, 50);
+}
+document.getElementById('err-btn-close').addEventListener('click', hideErrorModal);
+document.getElementById('err-btn-retry').addEventListener('click', hideErrorModal);
+// Close on Escape
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.getElementById('error-modal').classList.contains('show')) {
+    hideErrorModal();
+  }
+});
 
 function goToScreen(n) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -1083,12 +1378,21 @@ function renderProductSelector() {
 function handleScan() {
   const bc = scanInput.value.trim();
   if (!bc) return;
+
+  // First check: parse + structure
   const parsed = parseBarcode(bc);
-  if (!parsed) {
-    showToast('⚠️ Barcode รูปแบบไม่ถูก', true);
+  const validation = validateBarcode(bc);
+
+  // Fatal = ผิดโครงสร้าง → show modal + error sound
+  if (!parsed || validation.fatal) {
+    const reasons = validation.warnings.length > 0
+      ? validation.warnings
+      : ['โครงสร้าง Barcode ผิดรูปแบบ'];
+    showErrorModal(bc, reasons);
     scanInput.value = '';
     return;
   }
+
   const currentProduct = state.products[state.currentProductIdx];
   state.scans.push({
     id: Date.now() + Math.random(),
@@ -1096,9 +1400,19 @@ function handleScan() {
     productIdx: state.currentProductIdx,
     productName: currentProduct.name,
     productIsNew: currentProduct.isNew,
+    valid: validation.valid,
+    warnings: validation.warnings,
     ...parsed
   });
-  showToast('✓ ' + currentProduct.name + ' · ' + parsed.paper_type);
+
+  if (validation.valid) {
+    showToast('✓ ' + currentProduct.name + ' · ' + parsed.paper_type);
+    playBeep('success');
+  } else {
+    // Non-fatal warnings — บันทึกได้ แต่ mark
+    showToast('⚠️ บันทึกแล้ว แต่ Barcode ผิด format: ' + validation.warnings[0], 'warning');
+    playBeep('warning');
+  }
   scanInput.value = '';
   renderScans();
   renderProductSelector();
@@ -1129,12 +1443,15 @@ function renderScans() {
 
   list.innerHTML = state.scans.slice().reverse().map((s, idx) => {
     const n = state.scans.length - idx;
-    return `<div class="scan-item">
+    const warningBadge = !s.valid && s.warnings && s.warnings.length > 0
+      ? `<span style="display:inline-block;padding:2px 6px;background:#fef3c7;color:#92400e;border-radius:4px;font-size:11px;font-weight:700;margin-right:4px;" title="${escapeHtml(s.warnings.join(' · '))}">⚠️ ผิด format</span>`
+      : '';
+    return `<div class="scan-item" style="${!s.valid ? 'border-left-color: #d97706;' : ''}">
       <div class="scan-item-num">${n}</div>
       <div class="scan-item-info">
         <div class="scan-item-barcode">${escapeHtml(s.barcode)}</div>
         <div class="scan-item-meta">
-          <span class="tag">${escapeHtml(s.paper_type)}</span>
+          ${warningBadge}<span class="tag">${escapeHtml(s.paper_type)}</span>
           <span style="color:var(--accent-2);font-weight:600;">→ ${escapeHtml(s.productName)}</span>
           · ล็อต ${escapeHtml(s.jumbo_lot)} · Slitter ${escapeHtml(s.slitter)}
         </div>
@@ -1195,7 +1512,17 @@ function renderReview() {
   document.getElementById('rv-rolls').textContent = totalRolls;
   document.getElementById('rv-lots').textContent = totalLots;
 
+  // Show warning if there are invalid barcodes
+  const invalidCount = state.scans.filter(s => s.valid === false).length;
+  let invalidBanner = '';
+  if (invalidCount > 0) {
+    invalidBanner = `<div style="padding: 14px 16px; background: #fef3c7; border-left: 4px solid #d97706; border-radius: 8px; margin-bottom: 16px; color: #78350f; font-size: 14px;">
+      <strong>⚠️ มี ${invalidCount} Barcode ที่ผิด format</strong><br>
+      <span style="font-size: 12px;">ระบบจะบันทึกให้ แต่ mark ไว้ใน DB เพื่อให้ตรวจสอบภายหลัง</span>
+    </div>`;
+  }
   const container = document.getElementById('rv-groups');
+  container.innerHTML = invalidBanner;
   // Sort products by scan count desc
   const sortedProducts = Object.entries(byProduct).sort((a, b) => {
     const countA = state.scans.filter(s => s.productName === a[0]).length;
@@ -1203,7 +1530,7 @@ function renderReview() {
     return countB - countA;
   });
 
-  container.innerHTML = sortedProducts.map(([productName, types]) => {
+  container.innerHTML += sortedProducts.map(([productName, types]) => {
     const productRolls = state.scans.filter(s => s.productName === productName).length;
     const isProductNew = state.scans.find(s => s.productName === productName)?.productIsNew;
     const sortedTypes = Object.entries(types).sort((a,b) => {
@@ -1332,7 +1659,9 @@ async function submitBatch() {
         cut_date: s.cut_date,
         roll_no: s.roll_no,
         slitter: s.slitter,
-        jumbo_lot: s.jumbo_lot
+        jumbo_lot: s.jumbo_lot,
+        barcode_valid: s.valid !== false,
+        barcode_warnings: (s.warnings && s.warnings.length > 0) ? s.warnings.join(' | ') : null
       };
     });
     const { error: scanErr } = await supabase
