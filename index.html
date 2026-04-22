@@ -679,14 +679,16 @@
 
     <div class="panel">
       <div style="margin-bottom: 16px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
           <div style="font-size: 13px; font-weight: 800; color: var(--text); text-transform: uppercase; letter-spacing: 1.2px;">
-            กำลังสแกนให้สินค้า:
+            <span id="selector-title">ม้วนนี้จะบันทึกให้ทุกสินค้า</span>
           </div>
-          <button id="btn-copy-to-all" style="display:none; padding: 6px 12px; background: var(--accent-2-bg); color: var(--accent-2); border: 1.5px solid var(--accent-2); border-radius: 8px; font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;"
-                  title="Copy ม้วนทั้งหมดไปสินค้าอื่น (กรณีใช้ม้วนเดียวกันผลิตหลายสินค้า)">
-            🔗 Copy ม้วนไปทุกสินค้า
-          </button>
+          <div id="mode-toggle-wrapper" style="display:none; display: flex; align-items: center; gap: 6px;">
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; cursor: pointer; color: var(--text-dim);">
+              <input type="checkbox" id="chk-per-product" style="width: 16px; height: 16px; cursor: pointer;">
+              แยกม้วนให้แต่ละสินค้า
+            </label>
+          </div>
         </div>
         <div class="product-selector" id="product-selector"></div>
       </div>
@@ -791,7 +793,8 @@ const state = {
   dp: '',
   products: [],  // array of product names
   currentProductIdx: 0,  // ตัวที่กำลังสแกนอยู่
-  scans: []  // { ..., productIdx }
+  scans: [],  // { ..., productIdx }
+  sharedMode: true  // default: ม้วน 1 ตัว = share ทุกสินค้า
 };
 
 // Sample barcodes for quick-test chips
@@ -1374,104 +1377,67 @@ scanInput.addEventListener('blur', () => scannerBox.classList.remove('focused'))
 
 function renderProductSelector() {
   const sel = document.getElementById('product-selector');
-  sel.innerHTML = state.products.map((p, idx) => {
-    const count = state.scans.filter(s => s.productIdx === idx).length;
-    const isActive = idx === state.currentProductIdx;
-    const newMark = p.isNew ? '<span style="font-size:9px;opacity:0.8;margin-right:4px;">●NEW</span>' : '';
-    return `<button class="product-tab ${isActive ? 'active' : ''}" data-idx="${idx}">
-      ${newMark}${escapeHtml(p.name)} <span class="count">${count}</span>
-    </button>`;
-  }).join('');
-  sel.querySelectorAll('.product-tab').forEach(btn => {
-    btn.addEventListener('click', () => {
-      state.currentProductIdx = parseInt(btn.dataset.idx);
-      renderProductSelector();
-      setTimeout(() => scanInput.focus(), 50);
-    });
-  });
+  const title = document.getElementById('selector-title');
+  const toggleWrapper = document.getElementById('mode-toggle-wrapper');
 
-  // แสดงปุ่ม Copy to all เฉพาะเมื่อ:
-  // 1. มีสินค้าตั้งแต่ 2 ตัวขึ้นไป
-  // 2. มีสินค้าอย่างน้อย 1 ตัวที่ยังไม่มี scan
-  // 3. มีอย่างน้อย 1 ตัวที่มี scan
-  const btnCopy = document.getElementById('btn-copy-to-all');
-  if (btnCopy) {
-    const productsWithScans = state.products.filter((p, idx) =>
-      state.scans.some(s => s.productIdx === idx)
-    ).length;
-    const shouldShow = state.products.length >= 2 && productsWithScans >= 1 && productsWithScans < state.products.length;
-    btnCopy.style.display = shouldShow ? 'inline-block' : 'none';
-  }
-}
-
-function copyScansToAllProducts() {
-  if (state.products.length < 2) return;
-
-  // หาสินค้าที่มี scan อยู่แล้ว
-  const productsWithScans = new Set();
-  state.scans.forEach(s => productsWithScans.add(s.productIdx));
-
-  if (productsWithScans.size === 0) {
-    showToast('⚠️ ยังไม่มีม้วนที่สแกน', 'error');
-    return;
+  // Show toggle only if there are 2+ products
+  if (state.products.length >= 2) {
+    toggleWrapper.style.display = 'flex';
+  } else {
+    toggleWrapper.style.display = 'none';
+    state.sharedMode = true;  // 1 product ก็ shared โดยอัตโนมัติ
   }
 
-  // ถ้ามี product หลายอันที่มี scan — เตือน
-  if (productsWithScans.size > 1) {
-    if (!confirm('มีสินค้าหลายตัวที่มีม้วนสแกนแล้ว
-ระบบจะ copy ม้วนทั้งหมด (รวมกัน) ไปยังสินค้าที่ยังไม่มีม้วน
-
-ดำเนินการต่อ?')) {
-      return;
-    }
-  }
-
-  // หาสินค้าที่ยังไม่มี scan
-  const targetProductIndices = state.products
-    .map((_, idx) => idx)
-    .filter(idx => !productsWithScans.has(idx));
-
-  if (targetProductIndices.length === 0) {
-    showToast('ทุกสินค้ามีม้วนแล้ว', 'error');
-    return;
-  }
-
-  // รวบรวมม้วนต้นฉบับ (ใช้อันจากสินค้าตัวแรกที่มี)
-  const sourceScans = state.scans.filter(s => s.productIdx === [...productsWithScans][0]);
-
-  // Confirm final
-  const targetNames = targetProductIndices.map(i => state.products[i].name).join(', ');
-  if (!confirm(`Copy ${sourceScans.length} ม้วน ไปยังสินค้า: ${targetNames}
-
-ดำเนินการ?`)) {
-    return;
-  }
-
-  // Duplicate scans
-  let addedCount = 0;
-  targetProductIndices.forEach(targetIdx => {
-    sourceScans.forEach(src => {
-      state.scans.push({
-        ...src,
-        id: Date.now() + Math.random(),
-        productIdx: targetIdx,
-        productName: state.products[targetIdx].name,
-        productIsNew: state.products[targetIdx].isNew
+  if (state.sharedMode) {
+    title.innerHTML = state.products.length >= 2
+      ? '🔗 ม้วนนี้จะบันทึกให้ <strong style="color:var(--accent-2)">ทุกสินค้า</strong> (' + state.products.length + ' สินค้า)'
+      : 'กำลังสแกนให้สินค้า:';
+    // แสดง tabs แบบอ่านอย่างเดียว (ไม่ active single)
+    sel.innerHTML = state.products.map((p, idx) => {
+      const count = state.scans.filter(s => s.productIdx === idx).length;
+      const newMark = p.isNew ? '<span style="font-size:9px;opacity:0.8;margin-right:4px;">●NEW</span>' : '';
+      return `<div class="product-tab" style="cursor:default; background:var(--accent-2-bg); color:var(--accent-2); border:1.5px solid var(--accent-2);">
+        ${newMark}${escapeHtml(p.name)} <span class="count" style="background:white;color:var(--accent-2);">${count}</span>
+      </div>`;
+    }).join('');
+  } else {
+    title.textContent = 'กำลังสแกนให้สินค้า:';
+    sel.innerHTML = state.products.map((p, idx) => {
+      const count = state.scans.filter(s => s.productIdx === idx).length;
+      const isActive = idx === state.currentProductIdx;
+      const newMark = p.isNew ? '<span style="font-size:9px;opacity:0.8;margin-right:4px;">●NEW</span>' : '';
+      return `<button class="product-tab ${isActive ? 'active' : ''}" data-idx="${idx}">
+        ${newMark}${escapeHtml(p.name)} <span class="count">${count}</span>
+      </button>`;
+    }).join('');
+    sel.querySelectorAll('.product-tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        state.currentProductIdx = parseInt(btn.dataset.idx);
+        renderProductSelector();
+        setTimeout(() => scanInput.focus(), 50);
       });
-      addedCount++;
     });
-  });
-
-  showToast(`✓ Copy ${addedCount} ม้วน ไปยัง ${targetProductIndices.length} สินค้า`);
-  playBeep('success');
-  renderScans();
-  renderProductSelector();
+  }
 }
 
-// Attach handler
-const btnCopyToAll = document.getElementById('btn-copy-to-all');
-if (btnCopyToAll) {
-  btnCopyToAll.addEventListener('click', copyScansToAllProducts);
+// Toggle shared/per-product mode
+const chkPerProduct = document.getElementById('chk-per-product');
+if (chkPerProduct) {
+  chkPerProduct.addEventListener('change', () => {
+    if (state.scans.length > 0) {
+      // มี scan แล้ว — ต้องเตือน
+      if (!confirm('การเปลี่ยน mode จะล้างม้วนที่สแกนไปแล้ว
+ต้องการเปลี่ยน?')) {
+        chkPerProduct.checked = !chkPerProduct.checked;  // revert
+        return;
+      }
+      state.scans = [];
+    }
+    state.sharedMode = !chkPerProduct.checked;
+    state.currentProductIdx = 0;
+    renderProductSelector();
+    renderScans();
+  });
 }
 
 function handleScan() {
@@ -1522,25 +1488,53 @@ function processOneBarcode(bc) {
     return true;  // modal was shown
   }
 
-  const currentProduct = state.products[state.currentProductIdx];
-  state.scans.push({
-    id: Date.now() + Math.random(),
-    barcode: bc,
-    productIdx: state.currentProductIdx,
-    productName: currentProduct.name,
-    productIsNew: currentProduct.isNew,
-    valid: validation.valid,
-    warnings: validation.warnings,
-    ...parsed
-  });
-
-  if (validation.valid) {
-    showToast('✓ ' + currentProduct.name + ' · ' + parsed.paper_type);
-    playBeep('success');
+  const scanId = Date.now() + Math.random();
+  if (state.sharedMode) {
+    // Shared mode (default): ม้วนนี้ใส่ให้ทุกสินค้า
+    state.products.forEach((product, idx) => {
+      state.scans.push({
+        id: scanId + (idx * 0.0001),  // unique id per product
+        barcode: bc,
+        productIdx: idx,
+        productName: product.name,
+        productIsNew: product.isNew,
+        valid: validation.valid,
+        warnings: validation.warnings,
+        ...parsed
+      });
+    });
+    const label = state.products.length === 1
+      ? state.products[0].name
+      : `${state.products.length} สินค้า`;
+    if (validation.valid) {
+      showToast('✓ ' + label + ' · ' + parsed.paper_type);
+      playBeep('success');
+    } else {
+      showToast('⚠️ บันทึกแล้ว (' + label + ') แต่ผิด format: ' + validation.warnings[0], 'warning');
+      playBeep('warning');
+    }
   } else {
-    showToast('⚠️ บันทึกแล้ว แต่ Barcode ผิด format: ' + validation.warnings[0], 'warning');
-    playBeep('warning');
+    // Per-product mode: ม้วนเข้าเฉพาะสินค้าที่เลือก
+    const currentProduct = state.products[state.currentProductIdx];
+    state.scans.push({
+      id: scanId,
+      barcode: bc,
+      productIdx: state.currentProductIdx,
+      productName: currentProduct.name,
+      productIsNew: currentProduct.isNew,
+      valid: validation.valid,
+      warnings: validation.warnings,
+      ...parsed
+    });
+    if (validation.valid) {
+      showToast('✓ ' + currentProduct.name + ' · ' + parsed.paper_type);
+      playBeep('success');
+    } else {
+      showToast('⚠️ บันทึกแล้ว แต่ Barcode ผิด format: ' + validation.warnings[0], 'warning');
+      playBeep('warning');
+    }
   }
+
   renderScans();
   renderProductSelector();
   return false;  // no modal
