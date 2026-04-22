@@ -368,7 +368,122 @@
   }
   .login-footer a:hover { color: var(--accent); }
 
-  /* ============ Access Log Table ============ */
+  /* ============ Edit View ============ */
+  .edit-batch-list {
+    display: grid; gap: 10px;
+  }
+  .edit-batch-card {
+    display: grid; grid-template-columns: 1fr auto;
+    gap: 12px; padding: 14px 16px;
+    background: var(--panel); border: 1.5px solid var(--border);
+    border-radius: 12px; align-items: center;
+    transition: all 0.15s;
+  }
+  .edit-batch-card:hover { border-color: var(--accent); box-shadow: 0 2px 12px rgba(194,65,12,0.1); }
+  .edit-batch-card.voided {
+    background: #fef2f2; opacity: 0.75;
+    border-color: #fecaca;
+  }
+  .edit-batch-info { min-width: 0; }
+  .edit-batch-title {
+    font-weight: 700; font-size: 15px;
+    display: flex; align-items: center; gap: 8px; margin-bottom: 4px;
+  }
+  .edit-batch-title .date { font-family: var(--mono); color: var(--accent); }
+  .edit-batch-title .machine { color: var(--accent-2); }
+  .voided-badge {
+    background: var(--danger); color: white;
+    padding: 2px 8px; border-radius: 5px; font-size: 11px; font-weight: 700;
+  }
+  .edit-batch-meta { font-size: 13px; color: var(--text-dim); font-weight: 500; }
+  .edit-batch-actions { display: flex; gap: 6px; }
+  .mini-btn {
+    padding: 8px 14px; font-family: inherit; font-weight: 700;
+    font-size: 13px; border-radius: 8px; cursor: pointer;
+    border: 1.5px solid; transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .mini-btn.edit { background: var(--accent-bg); color: var(--accent); border-color: var(--accent); }
+  .mini-btn.edit:hover { background: var(--accent); color: white; }
+  .mini-btn.void { background: #fef2f2; color: var(--danger); border-color: #fecaca; }
+  .mini-btn.void:hover { background: var(--danger); color: white; border-color: var(--danger); }
+  .mini-btn.restore { background: var(--success-bg); color: var(--success); border-color: var(--success); }
+  .mini-btn.restore:hover { background: var(--success); color: white; }
+
+  /* Editor detail panel */
+  .editor-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid var(--border);
+  }
+  .editor-title { font-size: 18px; font-weight: 800; }
+  .editor-back {
+    padding: 8px 16px; background: var(--panel); color: var(--text);
+    border: 1.5px solid var(--border); border-radius: 8px;
+    font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+  }
+  .editor-back:hover { background: var(--panel-2); }
+
+  .editor-section {
+    background: var(--panel-2); border-radius: 12px;
+    padding: 16px; margin-bottom: 14px;
+  }
+  .editor-section-title {
+    font-size: 13px; font-weight: 800; text-transform: uppercase;
+    letter-spacing: 1px; color: var(--text-dim); margin-bottom: 12px;
+  }
+  .edit-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+  }
+
+  .scan-edit-row {
+    display: grid; grid-template-columns: 32px 1fr 1fr 70px 70px 1fr auto;
+    gap: 8px; padding: 10px; background: white; border-radius: 8px;
+    margin-bottom: 6px; align-items: center;
+  }
+  .scan-edit-row.modified { background: #fff7ed; border-left: 4px solid var(--accent); }
+  .scan-edit-row.deleted { background: #fee2e2; opacity: 0.5; text-decoration: line-through; }
+  .scan-edit-row input, .scan-edit-row select {
+    width: 100%; padding: 8px 10px; font-size: 13px; font-weight: 600;
+    border: 1.5px solid var(--border); border-radius: 6px;
+    font-family: var(--mono);
+  }
+  .scan-edit-row input:focus { outline: none; border-color: var(--accent); }
+  .scan-edit-row .row-num {
+    text-align: center; color: var(--text-dim); font-weight: 700; font-size: 13px;
+    font-family: var(--mono);
+  }
+  .scan-edit-row .del-btn {
+    width: 32px; height: 32px; background: var(--panel-2); border: 1.5px solid var(--border);
+    border-radius: 6px; cursor: pointer; font-size: 14px; color: var(--danger);
+  }
+  .scan-edit-row .del-btn:hover { background: var(--danger); color: white; }
+
+  .editor-footer {
+    display: flex; gap: 10px; padding: 14px 0 0; border-top: 2px solid var(--border);
+    position: sticky; bottom: 0; background: var(--panel); margin-top: 20px;
+  }
+  .editor-footer .btn { flex: 1; }
+
+  /* Audit log panel */
+  .audit-entry {
+    padding: 10px 14px; background: var(--panel-2); border-radius: 8px;
+    margin-bottom: 6px; font-size: 13px;
+  }
+  .audit-time { color: var(--text-dim); font-family: var(--mono); font-size: 11px; }
+  .audit-action {
+    display: inline-block; padding: 1px 8px; border-radius: 4px;
+    font-weight: 700; font-size: 11px; margin-right: 6px;
+  }
+  .audit-action.update { background: var(--accent-bg); color: var(--accent); }
+  .audit-action.delete { background: #fee2e2; color: var(--danger); }
+  .audit-action.insert { background: var(--success-bg); color: var(--success); }
+  .audit-action.void { background: #fef2f2; color: var(--danger); }
+  .audit-action.restore { background: var(--success-bg); color: var(--success); }
+  .audit-diff {
+    font-family: var(--mono); font-size: 12px; margin-top: 4px;
+  }
+  .audit-diff .old { color: var(--danger); text-decoration: line-through; }
+  .audit-diff .new { color: var(--success); font-weight: 700; }
   .log-table {
     width: 100%; border-collapse: collapse; font-size: 13px;
   }
@@ -435,6 +550,7 @@
     <button class="tab active" data-view="trace">🔍 สอบกลับวัตถุดิบ</button>
     <button class="tab" data-view="lot">↩️ ย้อนหา Jumbo Lot</button>
     <button class="tab" data-view="history">📋 ประวัติการบันทึก</button>
+    <button class="tab" data-view="edit">⚙️ แก้ไขข้อมูล</button>
     <button class="tab" data-view="access">🔐 Access Log</button>
   </div>
 
@@ -550,6 +666,50 @@
         </div>
       </div>
     </div>
+  </div>
+  <!-- VIEW 5: Edit Data -->
+  <div class="view" id="view-edit">
+    <!-- Sub-view: Batch list -->
+    <div class="panel" id="edit-list-panel">
+      <div class="panel-title">⚙️ แก้ไขข้อมูล Batch</div>
+      <div class="panel-sub">ค้นหา batch แล้วคลิก "แก้ไข" เพื่อแก้ข้อมูล หรือ "ยกเลิก" เพื่อ mark voided</div>
+
+      <div class="form-grid" style="grid-template-columns: 1fr 1fr 1fr auto;">
+        <div>
+          <label class="field-label">จากวันที่</label>
+          <input type="date" id="e-from">
+        </div>
+        <div>
+          <label class="field-label">ถึงวันที่</label>
+          <input type="date" id="e-to">
+        </div>
+        <div>
+          <label class="field-label">เครื่องจักร</label>
+          <select id="e-machine">
+            <option value="">(ทุกเครื่อง)</option>
+          </select>
+        </div>
+        <button class="btn" id="btn-e-search">🔍 ค้นหา</button>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 14px; padding: 10px; background: var(--panel-2); border-radius: 8px;">
+        <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; cursor: pointer;">
+          <input type="checkbox" id="e-show-voided" style="width: 18px; height: 18px; cursor: pointer;">
+          แสดง batches ที่ยกเลิกแล้วด้วย
+        </label>
+      </div>
+
+      <div id="e-result">
+        <div class="empty">
+          <span class="emoji">📅</span>
+          <div class="empty-title">เลือกช่วงเวลาแล้วกดค้นหา</div>
+          <div>Default: 7 วันล่าสุด</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sub-view: Editor (hidden by default) -->
+    <div class="panel" id="edit-editor-panel" style="display: none;"></div>
   </div>
   <!-- VIEW 4: Access Log -->
   <div class="view" id="view-access">
@@ -881,6 +1041,10 @@ document.querySelectorAll('.tab').forEach(t => {
       window._historyAutoLoaded = true;
       loadHistory();
     }
+    if (t.dataset.view === 'edit' && !window._editAutoLoaded) {
+      window._editAutoLoaded = true;
+      loadEditList();
+    }
     if (t.dataset.view === 'access') loadAccessLog();
   });
 });
@@ -897,14 +1061,14 @@ async function loadMaster() {
 
     const tMachine = document.getElementById('t-machine');
     const hMachine = document.getElementById('h-machine');
+    const eMachine = document.getElementById('e-machine');
     machinesRes.data.forEach(m => {
       const opt = document.createElement('option');
       opt.value = m.id;
       opt.textContent = `${m.name} (${m.dp})`;
       tMachine.appendChild(opt);
-      // Also populate history filter
-      const opt2 = opt.cloneNode(true);
-      hMachine.appendChild(opt2);
+      hMachine.appendChild(opt.cloneNode(true));
+      eMachine.appendChild(opt.cloneNode(true));
     });
 
     const tProduct = document.getElementById('t-product');
@@ -925,6 +1089,15 @@ async function loadMaster() {
     const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
     document.getElementById('h-from').valueAsDate = thirtyDaysAgo;
     document.getElementById('h-to').valueAsDate = today;
+
+    // Edit view: last 7 days by default
+    const sevenDaysAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+    document.getElementById('e-from').valueAsDate = sevenDaysAgo;
+    document.getElementById('e-to').valueAsDate = today;
+
+    // Save global master for editor
+    window._masterMachines = machinesRes.data;
+    window._masterProducts = (productsRes.data || []).map(r => r.product_name);
   } catch (err) {
     console.error(err);
     setConnStatus(false, '✗ เชื่อมต่อ DB ไม่ได้');
@@ -1388,6 +1561,553 @@ document.getElementById('btn-h-preset').addEventListener('click', () => {
   document.getElementById('h-machine').value = '';
   loadHistory();
 });
+
+// ==================== VIEW 5: EDIT DATA ====================
+
+// ---- State ----
+let _currentEditor = null;  // { batch, products, scans, originalProducts, originalScans, changes }
+
+// ---- Audit log helper ----
+async function logEdit(action, tableName, recordId, fieldName, oldVal, newVal, batchId, note) {
+  try {
+    const ip = await getClientIP();
+    await supabase.from('edit_audit_logs').insert({
+      ip_address: ip,
+      table_name: tableName,
+      record_id: recordId,
+      action,
+      field_name: fieldName,
+      old_value: oldVal == null ? null : String(oldVal),
+      new_value: newVal == null ? null : String(newVal),
+      batch_id: batchId,
+      note
+    });
+  } catch (e) {
+    console.warn('Audit log failed', e);
+  }
+}
+
+// ---- Batch list ----
+async function loadEditList() {
+  const from = document.getElementById('e-from').value;
+  const to = document.getElementById('e-to').value;
+  const machineId = document.getElementById('e-machine').value;
+  const showVoided = document.getElementById('e-show-voided').checked;
+
+  if (!from || !to) {
+    alert('กรุณาเลือกช่วงวันที่');
+    return;
+  }
+
+  const container = document.getElementById('e-result');
+  container.innerHTML = '<div class="loading"><div class="spinner-small"></div><div style="margin-top:10px;">กำลังค้นหา...</div></div>';
+
+  try {
+    let query = supabase
+      .from('production_batches')
+      .select(`
+        id, production_date, submitted_at, voided, voided_at, voided_reason, machine_id,
+        machines (name, dp),
+        batch_products (id, product_name, is_new_product, sequence)
+      `)
+      .gte('production_date', from)
+      .lte('production_date', to)
+      .order('production_date', { ascending: false })
+      .order('submitted_at', { ascending: false });
+
+    if (machineId) query = query.eq('machine_id', parseInt(machineId));
+    if (!showVoided) query = query.eq('voided', false);
+
+    const { data: batches, error } = await query;
+    if (error) throw error;
+
+    if (!batches || batches.length === 0) {
+      container.innerHTML = '<div class="empty"><span class="emoji">📭</span><div class="empty-title">ไม่พบ batch</div></div>';
+      return;
+    }
+
+    // Get scan counts
+    const batchIds = batches.map(b => b.id);
+    const { data: scans } = await supabase
+      .from('paper_scans')
+      .select('batch_id')
+      .in('batch_id', batchIds);
+    const countsByBatch = {};
+    (scans || []).forEach(s => { countsByBatch[s.batch_id] = (countsByBatch[s.batch_id] || 0) + 1; });
+
+    let html = '<div class="edit-batch-list">';
+    batches.forEach(b => {
+      const products = (b.batch_products || [])
+        .sort((a, b) => a.sequence - b.sequence)
+        .map(p => p.product_name).join(', ');
+      const machineName = b.machines ? b.machines.name : '-';
+      const cnt = countsByBatch[b.id] || 0;
+      const submittedTime = new Date(b.submitted_at).toLocaleString('th-TH');
+
+      html += `<div class="edit-batch-card ${b.voided ? 'voided' : ''}">
+        <div class="edit-batch-info">
+          <div class="edit-batch-title">
+            <span class="date">${b.production_date}</span>
+            · <span class="machine">${escapeHtml(machineName)}</span>
+            · ${cnt} ม้วน
+            ${b.voided ? '<span class="voided-badge">ยกเลิกแล้ว</span>' : ''}
+          </div>
+          <div class="edit-batch-meta">
+            📦 ${escapeHtml(products)}<br>
+            <small>บันทึกเมื่อ ${escapeHtml(submittedTime)}${b.voided ? ' · ยกเลิก: ' + escapeHtml(b.voided_reason || '-') : ''}</small>
+          </div>
+        </div>
+        <div class="edit-batch-actions">
+          <button class="mini-btn edit" data-id="${b.id}">✏️ แก้ไข</button>
+          ${b.voided
+            ? `<button class="mini-btn restore" data-id="${b.id}">↻ กู้คืน</button>`
+            : `<button class="mini-btn void" data-id="${b.id}">✕ ยกเลิก</button>`}
+        </div>
+      </div>`;
+    });
+    html += '</div>';
+    container.innerHTML = html;
+
+    // Attach handlers
+    container.querySelectorAll('.mini-btn.edit').forEach(btn => {
+      btn.addEventListener('click', () => openEditor(btn.dataset.id));
+    });
+    container.querySelectorAll('.mini-btn.void').forEach(btn => {
+      btn.addEventListener('click', () => voidBatch(btn.dataset.id));
+    });
+    container.querySelectorAll('.mini-btn.restore').forEach(btn => {
+      btn.addEventListener('click', () => restoreBatch(btn.dataset.id));
+    });
+  } catch (err) {
+    console.error(err);
+    container.innerHTML = `<div class="empty"><span class="emoji">⚠️</span><div class="empty-title">ค้นหาไม่สำเร็จ</div><div>${escapeHtml(err.message)}</div></div>`;
+  }
+}
+
+// ---- Void / Restore ----
+async function voidBatch(batchId) {
+  const reason = prompt('กรุณาระบุเหตุผลในการยกเลิก batch นี้:');
+  if (reason == null || !reason.trim()) return;
+
+  try {
+    const { error } = await supabase
+      .from('production_batches')
+      .update({
+        voided: true,
+        voided_at: new Date().toISOString(),
+        voided_reason: reason.trim()
+      })
+      .eq('id', batchId);
+    if (error) throw error;
+    await logEdit('void', 'production_batches', batchId, null, null, reason.trim(), batchId, 'Voided batch');
+    alert('✓ ยกเลิก batch เรียบร้อย');
+    loadEditList();
+  } catch (err) {
+    console.error(err);
+    alert('ยกเลิกไม่สำเร็จ: ' + err.message);
+  }
+}
+
+async function restoreBatch(batchId) {
+  if (!confirm('กู้คืน batch นี้ให้กลับมาใช้งาน?')) return;
+  try {
+    const { error } = await supabase
+      .from('production_batches')
+      .update({ voided: false, voided_at: null, voided_reason: null })
+      .eq('id', batchId);
+    if (error) throw error;
+    await logEdit('restore', 'production_batches', batchId, null, null, null, batchId, 'Restored batch');
+    alert('✓ กู้คืนเรียบร้อย');
+    loadEditList();
+  } catch (err) {
+    console.error(err);
+    alert('กู้คืนไม่สำเร็จ: ' + err.message);
+  }
+}
+
+// ---- Editor ----
+async function openEditor(batchId) {
+  const listPanel = document.getElementById('edit-list-panel');
+  const editorPanel = document.getElementById('edit-editor-panel');
+  editorPanel.innerHTML = '<div class="loading"><div class="spinner-small"></div><div style="margin-top:10px;">กำลังโหลด batch...</div></div>';
+  editorPanel.style.display = 'block';
+  listPanel.style.display = 'none';
+
+  try {
+    // Load batch + products + scans
+    const { data: batch, error: bErr } = await supabase
+      .from('production_batches')
+      .select(`
+        id, production_date, machine_id, voided, voided_reason,
+        machines (name, dp),
+        batch_products (id, product_name, is_new_product, sequence)
+      `)
+      .eq('id', batchId)
+      .single();
+    if (bErr) throw bErr;
+
+    const { data: scans, error: sErr } = await supabase
+      .from('paper_scans')
+      .select('*')
+      .eq('batch_id', batchId)
+      .order('scanned_at', { ascending: true });
+    if (sErr) throw sErr;
+
+    // Load audit log for this batch
+    const { data: auditLog } = await supabase
+      .from('edit_audit_logs')
+      .select('*')
+      .eq('batch_id', batchId)
+      .order('edited_at', { ascending: false })
+      .limit(20);
+
+    _currentEditor = {
+      batch: { ...batch },
+      original: {
+        production_date: batch.production_date,
+        machine_id: batch.machine_id
+      },
+      products: batch.batch_products.sort((a, b) => a.sequence - b.sequence).map(p => ({ ...p, _original: { ...p } })),
+      scans: scans.map(s => ({ ...s, _original: { ...s }, _deleted: false })),
+      auditLog: auditLog || []
+    };
+
+    renderEditor();
+  } catch (err) {
+    console.error(err);
+    editorPanel.innerHTML = `<div class="empty"><span class="emoji">⚠️</span><div class="empty-title">โหลดไม่สำเร็จ</div><div>${escapeHtml(err.message)}</div></div>`;
+  }
+}
+
+function renderEditor() {
+  const ed = _currentEditor;
+  const panel = document.getElementById('edit-editor-panel');
+
+  const machinesOpts = window._masterMachines.map(m =>
+    `<option value="${m.id}" ${m.id === ed.batch.machine_id ? 'selected' : ''}>${escapeHtml(m.name)} (${escapeHtml(m.dp)})</option>`
+  ).join('');
+
+  const auditHtml = ed.auditLog.length === 0
+    ? '<div style="color: var(--text-dim); font-size: 13px; padding: 8px;">ยังไม่มีประวัติการแก้ไข</div>'
+    : ed.auditLog.map(a => {
+        const t = new Date(a.edited_at).toLocaleString('th-TH');
+        let diff = '';
+        if (a.field_name) {
+          diff = `<div class="audit-diff">
+            ${a.field_name}:
+            <span class="old">${escapeHtml(a.old_value || '(ว่าง)')}</span> →
+            <span class="new">${escapeHtml(a.new_value || '(ว่าง)')}</span>
+          </div>`;
+        } else if (a.note) {
+          diff = `<div class="audit-diff">${escapeHtml(a.note)}${a.new_value ? ': ' + escapeHtml(a.new_value) : ''}</div>`;
+        }
+        return `<div class="audit-entry">
+          <span class="audit-action ${a.action}">${a.action.toUpperCase()}</span>
+          <span class="audit-time">${t} · ${escapeHtml(a.ip_address || '-')}</span>
+          <span style="margin-left: 4px; color: var(--text-dim); font-size: 11px;">${escapeHtml(a.table_name)}</span>
+          ${diff}
+        </div>`;
+      }).join('');
+
+  const productsHtml = ed.products.map((p, idx) => `
+    <div class="edit-grid" style="margin-bottom: 8px; align-items: center; grid-template-columns: 32px 1fr 100px auto;">
+      <div style="text-align:center; color: var(--text-dim); font-weight: 700;">${idx + 1}</div>
+      <input type="text" class="p-edit-name" data-idx="${idx}" value="${escapeHtml(p.product_name)}" placeholder="ชื่อสินค้า">
+      <label style="font-size:12px;display:flex;align-items:center;gap:6px;">
+        <input type="checkbox" class="p-edit-new" data-idx="${idx}" ${p.is_new_product ? 'checked' : ''}>
+        ใหม่
+      </label>
+      <button class="del-btn" data-idx="${idx}" title="ลบสินค้า (รวมม้วนทั้งหมดในสินค้านี้)" style="background:var(--danger-bg);color:var(--danger);border:1.5px solid var(--danger);border-radius:6px;padding:6px 12px;cursor:pointer;font-weight:700;">✕</button>
+    </div>
+  `).join('');
+
+  const scanRows = ed.scans.map((s, idx) => {
+    const isModified = JSON.stringify({a:s.barcode_raw,b:s.paper_type,c:s.cut_date,d:s.roll_no,e:s.slitter,f:s.jumbo_lot,g:s.batch_product_id}) !==
+                       JSON.stringify({a:s._original.barcode_raw,b:s._original.paper_type,c:s._original.cut_date,d:s._original.roll_no,e:s._original.slitter,f:s._original.jumbo_lot,g:s._original.batch_product_id});
+    const productOpts = ed.products.map(p =>
+      `<option value="${p.id}" ${p.id === s.batch_product_id ? 'selected' : ''}>${escapeHtml(p.product_name)}</option>`
+    ).join('');
+    return `<div class="scan-edit-row ${isModified ? 'modified' : ''} ${s._deleted ? 'deleted' : ''}" data-idx="${idx}">
+      <div class="row-num">${idx + 1}</div>
+      <select class="s-edit" data-field="batch_product_id" data-idx="${idx}" title="สินค้า">${productOpts}</select>
+      <input type="text" class="s-edit" data-field="paper_type" data-idx="${idx}" value="${escapeHtml(s.paper_type || '')}" placeholder="ประเภท">
+      <input type="text" class="s-edit" data-field="cut_date" data-idx="${idx}" value="${escapeHtml(s.cut_date || '')}" placeholder="ตัด">
+      <input type="text" class="s-edit" data-field="slitter" data-idx="${idx}" value="${escapeHtml(s.slitter || '')}" placeholder="slit">
+      <input type="text" class="s-edit" data-field="jumbo_lot" data-idx="${idx}" value="${escapeHtml(s.jumbo_lot || '')}" placeholder="ล็อต">
+      <button class="del-btn scan-del" data-idx="${idx}" title="${s._deleted ? 'ยกเลิกลบ' : 'ลบม้วนนี้'}">${s._deleted ? '↺' : '✕'}</button>
+    </div>`;
+  }).join('');
+
+  panel.innerHTML = `
+    <div class="editor-header">
+      <div class="editor-title">✏️ แก้ไข Batch
+        ${ed.batch.voided ? '<span class="voided-badge" style="margin-left:8px;">ยกเลิกแล้ว</span>' : ''}
+      </div>
+      <button class="editor-back" id="btn-editor-back">← กลับไป list</button>
+    </div>
+
+    <div class="editor-section">
+      <div class="editor-section-title">📋 ข้อมูลหัว Batch</div>
+      <div class="edit-grid">
+        <div>
+          <label class="field-label">วันที่ผลิต</label>
+          <input type="date" id="ed-date" value="${ed.batch.production_date}">
+        </div>
+        <div>
+          <label class="field-label">เครื่องจักร</label>
+          <select id="ed-machine">${machinesOpts}</select>
+        </div>
+      </div>
+    </div>
+
+    <div class="editor-section">
+      <div class="editor-section-title">📦 สินค้าใน Batch (${ed.products.length})</div>
+      ${productsHtml}
+      <button class="mini-btn edit" id="btn-add-product" style="margin-top:8px;">+ เพิ่มสินค้า</button>
+    </div>
+
+    <div class="editor-section">
+      <div class="editor-section-title">🧾 ม้วนที่สแกน (${ed.scans.filter(s => !s._deleted).length} / ${ed.scans.length})</div>
+      <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 8px;">
+        💡 Tip: คลิกช่องเพื่อแก้ค่า · ปุ่ม ✕ = ลบม้วน (กลับได้ก่อน save)
+      </div>
+      ${scanRows}
+    </div>
+
+    <div class="editor-section">
+      <div class="editor-section-title">📜 ประวัติการแก้ไข (20 ครั้งล่าสุด)</div>
+      ${auditHtml}
+    </div>
+
+    <div class="editor-footer">
+      <button class="btn btn-ghost" id="btn-editor-cancel">ยกเลิก (ไม่บันทึก)</button>
+      <button class="btn" id="btn-editor-save">💾 บันทึกการแก้ไข</button>
+    </div>
+  `;
+
+  // Attach handlers
+  document.getElementById('btn-editor-back').addEventListener('click', closeEditor);
+  document.getElementById('btn-editor-cancel').addEventListener('click', closeEditor);
+  document.getElementById('btn-editor-save').addEventListener('click', saveEditor);
+  document.getElementById('ed-date').addEventListener('change', e => ed.batch.production_date = e.target.value);
+  document.getElementById('ed-machine').addEventListener('change', e => ed.batch.machine_id = parseInt(e.target.value));
+
+  // Product edit
+  panel.querySelectorAll('.p-edit-name').forEach(inp => {
+    inp.addEventListener('input', e => {
+      const idx = parseInt(e.target.dataset.idx);
+      ed.products[idx].product_name = e.target.value;
+    });
+  });
+  panel.querySelectorAll('.p-edit-new').forEach(inp => {
+    inp.addEventListener('change', e => {
+      const idx = parseInt(e.target.dataset.idx);
+      ed.products[idx].is_new_product = e.target.checked;
+    });
+  });
+  panel.querySelectorAll('.edit-grid .del-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      const idx = parseInt(btn.dataset.idx);
+      const prod = ed.products[idx];
+      const scanCount = ed.scans.filter(s => s.batch_product_id === prod.id && !s._deleted).length;
+      if (scanCount > 0) {
+        if (!confirm(`สินค้า "${prod.product_name}" มี ${scanCount} ม้วน ถ้าลบ ม้วนทั้งหมดจะถูกลบด้วย ดำเนินการ?`)) return;
+        ed.scans.forEach(s => { if (s.batch_product_id === prod.id) s._deleted = true; });
+      }
+      prod._deleted = true;
+      ed.products.splice(idx, 1);
+      renderEditor();
+    });
+  });
+  document.getElementById('btn-add-product').addEventListener('click', () => {
+    const name = prompt('ชื่อสินค้าใหม่:');
+    if (!name || !name.trim()) return;
+    const newProd = {
+      id: 'new_' + Date.now(),  // marker ว่าเป็น new
+      product_name: name.trim(),
+      is_new_product: !window._masterProducts.includes(name.trim()),
+      sequence: ed.products.length + 1,
+      _isNew: true
+    };
+    ed.products.push(newProd);
+    renderEditor();
+  });
+
+  // Scan edit
+  panel.querySelectorAll('.s-edit').forEach(inp => {
+    inp.addEventListener('input', e => {
+      const idx = parseInt(e.target.dataset.idx);
+      const field = e.target.dataset.field;
+      const val = e.target.value;
+      ed.scans[idx][field] = field === 'batch_product_id' ? val : val;
+      // Also reconstruct barcode_raw from parts
+      const s = ed.scans[idx];
+      s.barcode_raw = `${s.paper_type}_${s.cut_date}_${s.roll_no}_${s.slitter}_${s.jumbo_lot}`;
+    });
+    inp.addEventListener('blur', renderEditor);  // re-render to show 'modified' highlight
+  });
+  panel.querySelectorAll('.scan-del').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt(btn.dataset.idx);
+      ed.scans[idx]._deleted = !ed.scans[idx]._deleted;
+      renderEditor();
+    });
+  });
+}
+
+function closeEditor() {
+  if (_currentEditor && hasChanges()) {
+    if (!confirm('มีการแก้ไขที่ยังไม่ได้บันทึก ต้องการออกโดยไม่บันทึก?')) return;
+  }
+  _currentEditor = null;
+  document.getElementById('edit-editor-panel').style.display = 'none';
+  document.getElementById('edit-list-panel').style.display = 'block';
+  loadEditList();  // refresh
+}
+
+function hasChanges() {
+  const ed = _currentEditor;
+  if (!ed) return false;
+  if (ed.batch.production_date !== ed.original.production_date) return true;
+  if (ed.batch.machine_id !== ed.original.machine_id) return true;
+  if (ed.products.some(p => p._isNew || p._deleted ||
+      p.product_name !== p._original?.product_name ||
+      p.is_new_product !== p._original?.is_new_product)) return true;
+  if (ed.scans.some(s => s._deleted ||
+      s.batch_product_id !== s._original.batch_product_id ||
+      s.paper_type !== s._original.paper_type ||
+      s.cut_date !== s._original.cut_date ||
+      s.slitter !== s._original.slitter ||
+      s.jumbo_lot !== s._original.jumbo_lot)) return true;
+  return false;
+}
+
+async function saveEditor() {
+  const ed = _currentEditor;
+  if (!ed) return;
+  if (!hasChanges()) {
+    alert('ไม่มีการเปลี่ยนแปลง');
+    return;
+  }
+
+  const saveBtn = document.getElementById('btn-editor-save');
+  saveBtn.disabled = true;
+  saveBtn.textContent = '⏳ กำลังบันทึก...';
+
+  try {
+    const batchId = ed.batch.id;
+    const changes = [];  // { action, table, id, field, old, new }
+
+    // 1. Batch header changes
+    if (ed.batch.production_date !== ed.original.production_date) {
+      await supabase.from('production_batches')
+        .update({ production_date: ed.batch.production_date })
+        .eq('id', batchId);
+      changes.push({ action: 'update', table: 'production_batches', id: batchId,
+                     field: 'production_date', old: ed.original.production_date, new: ed.batch.production_date });
+    }
+    if (ed.batch.machine_id !== ed.original.machine_id) {
+      await supabase.from('production_batches')
+        .update({ machine_id: ed.batch.machine_id })
+        .eq('id', batchId);
+      changes.push({ action: 'update', table: 'production_batches', id: batchId,
+                     field: 'machine_id', old: ed.original.machine_id, new: ed.batch.machine_id });
+    }
+
+    // 2. Product changes: insert new, update modified, delete removed
+    for (const p of ed.products) {
+      if (p._isNew) {
+        const { data, error } = await supabase.from('batch_products').insert({
+          batch_id: batchId,
+          product_name: p.product_name,
+          is_new_product: p.is_new_product,
+          sequence: p.sequence
+        }).select().single();
+        if (error) throw error;
+        // Remap p.id so any scan pointing to this new product works
+        const oldMarker = p.id;
+        p.id = data.id;
+        ed.scans.forEach(s => { if (s.batch_product_id === oldMarker) s.batch_product_id = data.id; });
+        changes.push({ action: 'insert', table: 'batch_products', id: data.id, field: null,
+                       old: null, new: p.product_name });
+      } else if (p._original && (p.product_name !== p._original.product_name || p.is_new_product !== p._original.is_new_product)) {
+        await supabase.from('batch_products').update({
+          product_name: p.product_name,
+          is_new_product: p.is_new_product
+        }).eq('id', p.id);
+        if (p.product_name !== p._original.product_name) {
+          changes.push({ action: 'update', table: 'batch_products', id: p.id,
+                         field: 'product_name', old: p._original.product_name, new: p.product_name });
+        }
+      }
+    }
+
+    // 3. Scan changes: update modified, delete marked
+    for (const s of ed.scans) {
+      if (s._deleted && !String(s.id).startsWith('new_')) {
+        await supabase.from('paper_scans').delete().eq('id', s.id);
+        changes.push({ action: 'delete', table: 'paper_scans', id: s.id, field: null,
+                       old: s._original.barcode_raw, new: null });
+        continue;
+      }
+      const modified =
+        s.batch_product_id !== s._original.batch_product_id ||
+        s.paper_type !== s._original.paper_type ||
+        s.cut_date !== s._original.cut_date ||
+        s.slitter !== s._original.slitter ||
+        s.jumbo_lot !== s._original.jumbo_lot;
+      if (modified && !s._deleted) {
+        await supabase.from('paper_scans').update({
+          batch_product_id: s.batch_product_id,
+          paper_type: s.paper_type,
+          cut_date: s.cut_date,
+          slitter: s.slitter,
+          jumbo_lot: s.jumbo_lot,
+          barcode_raw: s.barcode_raw
+        }).eq('id', s.id);
+        // Log per-field changes
+        ['batch_product_id', 'paper_type', 'cut_date', 'slitter', 'jumbo_lot'].forEach(f => {
+          if (s[f] !== s._original[f]) {
+            changes.push({ action: 'update', table: 'paper_scans', id: s.id,
+                           field: f, old: s._original[f], new: s[f] });
+          }
+        });
+      }
+    }
+
+    // 4. Write all audit logs
+    const ip = await getClientIP();
+    const auditInserts = changes.map(c => ({
+      ip_address: ip,
+      table_name: c.table,
+      record_id: c.id,
+      action: c.action,
+      field_name: c.field,
+      old_value: c.old == null ? null : String(c.old),
+      new_value: c.new == null ? null : String(c.new),
+      batch_id: batchId,
+      note: null
+    }));
+    if (auditInserts.length > 0) {
+      await supabase.from('edit_audit_logs').insert(auditInserts);
+    }
+
+    alert(`✓ บันทึกเรียบร้อย (${changes.length} การเปลี่ยนแปลง)`);
+    _currentEditor = null;
+    document.getElementById('edit-editor-panel').style.display = 'none';
+    document.getElementById('edit-list-panel').style.display = 'block';
+    loadEditList();
+  } catch (err) {
+    console.error(err);
+    alert('บันทึกไม่สำเร็จ: ' + err.message);
+    saveBtn.disabled = false;
+    saveBtn.textContent = '💾 บันทึกการแก้ไข';
+  }
+}
+
+// ==== Hook handlers ====
+document.getElementById('btn-e-search').addEventListener('click', loadEditList);
+document.getElementById('e-show-voided').addEventListener('change', loadEditList);
 
 // ==================== VIEW 4: ACCESS LOG ====================
 let accessLogLoaded = false;
