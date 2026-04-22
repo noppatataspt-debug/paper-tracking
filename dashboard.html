@@ -386,7 +386,8 @@
     <div class="login-title">Dashboard สอบกลับวัตถุดิบ</div>
     <div class="login-sub">สำหรับหัวหน้างานเท่านั้น กรุณาใส่รหัสเพื่อเข้าใช้งาน</div>
     <input type="password" class="login-input" id="login-input"
-           placeholder="••••" maxlength="20" autocomplete="off">
+           placeholder="ใส่รหัสผ่าน" maxlength="30" autocomplete="off"
+           style="letter-spacing: 4px; font-size: 18px;">
     <button class="login-btn" id="login-btn">เข้าสู่ระบบ</button>
     <div class="login-error" id="login-error"></div>
     <div class="login-footer">
@@ -559,7 +560,9 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ==================== AUTH CONFIG ====================
-const DASHBOARD_PASSWORD = '9999';
+const DASHBOARD_PASSWORD = 'rptasia';
+const MAX_ATTEMPTS = 3;
+const LOCKOUT_MINUTES = 5;
 
 // Fetch client IP (best-effort, from public IP API)
 async function getClientIP() {
@@ -581,8 +584,55 @@ async function logAccess(success, note) {
       success: success,
       note: note || null
     });
+    return ip;
   } catch (e) {
     console.warn('Failed to log access', e);
+    return null;
+  }
+}
+
+// Check if current IP is locked out by counting recent failed attempts
+async function checkLockout() {
+  try {
+    const ip = await getClientIP();
+    const sinceTime = new Date(Date.now() - LOCKOUT_MINUTES * 60 * 1000).toISOString();
+
+    const { data, error } = await supabase
+      .from('dashboard_access_logs')
+      .select('accessed_at, success')
+      .eq('ip_address', ip)
+      .gte('accessed_at', sinceTime)
+      .order('accessed_at', { ascending: false })
+      .limit(20);
+
+    if (error) return { locked: false };
+
+    // Look for any successful login in lockout window — if found, count fails AFTER that success
+    let failsInWindow = 0;
+    let oldestFailTime = null;
+    for (const log of data) {
+      if (log.success) break; // reset count on any success
+      failsInWindow++;
+      oldestFailTime = log.accessed_at;
+    }
+
+    if (failsInWindow >= MAX_ATTEMPTS) {
+      // Find the 3rd failed attempt (the one that triggered lock)
+      const thirdFail = data[MAX_ATTEMPTS - 1];
+      const lockUntil = new Date(new Date(thirdFail.accessed_at).getTime() + LOCKOUT_MINUTES * 60 * 1000);
+      const now = new Date();
+      if (lockUntil > now) {
+        return {
+          locked: true,
+          until: lockUntil,
+          secondsLeft: Math.ceil((lockUntil - now) / 1000)
+        };
+      }
+    }
+    return { locked: false, failCount: failsInWindow };
+  } catch (e) {
+    console.warn('Check lockout failed', e);
+    return { locked: false };
   }
 }
 
@@ -593,7 +643,33 @@ const loginBtn = document.getElementById('login-btn');
 const loginError = document.getElementById('login-error');
 const mainContainer = document.getElementById('main-container');
 
-let failedAttempts = 0;
+let lockoutTimer = null;
+
+function startLockoutCountdown(secondsLeft) {
+  loginInput.disabled = true;
+  loginBtn.disabled = true;
+  clearInterval(lockoutTimer);
+
+  function tick() {
+    if (secondsLeft <= 0) {
+      clearInterval(lockoutTimer);
+      loginInput.disabled = false;
+      loginBtn.disabled = false;
+      loginBtn.textContent = 'เข้าสู่ระบบ';
+      loginError.textContent = '';
+      loginInput.focus();
+      return;
+    }
+    const m = Math.floor(secondsLeft / 60);
+    const s = secondsLeft % 60;
+    const timeStr = m > 0 ? `${m} นาที ${s} วิ` : `${s} วินาที`;
+    loginBtn.textContent = `🔒 ถูกล็อก รออีก ${timeStr}`;
+    loginError.textContent = `พยายามเข้าผิด ${MAX_ATTEMPTS} ครั้ง — ระบบล็อกชั่วคราว`;
+    secondsLeft--;
+  }
+  tick();
+  lockoutTimer = setInterval(tick, 1000);
+}
 
 async function doLogin() {
   const val = loginInput.value.trim();
@@ -604,6 +680,15 @@ async function doLogin() {
 
   loginBtn.disabled = true;
   loginBtn.textContent = 'กำลังตรวจสอบ...';
+  loginError.textContent = '';
+
+  // Check lockout first (prevent bypass via refresh)
+  const lockStatus = await checkLockout();
+  if (lockStatus.locked) {
+    startLockoutCountdown(lockStatus.secondsLeft);
+    await logAccess(false, `Blocked: still in lockout (${lockStatus.secondsLeft}s left)`);
+    return;
+  }
 
   if (val === DASHBOARD_PASSWORD) {
     // Success
@@ -613,38 +698,28 @@ async function doLogin() {
     initDashboard();
   } else {
     // Failed
-    failedAttempts++;
-    await logAccess(false, `Wrong password (attempt #${failedAttempts})`);
-    loginInput.classList.add('shake');
-    loginError.textContent = `รหัสไม่ถูกต้อง (พยายาม ${failedAttempts} ครั้ง)`;
-    setTimeout(() => loginInput.classList.remove('shake'), 500);
-    loginInput.value = '';
-    loginBtn.disabled = false;
-    loginBtn.textContent = 'เข้าสู่ระบบ';
-    loginInput.focus();
+    const failCount = (lockStatus.failCount || 0) + 1;
+    await logAccess(false, `Wrong password (attempt ${failCount}/${MAX_ATTEMPTS})`);
 
-    // If too many attempts, force delay
-    if (failedAttempts >= 3) {
-      loginBtn.disabled = true;
-      loginBtn.textContent = 'รอ 5 วิ...';
-      let sec = 5;
-      const timer = setInterval(() => {
-        sec--;
-        if (sec > 0) {
-          loginBtn.textContent = `รอ ${sec} วิ...`;
-        } else {
-          clearInterval(timer);
-          loginBtn.disabled = false;
-          loginBtn.textContent = 'เข้าสู่ระบบ';
-        }
-      }, 1000);
+    loginInput.classList.add('shake');
+    loginInput.value = '';
+    setTimeout(() => loginInput.classList.remove('shake'), 500);
+
+    if (failCount >= MAX_ATTEMPTS) {
+      // Start lockout
+      startLockoutCountdown(LOCKOUT_MINUTES * 60);
+    } else {
+      loginError.textContent = `รหัสไม่ถูกต้อง (${failCount}/${MAX_ATTEMPTS}) — ผิด ${MAX_ATTEMPTS} ครั้งจะถูกล็อก ${LOCKOUT_MINUTES} นาที`;
+      loginBtn.disabled = false;
+      loginBtn.textContent = 'เข้าสู่ระบบ';
+      loginInput.focus();
     }
   }
 }
 
 loginBtn.addEventListener('click', doLogin);
 loginInput.addEventListener('keydown', e => {
-  if (e.key === 'Enter') doLogin();
+  if (e.key === 'Enter' && !loginInput.disabled) doLogin();
 });
 document.getElementById('btn-logout').addEventListener('click', () => {
   if (confirm('ต้องการออกจากระบบ?')) {
@@ -652,8 +727,15 @@ document.getElementById('btn-logout').addEventListener('click', () => {
   }
 });
 
-// Focus input on load
-setTimeout(() => loginInput.focus(), 100);
+// Check lockout on page load (in case user refreshed during lockout)
+(async () => {
+  const lockStatus = await checkLockout();
+  if (lockStatus.locked) {
+    startLockoutCountdown(lockStatus.secondsLeft);
+  } else {
+    setTimeout(() => loginInput.focus(), 100);
+  }
+})();
 
 // ==================== UTILS ====================
 
