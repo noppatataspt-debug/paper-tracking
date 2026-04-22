@@ -572,6 +572,71 @@
   }
   .audit-diff .old { color: var(--danger); text-decoration: line-through; }
   .audit-diff .new { color: var(--success); font-weight: 700; }
+
+  /* ============ Stats View ============ */
+  .stats-cards {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
+    margin-bottom: 20px;
+  }
+  .stats-card {
+    padding: 18px; background: var(--panel); border: 1.5px solid var(--border);
+    border-radius: 12px;
+  }
+  .stats-card-label {
+    font-size: 12px; font-weight: 700; color: var(--text-dim);
+    text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px;
+  }
+  .stats-card-value {
+    font-family: var(--mono); font-size: 26px; font-weight: 800;
+  }
+  .stats-card-sub { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+
+  .bar-row {
+    display: grid; grid-template-columns: 100px 1fr 120px; gap: 12px;
+    align-items: center; margin-bottom: 10px;
+  }
+  .bar-label { font-weight: 700; font-size: 14px; }
+  .bar-track {
+    height: 28px; background: var(--panel-2); border-radius: 6px;
+    overflow: hidden; position: relative;
+  }
+  .bar-fill {
+    height: 100%; background: linear-gradient(90deg, #fbbf24 0%, #f97316 50%, #dc2626 100%);
+    display: flex; align-items: center; justify-content: flex-end;
+    padding-right: 10px; color: white; font-weight: 700; font-size: 12px;
+    transition: width 0.6s ease;
+  }
+  .bar-fill.low { background: linear-gradient(90deg, #10b981 0%, #059669 100%); }
+  .bar-fill.med { background: linear-gradient(90deg, #fbbf24 0%, #f59e0b 100%); }
+  .bar-fill.high { background: linear-gradient(90deg, #ef4444 0%, #b91c1c 100%); }
+  .bar-numbers { font-family: var(--mono); font-size: 13px; color: var(--text-dim); }
+
+  .trend-chart {
+    padding: 16px; background: var(--panel-2); border-radius: 12px;
+    margin-top: 12px;
+  }
+  .trend-svg { width: 100%; height: 200px; }
+
+  .error-row {
+    display: grid; grid-template-columns: 32px 1fr auto auto;
+    gap: 12px; padding: 10px 14px; background: var(--panel);
+    border: 1px solid var(--border); border-radius: 8px;
+    margin-bottom: 6px; align-items: center;
+    cursor: pointer; transition: background 0.15s;
+  }
+  .error-row:hover { background: var(--panel-2); }
+  .error-row-num { color: var(--text-dim); font-family: var(--mono); text-align: center; font-weight: 700; }
+  .error-row-info { min-width: 0; }
+  .error-row-barcode {
+    font-family: var(--mono); font-size: 13px; font-weight: 700;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .error-row-reason { font-size: 12px; color: var(--danger); font-weight: 600; margin-top: 2px; }
+  .error-row-meta { font-size: 11px; color: var(--text-dim); font-family: var(--mono); }
+  .error-row-slitter {
+    padding: 4px 10px; background: var(--accent-bg); color: var(--accent);
+    border-radius: 6px; font-weight: 800; font-size: 13px; font-family: var(--mono);
+  }
   .log-table {
     width: 100%; border-collapse: collapse; font-size: 13px;
   }
@@ -659,6 +724,7 @@
     <button class="tab" data-view="lot">↩️ ย้อนหา Jumbo Lot</button>
     <button class="tab" data-view="history">📋 ประวัติการบันทึก</button>
     <button class="tab" data-view="edit">⚙️ แก้ไขข้อมูล</button>
+    <button class="tab" data-view="stats">📊 สถิติ</button>
     <button class="tab" data-view="access">🔐 Access Log</button>
   </div>
 
@@ -818,6 +884,34 @@
 
     <!-- Sub-view: Editor (hidden by default) -->
     <div class="panel" id="edit-editor-panel" style="display: none;"></div>
+  </div>
+  <!-- VIEW 6: Stats -->
+  <div class="view" id="view-stats">
+    <div class="panel">
+      <div class="panel-title">📊 สถิติข้อมูลผิด (จากพนักงาน Slitter)</div>
+      <div class="panel-sub">ดู error rate ต่อ slitter เพื่อหาจุดที่ต้องปรับปรุง</div>
+
+      <div class="form-grid" style="grid-template-columns: 1fr 1fr auto auto;">
+        <div>
+          <label class="field-label">จากวันที่</label>
+          <input type="date" id="s-from">
+        </div>
+        <div>
+          <label class="field-label">ถึงวันที่</label>
+          <input type="date" id="s-to">
+        </div>
+        <button class="btn btn-ghost" id="btn-s-preset">⏱ 30 วัน</button>
+        <button class="btn" id="btn-s-search">🔍 ค้นหา</button>
+      </div>
+
+      <div id="s-result">
+        <div class="empty">
+          <span class="emoji">📊</span>
+          <div class="empty-title">เลือกช่วงเวลาแล้วกดค้นหา</div>
+          <div>ดู error rate ของ slitter แต่ละตัว</div>
+        </div>
+      </div>
+    </div>
   </div>
   <!-- VIEW 4: Access Log -->
   <div class="view" id="view-access">
@@ -1289,6 +1383,10 @@ document.querySelectorAll('.tab').forEach(t => {
       window._editAutoLoaded = true;
       loadEditList();
     }
+    if (t.dataset.view === 'stats' && !window._statsAutoLoaded) {
+      window._statsAutoLoaded = true;
+      loadStats();
+    }
     if (t.dataset.view === 'access') loadAccessLog();
   });
 });
@@ -1338,6 +1436,10 @@ async function loadMaster() {
     const sevenDaysAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
     document.getElementById('e-from').valueAsDate = sevenDaysAgo;
     document.getElementById('e-to').valueAsDate = today;
+
+    // Stats view: last 30 days by default
+    document.getElementById('s-from').valueAsDate = thirtyDaysAgo;
+    document.getElementById('s-to').valueAsDate = today;
 
     // Save global master for editor
     window._masterMachines = machinesRes.data;
@@ -2357,6 +2459,223 @@ async function saveEditor() {
 // ==== Hook handlers ====
 document.getElementById('btn-e-search').addEventListener('click', loadEditList);
 document.getElementById('e-show-voided').addEventListener('change', loadEditList);
+
+// ==================== VIEW 6: STATS ====================
+
+async function loadStats() {
+  const from = document.getElementById('s-from').value;
+  const to = document.getElementById('s-to').value;
+
+  if (!from || !to) {
+    alert('กรุณาเลือกช่วงวันที่');
+    return;
+  }
+
+  const container = document.getElementById('s-result');
+  container.innerHTML = '<div class="loading"><div class="spinner-small"></div><div style="margin-top:10px;">กำลังคำนวณสถิติ...</div></div>';
+
+  try {
+    // Load all scans in date range (via v_scan_details view — voided excluded)
+    const { data: scans, error } = await supabase
+      .from('v_scan_details')
+      .select('id, barcode_raw, slitter, barcode_valid, barcode_warnings, production_date, machine_name, jumbo_lot, paper_type, scanned_at, batch_id')
+      .gte('production_date', from)
+      .lte('production_date', to)
+      .order('scanned_at', { ascending: false });
+    if (error) throw error;
+
+    if (!scans || scans.length === 0) {
+      container.innerHTML = '<div class="empty"><span class="emoji">📭</span><div class="empty-title">ไม่พบข้อมูลในช่วงเวลานี้</div></div>';
+      return;
+    }
+
+    renderStats(scans, { from, to });
+  } catch (err) {
+    console.error(err);
+    container.innerHTML = `<div class="empty"><span class="emoji">⚠️</span><div class="empty-title">โหลดสถิติไม่สำเร็จ</div><div>${escapeHtml(err.message)}</div></div>`;
+  }
+}
+
+function renderStats(scans, params) {
+  const container = document.getElementById('s-result');
+
+  const total = scans.length;
+  const invalid = scans.filter(s => s.barcode_valid === false);
+  const errorCount = invalid.length;
+  const errorRate = total > 0 ? (errorCount / total * 100) : 0;
+  const uniqueSlitters = [...new Set(scans.map(s => s.slitter).filter(Boolean))].sort();
+  const uniqueDays = new Set(scans.map(s => s.production_date)).size;
+
+  // ===== 1. Summary cards =====
+  let html = `<div class="stats-cards">
+    <div class="stats-card">
+      <div class="stats-card-label">ม้วนทั้งหมด</div>
+      <div class="stats-card-value">${total.toLocaleString()}</div>
+      <div class="stats-card-sub">ใน ${uniqueDays} วัน</div>
+    </div>
+    <div class="stats-card">
+      <div class="stats-card-label">Error (ผิด format)</div>
+      <div class="stats-card-value" style="color:var(--danger);">${errorCount.toLocaleString()}</div>
+      <div class="stats-card-sub">${errorRate.toFixed(2)}% ของทั้งหมด</div>
+    </div>
+    <div class="stats-card">
+      <div class="stats-card-label">Slitter ที่ใช้งาน</div>
+      <div class="stats-card-value" style="color:var(--accent-2);">${uniqueSlitters.length}</div>
+      <div class="stats-card-sub">เครื่อง</div>
+    </div>
+    <div class="stats-card">
+      <div class="stats-card-label">ค่าเฉลี่ยต่อวัน</div>
+      <div class="stats-card-value" style="color:var(--accent);">${Math.round(total / uniqueDays).toLocaleString()}</div>
+      <div class="stats-card-sub">ม้วน/วัน</div>
+    </div>
+  </div>`;
+
+  // ===== 2. Error rate by Slitter =====
+  const slitterStats = {};
+  scans.forEach(s => {
+    const key = s.slitter || '(ไม่ระบุ)';
+    if (!slitterStats[key]) slitterStats[key] = { total: 0, errors: 0 };
+    slitterStats[key].total++;
+    if (s.barcode_valid === false) slitterStats[key].errors++;
+  });
+
+  const sortedSlitters = Object.entries(slitterStats)
+    .map(([k, v]) => ({
+      slitter: k,
+      total: v.total,
+      errors: v.errors,
+      rate: v.total > 0 ? (v.errors / v.total * 100) : 0
+    }))
+    .sort((a, b) => b.rate - a.rate);  // เรียง error rate สูง → ต่ำ
+
+  const maxRate = Math.max(...sortedSlitters.map(s => s.rate), 1);
+
+  html += `<div style="background:var(--panel);border:1.5px solid var(--border);border-radius:12px;padding:20px;margin-bottom:16px;">
+    <h3 style="font-size:17px;font-weight:800;margin-bottom:6px;">🎯 Error Rate ต่อ Slitter</h3>
+    <p style="font-size:13px;color:var(--text-dim);margin-bottom:16px;">พนักงาน slitter ที่มี error % สูง = ควรฝึกเพิ่ม</p>`;
+
+  if (sortedSlitters.length === 0) {
+    html += '<div style="color:var(--text-dim);text-align:center;padding:20px;">ไม่มีข้อมูล slitter</div>';
+  } else {
+    sortedSlitters.forEach(s => {
+      const fillWidth = Math.max(s.rate / maxRate * 100, 2);
+      const rateClass = s.rate === 0 ? 'low' : (s.rate < 2 ? 'low' : (s.rate < 5 ? 'med' : 'high'));
+      const displayName = s.slitter === '(ไม่ระบุ)' ? s.slitter : `Slitter ${s.slitter}`;
+      html += `<div class="bar-row">
+        <div class="bar-label">${escapeHtml(displayName)}</div>
+        <div class="bar-track">
+          <div class="bar-fill ${rateClass}" style="width:${fillWidth}%;">
+            ${s.rate.toFixed(2)}%
+          </div>
+        </div>
+        <div class="bar-numbers">${s.errors}/${s.total} ม้วน</div>
+      </div>`;
+    });
+  }
+  html += '</div>';
+
+  // ===== 3. Trend line (daily error rate) =====
+  const byDay = {};
+  scans.forEach(s => {
+    const d = s.production_date;
+    if (!byDay[d]) byDay[d] = { total: 0, errors: 0 };
+    byDay[d].total++;
+    if (s.barcode_valid === false) byDay[d].errors++;
+  });
+
+  const sortedDays = Object.entries(byDay)
+    .map(([d, v]) => ({ date: d, total: v.total, errors: v.errors, rate: v.total > 0 ? v.errors / v.total * 100 : 0 }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  if (sortedDays.length > 1) {
+    const maxDayRate = Math.max(...sortedDays.map(d => d.rate), 1);
+    const w = 800, h = 200, pad = 40;
+    const chartW = w - pad * 2;
+    const chartH = h - pad * 2;
+    const xStep = sortedDays.length > 1 ? chartW / (sortedDays.length - 1) : 0;
+
+    const points = sortedDays.map((d, i) => {
+      const x = pad + i * xStep;
+      const y = pad + chartH - (d.rate / maxDayRate * chartH);
+      return { x, y, ...d };
+    });
+
+    const pathStr = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
+    const circles = points.map(p =>
+      `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4" fill="#c2410c">
+        <title>${p.date}: ${p.errors}/${p.total} (${p.rate.toFixed(2)}%)</title>
+      </circle>`
+    ).join('');
+
+    // X-axis labels (show every Nth if too many)
+    const labelStep = Math.max(1, Math.ceil(sortedDays.length / 10));
+    const xLabels = points.filter((_, i) => i % labelStep === 0).map(p =>
+      `<text x="${p.x.toFixed(1)}" y="${h - 10}" font-size="10" fill="#64748b" text-anchor="middle" font-family="monospace">${p.date.slice(5)}</text>`
+    ).join('');
+
+    // Y-axis gridlines
+    const yGrid = [0, 25, 50, 75, 100].map(pct => {
+      const yVal = maxDayRate * pct / 100;
+      const y = pad + chartH - (yVal / maxDayRate * chartH);
+      return `<line x1="${pad}" y1="${y.toFixed(1)}" x2="${w - pad}" y2="${y.toFixed(1)}" stroke="#e5e7eb" stroke-dasharray="2,2"/>
+              <text x="${pad - 6}" y="${(y+3).toFixed(1)}" font-size="10" fill="#94a3b8" text-anchor="end" font-family="monospace">${yVal.toFixed(1)}%</text>`;
+    }).join('');
+
+    html += `<div style="background:var(--panel);border:1.5px solid var(--border);border-radius:12px;padding:20px;margin-bottom:16px;">
+      <h3 style="font-size:17px;font-weight:800;margin-bottom:6px;">📉 แนวโน้ม Error Rate รายวัน</h3>
+      <p style="font-size:13px;color:var(--text-dim);margin-bottom:12px;">ถ้ามี spike วันไหน ไปดู batch ของวันนั้นได้</p>
+      <div class="trend-chart">
+        <svg class="trend-svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet">
+          ${yGrid}
+          <path d="${pathStr}" stroke="#c2410c" stroke-width="2" fill="none"/>
+          ${circles}
+          ${xLabels}
+        </svg>
+      </div>
+    </div>`;
+  }
+
+  // ===== 4. Recent errors list =====
+  html += `<div style="background:var(--panel);border:1.5px solid var(--border);border-radius:12px;padding:20px;">
+    <h3 style="font-size:17px;font-weight:800;margin-bottom:6px;">📝 Error ล่าสุด (20 รายการ)</h3>
+    <p style="font-size:13px;color:var(--text-dim);margin-bottom:12px;">คลิกเพื่อดูรายละเอียด batch</p>`;
+
+  if (invalid.length === 0) {
+    html += '<div style="color:var(--success);font-weight:700;text-align:center;padding:24px;">🎉 ไม่มี error ในช่วงนี้!</div>';
+  } else {
+    invalid.slice(0, 20).forEach((s, i) => {
+      const dt = new Date(s.scanned_at).toLocaleString('th-TH', {
+        day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'
+      });
+      html += `<div class="error-row" data-batch-id="${s.batch_id}">
+        <div class="error-row-num">${i + 1}</div>
+        <div class="error-row-info">
+          <div class="error-row-barcode">${escapeHtml(s.barcode_raw || '')}</div>
+          <div class="error-row-reason">⚠️ ${escapeHtml(s.barcode_warnings || 'ผิด format')}</div>
+          <div class="error-row-meta">${dt} · ${escapeHtml(s.machine_name || '-')}</div>
+        </div>
+        <div class="error-row-slitter" title="Slitter">S-${escapeHtml(s.slitter || '?')}</div>
+      </div>`;
+    });
+  }
+  html += '</div>';
+
+  container.innerHTML = html;
+
+  // Click error row → open batch detail
+  container.querySelectorAll('.error-row[data-batch-id]').forEach(el => {
+    el.addEventListener('click', () => openBatchDetail(el.dataset.batchId));
+  });
+}
+
+document.getElementById('btn-s-search').addEventListener('click', loadStats);
+document.getElementById('btn-s-preset').addEventListener('click', () => {
+  const today = new Date();
+  const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+  document.getElementById('s-from').valueAsDate = thirtyDaysAgo;
+  document.getElementById('s-to').valueAsDate = today;
+  loadStats();
+});
 
 // ==================== VIEW 4: ACCESS LOG ====================
 let accessLogLoaded = false;
