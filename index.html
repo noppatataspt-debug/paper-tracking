@@ -679,8 +679,14 @@
 
     <div class="panel">
       <div style="margin-bottom: 16px;">
-        <div style="font-size: 13px; font-weight: 800; color: var(--text); text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 10px;">
-          กำลังสแกนให้สินค้า:
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+          <div style="font-size: 13px; font-weight: 800; color: var(--text); text-transform: uppercase; letter-spacing: 1.2px;">
+            กำลังสแกนให้สินค้า:
+          </div>
+          <button id="btn-copy-to-all" style="display:none; padding: 6px 12px; background: var(--accent-2-bg); color: var(--accent-2); border: 1.5px solid var(--accent-2); border-radius: 8px; font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;"
+                  title="Copy ม้วนทั้งหมดไปสินค้าอื่น (กรณีใช้ม้วนเดียวกันผลิตหลายสินค้า)">
+            🔗 Copy ม้วนไปทุกสินค้า
+          </button>
         </div>
         <div class="product-selector" id="product-selector"></div>
       </div>
@@ -1383,6 +1389,89 @@ function renderProductSelector() {
       setTimeout(() => scanInput.focus(), 50);
     });
   });
+
+  // แสดงปุ่ม Copy to all เฉพาะเมื่อ:
+  // 1. มีสินค้าตั้งแต่ 2 ตัวขึ้นไป
+  // 2. มีสินค้าอย่างน้อย 1 ตัวที่ยังไม่มี scan
+  // 3. มีอย่างน้อย 1 ตัวที่มี scan
+  const btnCopy = document.getElementById('btn-copy-to-all');
+  if (btnCopy) {
+    const productsWithScans = state.products.filter((p, idx) =>
+      state.scans.some(s => s.productIdx === idx)
+    ).length;
+    const shouldShow = state.products.length >= 2 && productsWithScans >= 1 && productsWithScans < state.products.length;
+    btnCopy.style.display = shouldShow ? 'inline-block' : 'none';
+  }
+}
+
+function copyScansToAllProducts() {
+  if (state.products.length < 2) return;
+
+  // หาสินค้าที่มี scan อยู่แล้ว
+  const productsWithScans = new Set();
+  state.scans.forEach(s => productsWithScans.add(s.productIdx));
+
+  if (productsWithScans.size === 0) {
+    showToast('⚠️ ยังไม่มีม้วนที่สแกน', 'error');
+    return;
+  }
+
+  // ถ้ามี product หลายอันที่มี scan — เตือน
+  if (productsWithScans.size > 1) {
+    if (!confirm('มีสินค้าหลายตัวที่มีม้วนสแกนแล้ว
+ระบบจะ copy ม้วนทั้งหมด (รวมกัน) ไปยังสินค้าที่ยังไม่มีม้วน
+
+ดำเนินการต่อ?')) {
+      return;
+    }
+  }
+
+  // หาสินค้าที่ยังไม่มี scan
+  const targetProductIndices = state.products
+    .map((_, idx) => idx)
+    .filter(idx => !productsWithScans.has(idx));
+
+  if (targetProductIndices.length === 0) {
+    showToast('ทุกสินค้ามีม้วนแล้ว', 'error');
+    return;
+  }
+
+  // รวบรวมม้วนต้นฉบับ (ใช้อันจากสินค้าตัวแรกที่มี)
+  const sourceScans = state.scans.filter(s => s.productIdx === [...productsWithScans][0]);
+
+  // Confirm final
+  const targetNames = targetProductIndices.map(i => state.products[i].name).join(', ');
+  if (!confirm(`Copy ${sourceScans.length} ม้วน ไปยังสินค้า: ${targetNames}
+
+ดำเนินการ?`)) {
+    return;
+  }
+
+  // Duplicate scans
+  let addedCount = 0;
+  targetProductIndices.forEach(targetIdx => {
+    sourceScans.forEach(src => {
+      state.scans.push({
+        ...src,
+        id: Date.now() + Math.random(),
+        productIdx: targetIdx,
+        productName: state.products[targetIdx].name,
+        productIsNew: state.products[targetIdx].isNew
+      });
+      addedCount++;
+    });
+  });
+
+  showToast(`✓ Copy ${addedCount} ม้วน ไปยัง ${targetProductIndices.length} สินค้า`);
+  playBeep('success');
+  renderScans();
+  renderProductSelector();
+}
+
+// Attach handler
+const btnCopyToAll = document.getElementById('btn-copy-to-all');
+if (btnCopyToAll) {
+  btnCopyToAll.addEventListener('click', copyScansToAllProducts);
 }
 
 function handleScan() {

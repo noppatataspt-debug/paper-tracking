@@ -1285,9 +1285,19 @@ function renderBatchDetail(batch, scans) {
 
   // Stats
   const totalScans = scans.length;
+  const uniqueBarcodes = new Set(scans.map(s => s.barcode_raw)).size;
+  const hasSharedRolls = uniqueBarcodes < totalScans;
   const invalidCount = scans.filter(s => s.barcode_valid === false).length;
   const uniqueLots = new Set(scans.map(s => s.jumbo_lot)).size;
   const uniqueTypes = new Set(scans.map(s => s.paper_type)).size;
+
+  // หาม้วนที่ share กัน (barcode ถูก scan หลายครั้งใน batch เดียวกัน)
+  const barcodeUsage = {};
+  scans.forEach(s => {
+    if (!barcodeUsage[s.barcode_raw]) barcodeUsage[s.barcode_raw] = new Set();
+    barcodeUsage[s.barcode_raw].add(s.batch_product_id);
+  });
+  const sharedBarcodes = Object.entries(barcodeUsage).filter(([_, products]) => products.size > 1);
 
   let html = `<div class="detail-stats">
     <div class="detail-stat">
@@ -1295,14 +1305,21 @@ function renderBatchDetail(batch, scans) {
       <div class="detail-stat-value">${products.length}</div>
     </div>
     <div class="detail-stat">
-      <div class="detail-stat-label">ม้วน</div>
-      <div class="detail-stat-value" style="color:var(--accent);">${totalScans}</div>
+      <div class="detail-stat-label">ม้วนกระดาษ</div>
+      <div class="detail-stat-value" style="color:var(--accent);">${uniqueBarcodes}</div>
+      ${hasSharedRolls ? `<div style="font-size:10px;color:var(--text-dim);margin-top:2px;">(${totalScans} รายการ)</div>` : ''}
     </div>
     <div class="detail-stat">
       <div class="detail-stat-label">Jumbo Lots</div>
       <div class="detail-stat-value" style="color:var(--accent-2);">${uniqueLots}</div>
     </div>
   </div>`;
+
+  if (hasSharedRolls) {
+    html += `<div style="padding:10px 14px;background:var(--accent-2-bg);border-left:4px solid var(--accent-2);border-radius:8px;margin-bottom:12px;font-size:13px;color:#1e3a8a;">
+      🔗 <strong>มี ${sharedBarcodes.length} ม้วนที่ใช้ร่วมหลายสินค้า</strong> (บันทึกซ้ำในแต่ละสินค้า)
+    </div>`;
+  }
 
   if (invalidCount > 0) {
     html += `<div style="padding:10px 14px;background:#fef3c7;border-left:4px solid #d97706;border-radius:8px;margin-bottom:12px;font-size:13px;color:#78350f;">
@@ -1322,10 +1339,16 @@ function renderBatchDetail(batch, scans) {
       </div>`;
     prodScans.forEach((s, idx) => {
       const t = new Date(s.scanned_at).toLocaleTimeString('th-TH', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+      // Check if this barcode is shared with other products
+      const sharedWith = barcodeUsage[s.barcode_raw] ? barcodeUsage[s.barcode_raw].size : 1;
+      const isShared = sharedWith > 1;
+      const sharedBadge = isShared
+        ? `<span style="display:inline-block;padding:1px 7px;background:var(--accent-2-bg);color:var(--accent-2);border-radius:4px;font-size:10px;font-weight:700;margin-left:6px;" title="ม้วนนี้ใช้กับ ${sharedWith} สินค้า">🔗 ใช้ร่วม ×${sharedWith}</span>`
+        : '';
       html += `<div class="detail-scan-row ${s.barcode_valid === false ? 'invalid' : ''}">
         <div class="detail-scan-num">${idx + 1}</div>
         <div class="detail-scan-barcode" title="${escapeHtml(s.barcode_raw || '')}">
-          ${escapeHtml(s.barcode_raw || '')}
+          ${escapeHtml(s.barcode_raw || '')}${sharedBadge}
           ${s.barcode_valid === false ? '<span style="color:#d97706;font-size:11px;margin-left:6px;">⚠️ ' + escapeHtml(s.barcode_warnings || '') + '</span>' : ''}
         </div>
         <div class="detail-scan-time">${t}</div>
@@ -1505,7 +1528,10 @@ function renderTraceResult(container, data, params) {
   });
 
   const totalTypes = new Set(data.map(s => s.paper_type)).size;
-  const totalRolls = data.length;
+  const totalRolls = data.length;  // scan records
+  // นับ unique ม้วน = barcode_raw ที่ไม่ซ้ำกัน (ตัด duplicate จาก shared rolls)
+  const uniqueBarcodes = new Set(data.map(s => s.barcode_raw)).size;
+  const hasSharedRolls = uniqueBarcodes < totalRolls;
   const totalLots = new Set(data.map(s => s.jumbo_lot)).size;
   const totalProducts = new Set(data.map(s => s.product_name)).size;
 
@@ -1516,7 +1542,11 @@ function renderTraceResult(container, data, params) {
     <div class="stat"><div class="stat-label">สินค้า</div><div class="stat-value">${totalProducts}</div></div>
     <div class="stat"><div class="stat-label">ประเภทกระดาษ</div><div class="stat-value blue">${totalTypes}</div></div>
     <div class="stat"><div class="stat-label">Jumbo Lots</div><div class="stat-value accent">${totalLots}</div></div>
-    <div class="stat"><div class="stat-label">ม้วนทั้งหมด</div><div class="stat-value">${totalRolls}</div></div>
+    <div class="stat">
+      <div class="stat-label">ม้วนกระดาษ</div>
+      <div class="stat-value">${uniqueBarcodes}</div>
+      ${hasSharedRolls ? `<div style="font-size:11px;color:var(--text-dim);margin-top:2px;">(${totalRolls} รายการ - มีม้วนใช้ร่วม)</div>` : ''}
+    </div>
   </div>`;
 
   // Sort products by scan count desc
