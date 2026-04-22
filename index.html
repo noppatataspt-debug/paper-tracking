@@ -606,6 +606,7 @@
 <div class="conn-status online" id="conn-status">
   <span class="dot"></span>
   <span id="conn-label">เชื่อมต่อ DB</span>
+  <span style="margin-left: 6px; opacity: 0.65; font-size: 10px;">v2.1 shared</span>
 </div>
 
 <div class="loading-overlay" id="loading-overlay">
@@ -1379,19 +1380,24 @@ function renderProductSelector() {
   const sel = document.getElementById('product-selector');
   const title = document.getElementById('selector-title');
   const toggleWrapper = document.getElementById('mode-toggle-wrapper');
+  if (!sel) return;  // defensive: skip ถ้า DOM ยังไม่พร้อม
 
   // Show toggle only if there are 2+ products
-  if (state.products.length >= 2) {
-    toggleWrapper.style.display = 'flex';
-  } else {
-    toggleWrapper.style.display = 'none';
-    state.sharedMode = true;  // 1 product ก็ shared โดยอัตโนมัติ
+  if (toggleWrapper) {
+    if (state.products.length >= 2) {
+      toggleWrapper.style.display = 'flex';
+    } else {
+      toggleWrapper.style.display = 'none';
+      state.sharedMode = true;  // 1 product ก็ shared โดยอัตโนมัติ
+    }
   }
 
   if (state.sharedMode) {
-    title.innerHTML = state.products.length >= 2
-      ? '🔗 ม้วนนี้จะบันทึกให้ <strong style="color:var(--accent-2)">ทุกสินค้า</strong> (' + state.products.length + ' สินค้า)'
-      : 'กำลังสแกนให้สินค้า:';
+    if (title) {
+      title.innerHTML = state.products.length >= 2
+        ? '🔗 ม้วนนี้จะบันทึกให้ <strong style="color:var(--accent-2)">ทุกสินค้า</strong> (' + state.products.length + ' สินค้า)'
+        : 'กำลังสแกนให้สินค้า:';
+    }
     // แสดง tabs แบบอ่านอย่างเดียว (ไม่ active single)
     sel.innerHTML = state.products.map((p, idx) => {
       const count = state.scans.filter(s => s.productIdx === idx).length;
@@ -1401,7 +1407,7 @@ function renderProductSelector() {
       </div>`;
     }).join('');
   } else {
-    title.textContent = 'กำลังสแกนให้สินค้า:';
+    if (title) title.textContent = 'กำลังสแกนให้สินค้า:';
     sel.innerHTML = state.products.map((p, idx) => {
       const count = state.scans.filter(s => s.productIdx === idx).length;
       const isActive = idx === state.currentProductIdx;
@@ -1426,8 +1432,7 @@ if (chkPerProduct) {
   chkPerProduct.addEventListener('change', () => {
     if (state.scans.length > 0) {
       // มี scan แล้ว — ต้องเตือน
-      if (!confirm('การเปลี่ยน mode จะล้างม้วนที่สแกนไปแล้ว
-ต้องการเปลี่ยน?')) {
+      if (!confirm('การเปลี่ยน mode จะล้างม้วนที่สแกนไปแล้ว ต้องการเปลี่ยน?')) {
         chkPerProduct.checked = !chkPerProduct.checked;  // revert
         return;
       }
