@@ -255,6 +255,94 @@
   }
   .batch-arrow { color: var(--text-dim); font-size: 18px; }
 
+  /* ============ Batch Detail Modal ============ */
+  .detail-modal {
+    position: fixed; inset: 0; background: rgba(15,23,42,0.55);
+    display: none; align-items: center; justify-content: center;
+    z-index: 150; padding: 20px;
+  }
+  .detail-modal.show { display: flex; }
+  .detail-box {
+    background: white; border-radius: 16px; max-width: 800px; width: 100%;
+    max-height: 90vh; overflow: hidden;
+    display: flex; flex-direction: column;
+    box-shadow: 0 25px 60px rgba(0,0,0,0.3);
+  }
+  .detail-header {
+    padding: 20px 24px; border-bottom: 2px solid var(--border);
+    display: flex; justify-content: space-between; align-items: flex-start;
+    background: linear-gradient(135deg, #fff7ed 0%, #fed7aa 100%);
+  }
+  .detail-title { font-size: 18px; font-weight: 800; }
+  .detail-subtitle { font-size: 13px; color: var(--text-dim); font-weight: 500; margin-top: 2px; }
+  .detail-close {
+    width: 32px; height: 32px; background: white; border: 1.5px solid var(--border);
+    border-radius: 50%; font-size: 18px; font-weight: 700;
+    cursor: pointer; color: var(--text-dim);
+  }
+  .detail-close:hover { background: var(--danger); color: white; border-color: var(--danger); }
+  .detail-body { padding: 20px 24px; overflow-y: auto; flex: 1; }
+  .detail-stats {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px;
+  }
+  .detail-stat {
+    padding: 10px 14px; background: var(--panel-2); border-radius: 10px;
+    text-align: center;
+  }
+  .detail-stat-label {
+    font-size: 10px; font-weight: 700; color: var(--text-dim);
+    text-transform: uppercase; letter-spacing: 1px;
+  }
+  .detail-stat-value { font-family: var(--mono); font-size: 22px; font-weight: 800; }
+  .detail-product-group {
+    background: var(--panel-2); border-radius: 10px; padding: 12px; margin-bottom: 10px;
+  }
+  .detail-product-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px dashed var(--border);
+  }
+  .detail-product-name {
+    font-size: 15px; font-weight: 800; color: var(--accent);
+  }
+  .detail-product-count {
+    font-family: var(--mono); font-size: 12px; color: var(--text-dim);
+  }
+  .detail-scan-row {
+    display: grid; grid-template-columns: 32px 1fr auto;
+    padding: 8px 10px; background: white; border-radius: 6px;
+    margin-bottom: 4px; gap: 10px; align-items: center;
+  }
+  .detail-scan-row.invalid { border-left: 3px solid #d97706; }
+  .detail-scan-num {
+    font-family: var(--mono); font-size: 11px; color: var(--text-dim);
+    text-align: center; font-weight: 700;
+  }
+  .detail-scan-barcode {
+    font-family: var(--mono); font-size: 12px; font-weight: 600;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .detail-scan-time {
+    font-size: 11px; color: var(--text-dim); font-family: var(--mono);
+  }
+  .detail-footer {
+    padding: 14px 24px; border-top: 1.5px solid var(--border);
+    display: flex; gap: 10px; justify-content: flex-end;
+    background: var(--panel-2);
+  }
+  .detail-footer button {
+    padding: 10px 20px; border-radius: 8px; font-family: inherit;
+    font-weight: 700; font-size: 14px; cursor: pointer;
+    border: 1.5px solid;
+  }
+  .detail-footer .primary {
+    background: var(--accent); color: white; border-color: var(--accent);
+  }
+  .detail-footer .primary:hover { background: #9a3412; }
+  .detail-footer .ghost {
+    background: white; color: var(--text); border-color: var(--border);
+  }
+  .detail-footer .ghost:hover { background: var(--panel-2); }
+
   /* Connection status */
   .conn-status {
     position: fixed; bottom: 16px; right: 16px; z-index: 50;
@@ -530,6 +618,26 @@
 <div class="conn-status online" id="conn-status">
   <span class="dot"></span>
   <span id="conn-label">เชื่อมต่อ DB</span>
+</div>
+
+<!-- Batch Detail Modal -->
+<div class="detail-modal" id="detail-modal">
+  <div class="detail-box">
+    <div class="detail-header">
+      <div>
+        <div class="detail-title" id="detail-title">📋 รายละเอียด Batch</div>
+        <div class="detail-subtitle" id="detail-subtitle">-</div>
+      </div>
+      <button class="detail-close" id="detail-close">✕</button>
+    </div>
+    <div class="detail-body" id="detail-body">
+      <div class="loading"><div class="spinner-small"></div><div style="margin-top:10px;">กำลังโหลด...</div></div>
+    </div>
+    <div class="detail-footer">
+      <button class="ghost" id="detail-btn-close">ปิด</button>
+      <button class="primary" id="detail-btn-edit">✏️ แก้ไข Batch นี้</button>
+    </div>
+  </div>
 </div>
 
 <div class="container" id="main-container" style="display:none;">
@@ -1030,6 +1138,142 @@ const SCAN_CSV_HEADERS = [
   'เวลาที่สแกน'
 ];
 
+// ==================== BATCH DETAIL MODAL ====================
+async function openBatchDetail(batchId) {
+  const modal = document.getElementById('detail-modal');
+  const body = document.getElementById('detail-body');
+  modal.classList.add('show');
+  body.innerHTML = '<div class="loading"><div class="spinner-small"></div><div style="margin-top:10px;">กำลังโหลด...</div></div>';
+
+  try {
+    // Load batch + join data
+    const { data: batch, error: bErr } = await supabase
+      .from('production_batches')
+      .select(`
+        id, production_date, submitted_at, voided, voided_reason,
+        machines (name, dp),
+        batch_products (id, product_name, is_new_product, sequence)
+      `)
+      .eq('id', batchId)
+      .single();
+    if (bErr) throw bErr;
+
+    const { data: scans, error: sErr } = await supabase
+      .from('paper_scans')
+      .select('*')
+      .eq('batch_id', batchId)
+      .order('scanned_at', { ascending: true });
+    if (sErr) throw sErr;
+
+    renderBatchDetail(batch, scans);
+  } catch (err) {
+    console.error(err);
+    body.innerHTML = `<div class="empty"><span class="emoji">⚠️</span><div class="empty-title">โหลดไม่สำเร็จ</div><div>${escapeHtml(err.message)}</div></div>`;
+  }
+}
+
+function renderBatchDetail(batch, scans) {
+  document.getElementById('detail-title').innerHTML =
+    `📋 Batch · ${batch.production_date} · ${escapeHtml(batch.machines?.name || '-')}` +
+    (batch.voided ? ' <span class="voided-badge">ยกเลิกแล้ว</span>' : '');
+  document.getElementById('detail-subtitle').textContent =
+    `บันทึกเมื่อ ${new Date(batch.submitted_at).toLocaleString('th-TH')}` +
+    (batch.voided ? ` · เหตุผลที่ยกเลิก: ${batch.voided_reason || '-'}` : '');
+
+  const products = (batch.batch_products || []).sort((a, b) => a.sequence - b.sequence);
+
+  // Group scans by product
+  const byProduct = {};
+  products.forEach(p => byProduct[p.id] = { product: p, scans: [] });
+  scans.forEach(s => {
+    if (byProduct[s.batch_product_id]) byProduct[s.batch_product_id].scans.push(s);
+  });
+
+  // Stats
+  const totalScans = scans.length;
+  const invalidCount = scans.filter(s => s.barcode_valid === false).length;
+  const uniqueLots = new Set(scans.map(s => s.jumbo_lot)).size;
+  const uniqueTypes = new Set(scans.map(s => s.paper_type)).size;
+
+  let html = `<div class="detail-stats">
+    <div class="detail-stat">
+      <div class="detail-stat-label">สินค้า</div>
+      <div class="detail-stat-value">${products.length}</div>
+    </div>
+    <div class="detail-stat">
+      <div class="detail-stat-label">ม้วน</div>
+      <div class="detail-stat-value" style="color:var(--accent);">${totalScans}</div>
+    </div>
+    <div class="detail-stat">
+      <div class="detail-stat-label">Jumbo Lots</div>
+      <div class="detail-stat-value" style="color:var(--accent-2);">${uniqueLots}</div>
+    </div>
+  </div>`;
+
+  if (invalidCount > 0) {
+    html += `<div style="padding:10px 14px;background:#fef3c7;border-left:4px solid #d97706;border-radius:8px;margin-bottom:12px;font-size:13px;color:#78350f;">
+      ⚠️ มี ${invalidCount} Barcode ผิด format ใน batch นี้
+    </div>`;
+  }
+
+  // Render each product group
+  Object.values(byProduct).forEach(({ product, scans: prodScans }) => {
+    html += `<div class="detail-product-group">
+      <div class="detail-product-header">
+        <div class="detail-product-name">
+          📦 ${escapeHtml(product.product_name)}
+          ${product.is_new_product ? '<span style="font-size:10px;padding:2px 6px;background:var(--accent-2);color:white;border-radius:4px;margin-left:6px;">ใหม่</span>' : ''}
+        </div>
+        <div class="detail-product-count">${prodScans.length} ม้วน</div>
+      </div>`;
+    prodScans.forEach((s, idx) => {
+      const t = new Date(s.scanned_at).toLocaleTimeString('th-TH', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+      html += `<div class="detail-scan-row ${s.barcode_valid === false ? 'invalid' : ''}">
+        <div class="detail-scan-num">${idx + 1}</div>
+        <div class="detail-scan-barcode" title="${escapeHtml(s.barcode_raw || '')}">
+          ${escapeHtml(s.barcode_raw || '')}
+          ${s.barcode_valid === false ? '<span style="color:#d97706;font-size:11px;margin-left:6px;">⚠️ ' + escapeHtml(s.barcode_warnings || '') + '</span>' : ''}
+        </div>
+        <div class="detail-scan-time">${t}</div>
+      </div>`;
+    });
+    html += `</div>`;
+  });
+
+  if (products.length === 0) {
+    html += '<div class="empty"><span class="emoji">📭</span><div>ไม่มีข้อมูล</div></div>';
+  }
+
+  document.getElementById('detail-body').innerHTML = html;
+
+  // Set edit button to open editor with this batch
+  const editBtn = document.getElementById('detail-btn-edit');
+  editBtn.onclick = () => {
+    closeBatchDetail();
+    // Switch to edit tab then open editor
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(x => x.classList.remove('active'));
+    document.querySelector('.tab[data-view="edit"]').classList.add('active');
+    document.getElementById('view-edit').classList.add('active');
+    openEditor(batch.id);
+  };
+}
+
+function closeBatchDetail() {
+  document.getElementById('detail-modal').classList.remove('show');
+}
+
+document.getElementById('detail-close').addEventListener('click', closeBatchDetail);
+document.getElementById('detail-btn-close').addEventListener('click', closeBatchDetail);
+document.getElementById('detail-modal').addEventListener('click', e => {
+  if (e.target.id === 'detail-modal') closeBatchDetail();
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.getElementById('detail-modal').classList.contains('show')) {
+    closeBatchDetail();
+  }
+});
+
 // ==================== TABS ====================
 document.querySelectorAll('.tab').forEach(t => {
   t.addEventListener('click', () => {
@@ -1497,7 +1741,7 @@ async function loadHistory() {
         .join(', ');
       const machineName = b.machines ? b.machines.name : '-';
       const cnt = countsByBatch[b.id] || 0;
-      html += `<div class="batch-item">
+      html += `<div class="batch-item" data-batch-id="${b.id}" style="cursor:pointer;">
         <div>
           <div class="batch-date">${b.production_date}</div>
           <div style="font-size:11px;color:var(--text-dim);">${new Date(b.submitted_at).toLocaleString('th-TH')}</div>
@@ -1510,6 +1754,11 @@ async function loadHistory() {
     });
     html += '</div>';
     container.innerHTML = html;
+
+    // Click to open detail modal
+    container.querySelectorAll('.batch-item[data-batch-id]').forEach(item => {
+      item.addEventListener('click', () => openBatchDetail(item.dataset.batchId));
+    });
 
     // Export handler — need to fetch detailed scan info
     document.getElementById('btn-export-history').addEventListener('click', async () => {
