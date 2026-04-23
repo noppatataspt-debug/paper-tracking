@@ -214,6 +214,32 @@
   }
   .copy-btn:hover { background: var(--accent); color: white; }
 
+  /* ============ Autocomplete suggest ============ */
+  .ac-suggest {
+    position: absolute; z-index: 40; top: 100%; left: 0; right: 0;
+    background: white; border: 1.5px solid var(--border); border-top: none;
+    border-radius: 0 0 8px 8px; max-height: 280px; overflow-y: auto;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+  }
+  .ac-item {
+    padding: 10px 14px; cursor: pointer;
+    border-bottom: 1px solid #f1f5f9;
+    font-size: 14px; font-weight: 500;
+    transition: background 0.1s;
+  }
+  .ac-item:last-child { border-bottom: none; }
+  .ac-item:nth-child(even) { background: #f8fafc; }
+  .ac-item:hover, .ac-item.active {
+    background: var(--accent); color: white;
+  }
+  .ac-item.active { font-weight: 700; }
+  .ac-item .hit { font-weight: 800; color: var(--accent); background: #fef3c7; padding: 0 2px; border-radius: 2px; }
+  .ac-item:hover .hit, .ac-item.active .hit { color: #fff7ed; background: rgba(255,255,255,0.25); }
+  .ac-empty { padding: 14px; text-align: center; color: var(--text-dim); font-size: 13px; }
+
+  /* Highlight ใน lot search results */
+  .lot-hl { background: #fde68a; color: #78350f; font-weight: 800; padding: 1px 3px; border-radius: 3px; }
+
   .export-btn {
     padding: 8px 16px; background: var(--success-bg); color: var(--success);
     border: 1.5px solid var(--success); border-radius: 8px;
@@ -745,11 +771,11 @@
             <option value="">(ทุกเครื่อง)</option>
           </select>
         </div>
-        <div>
+        <div style="position:relative;">
           <label class="field-label">สินค้า</label>
-          <select id="t-product">
-            <option value="">(ทุกสินค้า)</option>
-          </select>
+          <input type="text" id="t-product-input" placeholder="(ทุกสินค้า) — พิมพ์เพื่อค้น" autocomplete="off">
+          <input type="hidden" id="t-product">
+          <div id="t-product-suggest" class="ac-suggest" style="display:none;"></div>
         </div>
         <button class="btn" id="btn-trace">🔍 ค้นหา</button>
       </div>
@@ -1443,13 +1469,9 @@ async function loadMaster() {
       eMachine.appendChild(opt.cloneNode(true));
     });
 
-    const tProduct = document.getElementById('t-product');
-    productsRes.data.forEach(p => {
-      const opt = document.createElement('option');
-      opt.value = p.product_name;
-      opt.textContent = p.product_name;
-      tProduct.appendChild(opt);
-    });
+    // Save product list for autocomplete
+    window._allProducts = productsRes.data.map(p => p.product_name);
+    setupProductAutocomplete();
 
     setConnStatus(true, `✓ ${machinesRes.data.length} เครื่อง · ${productsRes.data.length} สินค้า`);
 
@@ -1478,6 +1500,124 @@ async function loadMaster() {
     console.error(err);
     setConnStatus(false, '✗ เชื่อมต่อ DB ไม่ได้');
   }
+}
+
+// ==================== AUTOCOMPLETE ====================
+
+// Escape regex special chars
+function escRegex(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// ไฮไลท์ตำแหน่งที่ match ในข้อความ — return innerHTML ปลอดภัย
+function highlightMatch(text, query, className) {
+  if (!query) return escapeHtml(text);
+  const cls = className || 'hit';
+  const re = new RegExp('(' + escRegex(query) + ')', 'gi');
+  // split แล้ว escape แต่ละ chunk ก่อน ต่อด้วย <span>
+  const parts = String(text).split(re);
+  return parts.map((p, i) => {
+    if (i % 2 === 1) return '<span class="' + cls + '">' + escapeHtml(p) + '</span>';
+    return escapeHtml(p);
+  }).join('');
+}
+
+function setupProductAutocomplete() {
+  const input = document.getElementById('t-product-input');
+  const hidden = document.getElementById('t-product');
+  const box = document.getElementById('t-product-suggest');
+  if (!input || !window._allProducts) return;
+
+  let activeIdx = -1;
+  let currentMatches = [];
+
+  function render() {
+    const q = input.value.trim();
+    if (!q) {
+      // แสดง top 20 อันดับแรก
+      currentMatches = window._allProducts.slice(0, 30);
+    } else {
+      const qLow = q.toLowerCase();
+      // รวม 3 กลุ่ม: startsWith > includes > fuzzy
+      const starts = [], contains = [];
+      window._allProducts.forEach(p => {
+        const pLow = p.toLowerCase();
+        if (pLow.startsWith(qLow)) starts.push(p);
+        else if (pLow.includes(qLow)) contains.push(p);
+      });
+      currentMatches = [...starts, ...contains].slice(0, 30);
+    }
+
+    if (currentMatches.length === 0) {
+      box.innerHTML = '<div class="ac-empty">ไม่พบสินค้า — กด Enter เพื่อค้นทุกสินค้า</div>';
+      box.style.display = 'block';
+      return;
+    }
+    box.innerHTML = currentMatches.map((p, i) => {
+      const isActive = i === activeIdx;
+      return `<div class="ac-item ${isActive ? 'active' : ''}" data-idx="${i}" data-value="${escapeHtml(p)}">${highlightMatch(p, q, 'hit')}</div>`;
+    }).join('');
+    box.style.display = 'block';
+
+    // Attach click handlers
+    box.querySelectorAll('.ac-item').forEach(el => {
+      el.addEventListener('mousedown', e => {
+        e.preventDefault();  // ป้องกัน blur ก่อน click
+        const v = el.dataset.value;
+        input.value = v;
+        hidden.value = v;
+        box.style.display = 'none';
+      });
+    });
+  }
+
+  input.addEventListener('focus', () => {
+    activeIdx = -1;
+    render();
+  });
+
+  input.addEventListener('input', () => {
+    hidden.value = input.value.trim();  // sync value
+    activeIdx = -1;
+    render();
+  });
+
+  input.addEventListener('blur', () => {
+    // delay เพื่อให้ click event ทำงานก่อน
+    setTimeout(() => box.style.display = 'none', 150);
+  });
+
+  input.addEventListener('keydown', e => {
+    if (box.style.display === 'none') return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      activeIdx = Math.min(activeIdx + 1, currentMatches.length - 1);
+      render();
+      // Scroll into view
+      const active = box.querySelector('.ac-item.active');
+      if (active) active.scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      activeIdx = Math.max(activeIdx - 1, -1);
+      render();
+      const active = box.querySelector('.ac-item.active');
+      if (active) active.scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'Enter') {
+      if (activeIdx >= 0 && activeIdx < currentMatches.length) {
+        e.preventDefault();
+        const v = currentMatches[activeIdx];
+        input.value = v;
+        hidden.value = v;
+        box.style.display = 'none';
+      } else {
+        hidden.value = input.value.trim();
+        box.style.display = 'none';
+        runTrace();
+      }
+    } else if (e.key === 'Escape') {
+      box.style.display = 'none';
+    }
+  });
 }
 
 // ==================== VIEW 1: TRACE ====================
@@ -1716,7 +1856,11 @@ async function runLotLookup() {
       byDay[key].count++;
     });
 
-    const groups = Object.values(byDay);
+    // เรียงตาม lot ก่อน (ให้ lot เดียวกันติดกัน) → แล้วค่อยวันที่ใหม่สุดก่อน
+    const groups = Object.values(byDay).sort((a, b) => {
+      if (a.lot !== b.lot) return a.lot.localeCompare(b.lot);
+      return b.date.localeCompare(a.date);
+    });
     const totalScans = data.length;
     const uniqueLots = new Set(data.map(d => d.jumbo_lot)).size;
     const uniqueDays = new Set(data.map(d => d.production_date)).size;
@@ -1744,7 +1888,7 @@ async function runLotLookup() {
           <div class="lot-count">${g.count}×</div>
         </div>
         <div class="lot-day-meta">
-          <strong>${escapeHtml(g.lot)}</strong> · ${escapeHtml(g.paper_type)} · ตัด ${escapeHtml(g.cut_date)}
+          <strong>${highlightMatch(g.lot, q, 'lot-hl')}</strong> · ${escapeHtml(g.paper_type)} · ตัด ${escapeHtml(g.cut_date)}
         </div>
       </div>`;
     });
