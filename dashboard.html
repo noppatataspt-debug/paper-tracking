@@ -813,6 +813,13 @@
         <button class="btn" id="btn-h-search">🔍 ค้นหา</button>
       </div>
 
+      <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 14px; padding: 10px; background: var(--panel-2); border-radius: 8px;">
+        <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; cursor: pointer;">
+          <input type="checkbox" id="h-show-voided" style="width: 18px; height: 18px; cursor: pointer;">
+          แสดง batches ที่ยกเลิกแล้วด้วย
+        </label>
+      </div>
+
       <div class="stats" id="stats-box" style="display:none;">
         <div class="stat">
           <div class="stat-label">Batches</div>
@@ -1785,6 +1792,8 @@ async function loadHistory() {
   document.getElementById('stats-box').style.display = 'none';
 
   try {
+    const showVoided = document.getElementById('h-show-voided').checked;
+
     // Get batches with filter
     let batchQuery = supabase
       .from('production_batches')
@@ -1793,6 +1802,8 @@ async function loadHistory() {
         production_date,
         submitted_at,
         machine_id,
+        voided,
+        voided_reason,
         machines (name, dp),
         batch_products (product_name, is_new_product, sequence)
       `)
@@ -1802,6 +1813,7 @@ async function loadHistory() {
       .order('submitted_at', { ascending: false });
 
     if (machineId) batchQuery = batchQuery.eq('machine_id', parseInt(machineId));
+    if (!showVoided) batchQuery = batchQuery.eq('voided', false);
 
     const { data: batches, error: bErr } = await batchQuery;
     if (bErr) throw bErr;
@@ -1873,10 +1885,14 @@ async function loadHistory() {
         .join(', ');
       const machineName = b.machines ? b.machines.name : '-';
       const cnt = countsByBatch[b.id] || 0;
-      html += `<div class="batch-item" data-batch-id="${b.id}" style="cursor:pointer;">
+      const isVoided = b.voided;
+      const voidedBadge = isVoided
+        ? `<span style="display:inline-block;padding:2px 8px;background:var(--danger);color:white;border-radius:5px;font-size:10px;font-weight:800;margin-left:8px;">ยกเลิกแล้ว</span>`
+        : '';
+      html += `<div class="batch-item" data-batch-id="${b.id}" style="cursor:pointer; ${isVoided ? 'opacity:0.6; background:#fef2f2;' : ''}">
         <div>
-          <div class="batch-date">${b.production_date}</div>
-          <div style="font-size:11px;color:var(--text-dim);">${new Date(b.submitted_at).toLocaleString('th-TH')}</div>
+          <div class="batch-date">${b.production_date}${voidedBadge}</div>
+          <div style="font-size:11px;color:var(--text-dim);">${new Date(b.submitted_at).toLocaleString('th-TH')}${isVoided && b.voided_reason ? ' · ' + escapeHtml(b.voided_reason) : ''}</div>
         </div>
         <div class="batch-machine">${escapeHtml(machineName)}</div>
         <div class="batch-products" title="${escapeHtml(productNames)}">${escapeHtml(productNames.length > 50 ? productNames.substring(0, 47) + '...' : productNames)}</div>
@@ -1934,6 +1950,7 @@ async function loadHistory() {
 
 // ==================== Setup History Tab Handlers ====================
 document.getElementById('btn-h-search').addEventListener('click', loadHistory);
+document.getElementById('h-show-voided').addEventListener('change', loadHistory);
 document.getElementById('btn-h-preset').addEventListener('click', () => {
   const today = new Date();
   const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
