@@ -205,10 +205,10 @@ function showToast(msg, isError) {
 
 async function loadMaster() {
   try {
-    const { data, error } = await supabase.from('products').select('product_name').eq('is_active', true).order('product_name');
+    const { data, error } = await supabase.from('paper_types').select('paper_type').eq('is_active', true).order('paper_type');
     if (error) throw error;
-    state.products = (data || []).map(r => r.product_name);
-    document.getElementById('status-text').textContent = '✓ ' + state.products.length + ' สินค้า · พร้อมใช้';
+    state.products = (data || []).map(r => r.paper_type);
+    document.getElementById('status-text').textContent = '✓ ' + state.products.length + ' ประเภทกระดาษ · พร้อมใช้';
     document.getElementById('cut-date').valueAsDate = new Date();
     state.cutDate = document.getElementById('cut-date').value;
     updateAll();
@@ -311,7 +311,7 @@ function validateAll() {
   const errors = [];
   const warnings = [];
   if (!state.paperType) errors.push('กรุณาเลือกประเภทกระดาษ');
-  else if (!state.products.includes(state.paperType)) errors.push('ประเภทกระดาษ "' + state.paperType + '" ไม่มีใน master list');
+  else if (!state.products.includes(state.paperType)) errors.push('ประเภทกระดาษ "' + state.paperType + '" ไม่มีใน master list (51 ประเภท)');
   else if (state.paperType.includes('_') || state.paperType.includes(' ')) errors.push('ประเภทกระดาษห้ามมี _ หรือช่องว่าง');
   if (!state.cutDate) errors.push('กรุณาเลือกวันที่ตัดกระดาษ');
   if (!state.slitter) errors.push('กรุณาเลือก Slitter');
