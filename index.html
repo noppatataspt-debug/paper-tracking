@@ -820,6 +820,91 @@ function parseBarcode(bc) {
   };
 }
 
+// Normalize barcode — ปรับ format ให้ถูกต้องก่อน validate
+// คืน { normalized: string, changes: [descriptions] }
+function normalizeBarcode(bc) {
+  if (!bc || !bc.trim()) return { normalized: '', changes: [] };
+  const original = bc;
+  let result = bc.trim();
+  const changes = [];
+
+  // Paper type typo mapping (จากการวิเคราะห์ข้อมูลจริงปี 2026)
+  // key = uppercase + ไม่มี space, value = ชื่อที่ถูกต้องใน master list
+  const PAPER_TYPE_FIX = {
+    'M700/480':  'M700-490',
+    'M400/450':  'M400-440',
+    'SB110/150': 'SB-110',
+    'PRONEW80':  'OFFSET-80',   // หลัง remove space จะเป็น PRONEW80
+    'M800/380':  'M900-380',
+    'CB450':     'CBE-450'
+  };
+
+  // 1. Uppercase ทั้งหมด (เช่น cps450 → CPS450, 77-5-a8295-3h → 77-5-A8295-3H)
+  if (result !== result.toUpperCase()) {
+    result = result.toUpperCase();
+    changes.push('ตัวพิมพ์เล็ก → ใหญ่');
+  }
+
+  // 2. ลบ space ที่อยู่ใน barcode (เช่น "CPS 450_..." → "CPS450_...", "PRO NEW80" → "PRONEW80")
+  if (result.includes(' ')) {
+    result = result.replace(/\s+/g, '');
+    changes.push('ลบช่องว่าง');
+  }
+
+  // 3. Split ตาม _ → แก้ paper type + cut_date
+  const parts = result.split('_');
+  if (parts.length === 5) {
+    let [paper, date, roll, slitter, lot] = parts;
+
+    // 3a. Paper type typo fix
+    if (PAPER_TYPE_FIX[paper]) {
+      const fixed = PAPER_TYPE_FIX[paper];
+      changes.push('ประเภทกระดาษ: ' + paper + ' → ' + fixed);
+      paper = fixed;
+    }
+
+    // 3b. Cut date: แก้ 19/12/25 → 191225, 6/1/26 → 060126
+    if (/[\/\-]/.test(date)) {
+      const digits = date.replace(/[\/\-]/g, '');
+      // ถ้าได้ 5-6 หลัก (เช่น 19/12/25 → 191225)
+      if (/^\d{5,6}$/.test(digits)) {
+        let fixed = digits;
+        if (digits.length === 5) {
+          // วันเป็นเลขหลักเดียว → เติม 0 ข้างหน้า
+          fixed = '0' + digits;
+        }
+        if (/^\d{6}$/.test(fixed)) {
+          changes.push('วันที่ตัด: ' + date + ' → ' + fixed);
+          date = fixed;
+        }
+      } else if (/^\d{4,8}$/.test(digits)) {
+        // case 6/1/26 → ต้องเติม 0 ทั้งวันและเดือน
+        const dateParts = date.split(/[\/\-]/);
+        if (dateParts.length === 3) {
+          const [d, m, y] = dateParts;
+          if (/^\d{1,2}$/.test(d) && /^\d{1,2}$/.test(m) && /^\d{2,4}$/.test(y)) {
+            const dd = d.padStart(2, '0');
+            const mm = m.padStart(2, '0');
+            const yy = y.length === 4 ? y.slice(2) : y.padStart(2, '0');
+            const fixed = dd + mm + yy;
+            changes.push('วันที่ตัด: ' + date + ' → ' + fixed);
+            date = fixed;
+          }
+        }
+      }
+    }
+
+    // Reconstruct
+    result = [paper, date, roll, slitter, lot].join('_');
+  }
+
+  return {
+    normalized: result,
+    changes: changes,
+    wasChanged: result !== original
+  };
+}
+
 // Validate barcode format — returns { valid: bool, warnings: [] }
 function validateBarcode(bc) {
   const warnings = [];
@@ -1480,8 +1565,18 @@ function handleScan() {
   }
 }
 
-function processOneBarcode(bc) {
+function processOneBarcode(bcRaw) {
   // returns true if error modal was shown
+
+  // 1) Auto-normalize — แก้ case, space, cut_date format
+  const normResult = normalizeBarcode(bcRaw);
+  const bc = normResult.normalized;
+
+  // แจ้ง toast ว่า normalize แล้ว (ถ้ามีการแก้จริง)
+  if (normResult.wasChanged) {
+    console.log('Normalized:', bcRaw, '→', bc, '(' + normResult.changes.join(', ') + ')');
+  }
+
   const parsed = parseBarcode(bc);
   const validation = validateBarcode(bc);
 
@@ -1489,7 +1584,11 @@ function processOneBarcode(bc) {
     const reasons = validation.warnings.length > 0
       ? validation.warnings
       : ['โครงสร้าง Barcode ผิดรูปแบบ'];
-    showErrorModal(bc, reasons);
+    // ถ้ามีการ normalize ก่อนหน้า แต่ยังผิด → โชว์ทั้งต้นฉบับและที่ปรับแล้ว
+    if (normResult.wasChanged) {
+      reasons.unshift('ปรับแล้ว: ' + bcRaw + ' → ' + bc);
+    }
+    showErrorModal(bcRaw, reasons);
     return true;  // modal was shown
   }
 
@@ -1511,8 +1610,9 @@ function processOneBarcode(bc) {
     const label = state.products.length === 1
       ? state.products[0].name
       : `${state.products.length} สินค้า`;
+    const normSuffix = normResult.wasChanged ? ' 🔧' : '';
     if (validation.valid) {
-      showToast('✓ ' + label + ' · ' + parsed.paper_type);
+      showToast('✓ ' + label + ' · ' + parsed.paper_type + normSuffix);
       playBeep('success');
     } else {
       showToast('⚠️ บันทึกแล้ว (' + label + ') แต่ผิด format: ' + validation.warnings[0], 'warning');
@@ -1531,8 +1631,9 @@ function processOneBarcode(bc) {
       warnings: validation.warnings,
       ...parsed
     });
+    const normSuffix = normResult.wasChanged ? ' 🔧' : '';
     if (validation.valid) {
-      showToast('✓ ' + currentProduct.name + ' · ' + parsed.paper_type);
+      showToast('✓ ' + currentProduct.name + ' · ' + parsed.paper_type + normSuffix);
       playBeep('success');
     } else {
       showToast('⚠️ บันทึกแล้ว แต่ Barcode ผิด format: ' + validation.warnings[0], 'warning');
