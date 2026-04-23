@@ -399,18 +399,53 @@
     font-family: var(--mono); font-size: 18px; font-weight: 800;
   }
 
-  .lot-day-card {
+  /* ============ Lot Group (hierarchy) ============ */
+  .lot-group {
     background: var(--panel); border: 1.5px solid var(--border);
-    border-radius: 10px; padding: 12px 14px; margin-bottom: 8px;
+    border-radius: 12px; margin-bottom: 12px; overflow: hidden;
   }
-  .lot-day-header {
-    display: flex; justify-content: space-between; margin-bottom: 6px;
-    font-weight: 700;
+  .lot-group-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 18px; gap: 12px;
+    background: linear-gradient(to right, #fef3c7, #fffbeb);
+    border-bottom: 1.5px solid #fde68a;
   }
-  .lot-day-date { font-family: var(--mono); color: var(--accent); }
-  .lot-day-machine { color: var(--accent-2); font-size: 14px; }
-  .lot-day-meta {
-    font-size: 13px; color: var(--text-dim); font-family: var(--mono);
+  .lot-group-title { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .lot-group-title .lot-no {
+    font-family: var(--mono); font-size: 16px; font-weight: 800; color: #78350f;
+  }
+  .lot-group-meta {
+    font-family: var(--mono); font-size: 12px; color: #92400e;
+    background: rgba(255,255,255,0.6); padding: 3px 8px; border-radius: 6px;
+  }
+  .lot-group-total {
+    font-family: var(--mono); font-size: 14px; font-weight: 800;
+    color: var(--accent); background: white; padding: 6px 14px;
+    border-radius: 8px; border: 1.5px solid var(--accent);
+    white-space: nowrap;
+  }
+  .lot-group-body { padding: 6px 0; }
+  .lot-usage-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 9px 18px; gap: 12px;
+    transition: background 0.1s;
+  }
+  .lot-usage-row:hover { background: var(--panel-2); }
+  .lot-usage-row + .lot-usage-row { border-top: 1px dashed var(--border); }
+  .lot-usage-info { flex: 1; min-width: 0; font-size: 14px; }
+  .lot-usage-date { font-family: var(--mono); color: var(--accent); font-weight: 700; }
+  .lot-usage-sep { color: var(--text-dim); margin: 0 6px; }
+  .lot-usage-machine { color: var(--accent-2); font-weight: 600; }
+  .lot-usage-product { color: var(--text); margin-left: 2px; }
+  .lot-usage-count {
+    font-family: var(--mono); font-size: 13px; font-weight: 700;
+    color: var(--text-dim); white-space: nowrap;
+    padding: 4px 10px; background: var(--panel-2); border-radius: 6px;
+  }
+  .new-badge-sm {
+    display: inline-block; font-size: 9px; padding: 2px 6px;
+    background: var(--accent-2); color: white; border-radius: 4px;
+    margin-left: 6px; font-weight: 700;
   }
 
   @media (max-width: 700px) {
@@ -1839,30 +1874,37 @@ async function runLotLookup() {
     window._lotData = data;
     window._lotQuery = q;
 
-    // Group by date+machine+product
-    const byDay = {};
+    // Group by lot (top level) → ภายในแต่ละ lot group ต่อโดย date+machine+product
+    const byLot = {};
     data.forEach(s => {
-      const key = `${s.production_date}|${s.machine_id}|${s.product_name}|${s.jumbo_lot}`;
-      if (!byDay[key]) byDay[key] = {
-        date: s.production_date,
-        machine: s.machine_name,
-        product: s.product_name,
-        isNew: s.is_new_product,
-        lot: s.jumbo_lot,
-        paper_type: s.paper_type,
-        cut_date: s.cut_date,
-        count: 0
-      };
-      byDay[key].count++;
+      const lotKey = s.jumbo_lot;
+      if (!byLot[lotKey]) {
+        byLot[lotKey] = {
+          lot: s.jumbo_lot,
+          paper_type: s.paper_type,
+          cut_date: s.cut_date,
+          totalCount: 0,
+          usages: {}  // key: date|machine|product
+        };
+      }
+      const useKey = `${s.production_date}|${s.machine_id}|${s.product_name}`;
+      if (!byLot[lotKey].usages[useKey]) {
+        byLot[lotKey].usages[useKey] = {
+          date: s.production_date,
+          machine: s.machine_name,
+          product: s.product_name,
+          isNew: s.is_new_product,
+          count: 0
+        };
+      }
+      byLot[lotKey].usages[useKey].count++;
+      byLot[lotKey].totalCount++;
     });
 
-    // เรียงตาม lot ก่อน (ให้ lot เดียวกันติดกัน) → แล้วค่อยวันที่ใหม่สุดก่อน
-    const groups = Object.values(byDay).sort((a, b) => {
-      if (a.lot !== b.lot) return a.lot.localeCompare(b.lot);
-      return b.date.localeCompare(a.date);
-    });
+    // เรียง lot ตาม alphabet
+    const lotGroups = Object.values(byLot).sort((a, b) => a.lot.localeCompare(b.lot));
     const totalScans = data.length;
-    const uniqueLots = new Set(data.map(d => d.jumbo_lot)).size;
+    const uniqueLots = Object.keys(byLot).length;
     const uniqueDays = new Set(data.map(d => d.production_date)).size;
     const uniqueProducts = new Set(data.map(d => d.product_name)).size;
 
@@ -1876,21 +1918,34 @@ async function runLotLookup() {
       <div class="lot-summary-card"><div class="lot-summary-label">ม้วนทั้งหมด</div><div class="lot-summary-value">${totalScans}</div></div>
     </div>`;
 
-    groups.forEach(g => {
-      html += `<div class="lot-day-card">
-        <div class="lot-day-header">
-          <div>
-            <span class="lot-day-date">${g.date}</span>
-            · <span class="lot-day-machine">${escapeHtml(g.machine)}</span>
-            · <strong>${escapeHtml(g.product)}</strong>
-            ${g.isNew ? '<span class="new-badge" style="font-size:9px;padding:2px 6px;background:var(--accent-2);color:white;border-radius:4px;margin-left:4px;">ใหม่</span>' : ''}
+    lotGroups.forEach(lg => {
+      const usageList = Object.values(lg.usages).sort((a, b) => {
+        if (a.date !== b.date) return b.date.localeCompare(a.date);
+        return a.product.localeCompare(b.product);
+      });
+      html += `<div class="lot-group">
+        <div class="lot-group-header">
+          <div class="lot-group-title">
+            📦 <strong class="lot-no">${highlightMatch(lg.lot, q, 'lot-hl')}</strong>
+            <span class="lot-group-meta">${escapeHtml(lg.paper_type)} · ตัด ${escapeHtml(lg.cut_date)}</span>
           </div>
-          <div class="lot-count">${g.count}×</div>
+          <div class="lot-group-total">${lg.totalCount} ม้วน</div>
         </div>
-        <div class="lot-day-meta">
-          <strong>${highlightMatch(g.lot, q, 'lot-hl')}</strong> · ${escapeHtml(g.paper_type)} · ตัด ${escapeHtml(g.cut_date)}
-        </div>
-      </div>`;
+        <div class="lot-group-body">`;
+      usageList.forEach((u, i) => {
+        html += `<div class="lot-usage-row">
+          <div class="lot-usage-info">
+            <span class="lot-usage-date">${u.date}</span>
+            <span class="lot-usage-sep">·</span>
+            <span class="lot-usage-machine">${escapeHtml(u.machine)}</span>
+            <span class="lot-usage-sep">·</span>
+            <strong class="lot-usage-product">${escapeHtml(u.product)}</strong>
+            ${u.isNew ? '<span class="new-badge-sm">ใหม่</span>' : ''}
+          </div>
+          <div class="lot-usage-count">${u.count} ม้วน</div>
+        </div>`;
+      });
+      html += `</div></div>`;
     });
 
     container.innerHTML = html;
