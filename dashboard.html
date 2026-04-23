@@ -783,6 +783,7 @@
   <div class="tabs">
     <button class="tab active" data-view="trace">🔍 สอบกลับวัตถุดิบ</button>
     <button class="tab" data-view="lot">↩️ ย้อนหา Jumbo Lot</button>
+    <button class="tab" data-view="invoice">📦 Invoice Tracker</button>
     <button class="tab" data-view="history">📋 ประวัติการบันทึก</button>
     <button class="tab" data-view="edit">⚙️ แก้ไขข้อมูล</button>
     <button class="tab" data-view="stats">📊 สถิติ</button>
@@ -844,6 +845,53 @@
           <span class="emoji">📦</span>
           <div class="empty-title">พิมพ์เลขล็อตเพื่อเริ่มค้นหา</div>
           <div>พิมพ์เพียงบางส่วนของเลขล็อตก็ได้</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- VIEW: Invoice Tracker -->
+  <div class="view" id="view-invoice">
+    <div class="panel">
+      <div class="panel-title">📦 Invoice Tracker</div>
+      <div class="panel-sub">ค้นหาตามเลข Invoice / Supplier / ช่วงวันรับเข้า → ดู lots ทั้งหมด + การใช้งาน</div>
+
+      <div class="form-grid" style="grid-template-columns: 1fr 1fr 1fr 1fr auto;">
+        <div>
+          <label class="field-label">Invoice No.</label>
+          <input type="text" id="inv-no" placeholder="เช่น 414175479">
+        </div>
+        <div>
+          <label class="field-label">Supplier</label>
+          <select id="inv-supplier">
+            <option value="">(ทุก Supplier)</option>
+            <option value="SCG">SCG</option>
+            <option value="Muda">Muda</option>
+            <option value="MPK">MPK</option>
+            <option value="UTP">UTP</option>
+            <option value="AP">AP</option>
+            <option value="TPC">TPC</option>
+            <option value="NTPM">NTPM</option>
+            <option value="Ching Mei">Ching Mei</option>
+            <option value="SNP Paper">SNP Paper</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label">จากวันรับเข้า</label>
+          <input type="date" id="inv-from">
+        </div>
+        <div>
+          <label class="field-label">ถึงวันรับเข้า</label>
+          <input type="date" id="inv-to">
+        </div>
+        <button class="btn" id="btn-invoice">🔍 ค้นหา</button>
+      </div>
+
+      <div id="inv-result">
+        <div class="empty">
+          <span class="emoji">📦</span>
+          <div class="empty-title">ค้นหาเพื่อดู Invoice</div>
+          <div>ใส่เงื่อนไขอย่างน้อย 1 ตัว</div>
         </div>
       </div>
     </div>
@@ -1327,14 +1375,28 @@ async function openBatchDetail(batchId) {
       .order('scanned_at', { ascending: true });
     if (sErr) throw sErr;
 
-    renderBatchDetail(batch, scans);
+    // ดึง invoice info สำหรับ lots ใน batch นี้
+    const uniqueLots = [...new Set(scans.map(s => (s.jumbo_lot || '').replace(/-/g, '').toUpperCase()).filter(x => x))];
+    let invoiceMap = {};
+    if (uniqueLots.length > 0) {
+      const { data: invData } = await supabase
+        .from('paper_invoices')
+        .select('paper_lot, paper_lot_normalized, invoice_no, supplier, receive_date, weight_kg, price_per_roll')
+        .in('paper_lot_normalized', uniqueLots);
+      (invData || []).forEach(inv => {
+        invoiceMap[inv.paper_lot_normalized] = inv;
+      });
+    }
+
+    renderBatchDetail(batch, scans, invoiceMap);
   } catch (err) {
     console.error(err);
     body.innerHTML = `<div class="empty"><span class="emoji">⚠️</span><div class="empty-title">โหลดไม่สำเร็จ</div><div>${escapeHtml(err.message)}</div></div>`;
   }
 }
 
-function renderBatchDetail(batch, scans) {
+function renderBatchDetail(batch, scans, invoiceMap) {
+  invoiceMap = invoiceMap || {};
   document.getElementById('detail-title').innerHTML =
     `📋 Batch · ${batch.production_date} · ${escapeHtml(batch.machines?.name || '-')}` +
     (batch.voided ? ' <span class="voided-badge">ยกเลิกแล้ว</span>' : '');
@@ -1358,6 +1420,10 @@ function renderBatchDetail(batch, scans) {
   const invalidCount = scans.filter(s => s.barcode_valid === false).length;
   const uniqueLots = new Set(scans.map(s => s.jumbo_lot)).size;
   const uniqueTypes = new Set(scans.map(s => s.paper_type)).size;
+  
+  // Invoice stats
+  const lotsWithInvoice = [...new Set(scans.map(s => (s.jumbo_lot || '').replace(/-/g, '').toUpperCase()))].filter(l => invoiceMap[l]);
+  const uniqueSuppliers = new Set(Object.values(invoiceMap).map(i => i.supplier).filter(x => x));
 
   // หาม้วนที่ share กัน (barcode ถูก scan หลายครั้งใน batch เดียวกัน)
   const barcodeUsage = {};
@@ -1380,6 +1446,11 @@ function renderBatchDetail(batch, scans) {
     <div class="detail-stat">
       <div class="detail-stat-label">Jumbo Lots</div>
       <div class="detail-stat-value" style="color:var(--accent-2);">${uniqueLots}</div>
+    </div>
+    <div class="detail-stat">
+      <div class="detail-stat-label">📄 Invoice</div>
+      <div class="detail-stat-value" style="color:#4338ca;">${lotsWithInvoice.length}/${uniqueLots}</div>
+      ${uniqueSuppliers.size > 0 ? `<div style="font-size:10px;color:var(--text-dim);margin-top:2px;">${[...uniqueSuppliers].join(', ')}</div>` : ''}
     </div>
   </div>`;
 
@@ -1413,10 +1484,18 @@ function renderBatchDetail(batch, scans) {
       const sharedBadge = isShared
         ? `<span style="display:inline-block;padding:1px 7px;background:var(--accent-2-bg);color:var(--accent-2);border-radius:4px;font-size:10px;font-weight:700;margin-left:6px;" title="ม้วนนี้ใช้กับ ${sharedWith} สินค้า">🔗 ใช้ร่วม ×${sharedWith}</span>`
         : '';
+      
+      // Invoice badge
+      const lotNorm = (s.jumbo_lot || '').replace(/-/g, '').toUpperCase();
+      const inv = invoiceMap[lotNorm];
+      const invBadge = inv
+        ? `<span style="display:inline-block;padding:1px 7px;background:#eef2ff;color:#4338ca;border-radius:4px;font-size:10px;font-weight:600;margin-left:6px;" title="Invoice: ${escapeHtml(inv.invoice_no || '-')} | Supplier: ${escapeHtml(inv.supplier || '-')} | รับเข้า: ${inv.receive_date || '-'}">📄 ${escapeHtml(inv.supplier || '?')}</span>`
+        : '';
+      
       html += `<div class="detail-scan-row ${s.barcode_valid === false ? 'invalid' : ''}">
         <div class="detail-scan-num">${idx + 1}</div>
         <div class="detail-scan-barcode" title="${escapeHtml(s.barcode_raw || '')}">
-          ${escapeHtml(s.barcode_raw || '')}${sharedBadge}
+          ${escapeHtml(s.barcode_raw || '')}${sharedBadge}${invBadge}
           ${s.barcode_valid === false ? '<span style="color:#d97706;font-size:11px;margin-left:6px;">⚠️ ' + escapeHtml(s.barcode_warnings || '') + '</span>' : ''}
         </div>
         <div class="detail-scan-time">${t}</div>
@@ -1871,6 +1950,19 @@ async function runLotLookup() {
       return;
     }
 
+    // ดึง invoice info สำหรับ lots ที่เจอ
+    const uniqueLots = [...new Set(data.map(s => (s.jumbo_lot || '').replace(/-/g, '').toUpperCase()))];
+    let invoiceMap = {};
+    if (uniqueLots.length > 0) {
+      const { data: invData } = await supabase
+        .from('paper_invoices')
+        .select('paper_lot, paper_lot_normalized, invoice_no, supplier, receive_date, weight_kg')
+        .in('paper_lot_normalized', uniqueLots);
+      (invData || []).forEach(inv => {
+        invoiceMap[inv.paper_lot_normalized] = inv;
+      });
+    }
+
     window._lotData = data;
     window._lotQuery = q;
 
@@ -1923,6 +2015,16 @@ async function runLotLookup() {
         if (a.date !== b.date) return b.date.localeCompare(a.date);
         return a.product.localeCompare(b.product);
       });
+      
+      // ค้นหา invoice info
+      const lotNorm = (lg.lot || '').replace(/-/g, '').toUpperCase();
+      const inv = invoiceMap[lotNorm];
+      const invBadge = inv 
+        ? `<div style="margin-top:6px;padding:6px 10px;background:var(--accent-bg,#eef2ff);border-left:3px solid var(--accent,#6366f1);border-radius:4px;font-size:12px;">
+             📄 <strong>${escapeHtml(inv.invoice_no || '-')}</strong> · ${escapeHtml(inv.supplier || '-')} · รับเข้า ${inv.receive_date || '-'} ${inv.weight_kg ? `· ${Math.round(Number(inv.weight_kg))} kg` : ''}
+           </div>`
+        : '';
+      
       html += `<div class="lot-group">
         <div class="lot-group-header">
           <div class="lot-group-title">
@@ -1931,6 +2033,7 @@ async function runLotLookup() {
           </div>
           <div class="lot-group-total">${lg.totalCount} ม้วน</div>
         </div>
+        ${invBadge}
         <div class="lot-group-body">`;
       usageList.forEach((u, i) => {
         html += `<div class="lot-usage-row">
@@ -1969,6 +2072,147 @@ async function runLotLookup() {
 document.getElementById('btn-lot').addEventListener('click', runLotLookup);
 document.getElementById('l-input').addEventListener('keydown', e => {
   if (e.key === 'Enter') runLotLookup();
+});
+
+// ==================== VIEW: INVOICE TRACKER ====================
+async function runInvoiceSearch() {
+  const invNo = document.getElementById('inv-no').value.trim();
+  const supplier = document.getElementById('inv-supplier').value;
+  const fromDate = document.getElementById('inv-from').value;
+  const toDate = document.getElementById('inv-to').value;
+
+  if (!invNo && !supplier && !fromDate && !toDate) {
+    alert('กรุณากรอกเงื่อนไขค้นหาอย่างน้อย 1 ตัว');
+    return;
+  }
+
+  const container = document.getElementById('inv-result');
+  container.innerHTML = '<div class="loading"><div class="spinner-small"></div><div style="margin-top:10px;">กำลังค้นหา...</div></div>';
+
+  try {
+    let query = supabase
+      .from('paper_invoices')
+      .select('*')
+      .order('receive_date', { ascending: false })
+      .limit(1000);
+
+    if (invNo) query = query.ilike('invoice_no', `%${invNo}%`);
+    if (supplier) query = query.eq('supplier', supplier);
+    if (fromDate) query = query.gte('receive_date', fromDate);
+    if (toDate) query = query.lte('receive_date', toDate);
+
+    const { data: invoices, error } = await query;
+    if (error) throw error;
+
+    if (!invoices || invoices.length === 0) {
+      container.innerHTML = `<div class="empty"><span class="emoji">📭</span><div class="empty-title">ไม่พบ Invoice ที่ตรงกับเงื่อนไข</div></div>`;
+      return;
+    }
+
+    // ดึง scan data ที่ใช้ lots เหล่านี้
+    const lotNormalized = invoices.map(i => i.paper_lot_normalized);
+    const { data: scans } = await supabase
+      .from('v_scan_details')
+      .select('jumbo_lot, production_date, machine_name, product_name')
+      .limit(5000);
+
+    // Normalize scan lots
+    const scanByLot = {};
+    (scans || []).forEach(s => {
+      const norm = (s.jumbo_lot || '').replace(/-/g, '').toUpperCase();
+      if (!scanByLot[norm]) scanByLot[norm] = [];
+      scanByLot[norm].push(s);
+    });
+
+    // Group invoices by invoice_no
+    const byInvoice = {};
+    invoices.forEach(inv => {
+      const key = inv.invoice_no || '(ไม่ระบุ)';
+      if (!byInvoice[key]) {
+        byInvoice[key] = {
+          invoice_no: key,
+          supplier: inv.supplier,
+          receive_date: inv.receive_date,
+          invoice_date: inv.invoice_date,
+          lots: [],
+          total_weight: 0,
+          total_rolls: 0,
+          paper_types: new Set()
+        };
+      }
+      byInvoice[key].lots.push(inv);
+      byInvoice[key].total_weight += Number(inv.weight_kg) || 0;
+      byInvoice[key].total_rolls++;
+      if (inv.paper_type) byInvoice[key].paper_types.add(inv.paper_type);
+    });
+
+    const invList = Object.values(byInvoice).sort((a, b) =>
+      (b.receive_date || '').localeCompare(a.receive_date || '')
+    );
+
+    // Stats
+    const totalInvs = invList.length;
+    const totalLots = invoices.length;
+    const usedLots = invoices.filter(i => scanByLot[i.paper_lot_normalized]).length;
+    const usageRate = totalLots > 0 ? (usedLots / totalLots * 100).toFixed(1) : 0;
+
+    let html = `<div class="lot-summary">
+      <div class="lot-summary-card"><div class="lot-summary-label">Invoices</div><div class="lot-summary-value">${totalInvs}</div></div>
+      <div class="lot-summary-card"><div class="lot-summary-label">ม้วนทั้งหมด</div><div class="lot-summary-value">${totalLots}</div></div>
+      <div class="lot-summary-card"><div class="lot-summary-label">ใช้ไปแล้ว</div><div class="lot-summary-value" style="color:var(--accent);">${usedLots} <span style="font-size:12px;color:var(--text-dim);">(${usageRate}%)</span></div></div>
+      <div class="lot-summary-card"><div class="lot-summary-label">รอใช้</div><div class="lot-summary-value" style="color:var(--accent-2);">${totalLots - usedLots}</div></div>
+    </div>`;
+
+    invList.forEach(inv => {
+      const papers = Array.from(inv.paper_types).join(', ');
+      const usedInInv = inv.lots.filter(l => scanByLot[l.paper_lot_normalized]).length;
+
+      html += `<div class="lot-group">
+        <div class="lot-group-header">
+          <div class="lot-group-title">
+            📄 <strong class="lot-no">${escapeHtml(inv.invoice_no)}</strong>
+            <span class="lot-group-meta">${escapeHtml(inv.supplier || '-')} · รับเข้า ${inv.receive_date || '-'} · ${papers}</span>
+          </div>
+          <div class="lot-group-total">${inv.total_rolls} ม้วน · ${Math.round(inv.total_weight).toLocaleString()} kg · ใช้ ${usedInInv}/${inv.total_rolls}</div>
+        </div>
+        <div class="lot-group-body">`;
+
+      inv.lots.slice(0, 50).forEach(l => {
+        const uses = scanByLot[l.paper_lot_normalized] || [];
+        const usageText = uses.length > 0
+          ? uses.slice(0, 3).map(u => `${u.production_date}·${u.machine_name}·${u.product_name}`).join(' | ') +
+            (uses.length > 3 ? ` +${uses.length - 3} อื่น` : '')
+          : '<span style="color:var(--text-dim);">(ยังไม่ได้ใช้)</span>';
+
+        html += `<div class="lot-usage-row">
+          <div class="lot-usage-info" style="flex:2;">
+            <strong>${escapeHtml(l.paper_lot)}</strong>
+            <span class="lot-usage-sep">·</span>
+            <span class="lot-usage-machine">${escapeHtml(l.paper_type || '-')}</span>
+            <span class="lot-usage-sep">·</span>
+            <span style="color:var(--text-dim);">${Math.round(Number(l.weight_kg) || 0)} kg</span>
+          </div>
+          <div style="font-size:11px;color:var(--text-dim);flex:3;text-align:right;">${usageText}</div>
+        </div>`;
+      });
+
+      if (inv.lots.length > 50) {
+        html += `<div style="padding:8px 14px;font-size:12px;color:var(--text-dim);">... และอีก ${inv.lots.length - 50} lots</div>`;
+      }
+
+      html += `</div></div>`;
+    });
+
+    container.innerHTML = html;
+  } catch (err) {
+    console.error(err);
+    container.innerHTML = `<div class="empty"><span class="emoji">⚠️</span><div class="empty-title">ค้นหาไม่สำเร็จ</div><div>${escapeHtml(err.message)}</div></div>`;
+  }
+}
+
+document.getElementById('btn-invoice').addEventListener('click', runInvoiceSearch);
+document.getElementById('inv-no').addEventListener('keydown', e => {
+  if (e.key === 'Enter') runInvoiceSearch();
 });
 
 // ==================== VIEW 3: HISTORY ====================
