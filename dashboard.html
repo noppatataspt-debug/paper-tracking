@@ -172,6 +172,56 @@
     background: #eef2ff; border-radius: 4px;
     font-size: 12px;
   }
+  
+  /* Report box ขึ้นบนสุด (highlight) */
+  .report-box-top {
+    margin-bottom: 20px;
+    border: 2px solid #d97706 !important;
+    background: linear-gradient(to bottom, #fffbeb, #fff);
+  }
+  .report-box-top .report-title {
+    color: #b45309; font-weight: 800;
+  }
+  
+  /* Collapse product groups */
+  .trace-details-section {
+    margin-top: 20px; padding-bottom: 8px;
+    border-bottom: 2px solid var(--border);
+  }
+  .trace-details-title {
+    font-size: 14px; font-weight: 800; color: var(--text);
+  }
+  .trace-group.collapsible .trace-group-header.clickable {
+    cursor: pointer;
+    user-select: none;
+  }
+  .trace-group.collapsible .trace-group-header.clickable:hover {
+    filter: brightness(0.95);
+  }
+  .toggle-arrow {
+    display: inline-block; margin-right: 6px;
+    font-size: 11px; color: var(--text-dim); min-width: 12px;
+  }
+  
+  /* Summary ก่อน expand — แสดง paper type + count */
+  .trace-group-summary {
+    padding: 8px 14px; background: white;
+    border-top: 1px solid var(--border);
+  }
+  .prod-summary-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 4px 0; font-size: 13px;
+  }
+  .prod-summary-row + .prod-summary-row {
+    border-top: 1px dashed var(--border);
+  }
+  .prod-summary-type {
+    font-family: var(--mono); font-weight: 800; color: var(--accent-2);
+  }
+  .prod-summary-meta {
+    font-family: var(--mono); font-size: 12px; color: var(--text-dim);
+  }
+  .prod-summary-meta strong { color: var(--text); }
   .invoice-sub-header .invoice-label {
     font-family: var(--mono); font-weight: 800; color: #4338ca;
   }
@@ -2056,7 +2106,8 @@ function renderTraceResult(container, data, params, invoiceMap) {
       <div class="stat-value">${uniqueBarcodes}</div>
       ${hasSharedRolls ? `<div style="font-size:11px;color:var(--text-dim);margin-top:2px;">(${totalRolls} รายการ - มีม้วนใช้ร่วม)</div>` : ''}
     </div>
-  </div>`;
+  </div>
+  <div id="trace-report-placeholder"></div>`;  // report จะ inject ตรงนี้ ด้านบน product groups
 
   // Sort products by scan count desc
   const sortedProducts = Object.values(byProduct).sort((a, b) => {
@@ -2065,19 +2116,38 @@ function renderTraceResult(container, data, params, invoiceMap) {
     return sumB - sumA;
   });
 
-  sortedProducts.forEach(prod => {
+  html += `<div class="trace-details-section">
+    <div class="trace-details-title">📋 รายละเอียดการใช้วัตถุดิบ <span style="font-weight:400;color:var(--text-dim);font-size:12px;">(คลิกที่สินค้าเพื่อขยาย)</span></div>
+  </div>`;
+
+  sortedProducts.forEach((prod, prodIdx) => {
     const productTotal = Object.values(prod.types).reduce((s, t) => 
       s + Object.values(t).reduce((ss, inv) => 
         ss + Object.values(inv.lots).reduce((sss, v) => sss + v.count, 0), 0), 0);
 
-    html += `<div class="trace-group">
-      <div class="trace-group-header">
+    const prodId = 'prod-' + prodIdx;
+    // Summary compact line per paper type (สั้น ๆ ให้เห็นเลย ก่อน expand)
+    const typeSummary = Object.entries(prod.types).map(([type, invoices]) => {
+      const typeTotal = Object.values(invoices).reduce((s, inv) => s + Object.values(inv.lots).reduce((ss, v) => ss + v.count, 0), 0);
+      const numInvoices = Object.keys(invoices).length;
+      const numLots = Object.values(invoices).reduce((s, inv) => s + Object.keys(inv.lots).length, 0);
+      return `<div class="prod-summary-row">
+        <span class="prod-summary-type">${escapeHtml(type)}</span>
+        <span class="prod-summary-meta">${numInvoices} inv · ${numLots} lots · <strong>${typeTotal} ม้วน</strong></span>
+      </div>`;
+    }).join('');
+
+    html += `<div class="trace-group collapsible" data-prod-id="${prodId}">
+      <div class="trace-group-header clickable" onclick="toggleProdGroup('${prodId}')">
         <div class="trace-group-title">
+          <span class="toggle-arrow" id="arrow-${prodId}">▶</span>
           📦 ${escapeHtml(prod.name)}
           ${prod.isNew ? '<span class="new-badge">ใหม่</span>' : ''}
         </div>
         <div class="trace-group-count">${productTotal} ม้วน</div>
-      </div>`;
+      </div>
+      <div class="trace-group-summary">${typeSummary}</div>
+      <div class="trace-group-details" id="${prodId}" style="display:none;">`;
 
     // Sort paper types by total count
     const sortedTypes = Object.entries(prod.types).sort((a, b) => {
@@ -2139,7 +2209,7 @@ function renderTraceResult(container, data, params, invoiceMap) {
       html += `</div>`;
     });
 
-    html += `</div>`;
+    html += `</div></div>`;  // close trace-group-details, trace-group
   });
 
   // ==================== Supplier Report (text) ====================
@@ -2189,25 +2259,30 @@ function renderTraceResult(container, data, params, invoiceMap) {
   report += `════════════════════════════════════════\n`;
   report += `รวม: ${totalProducts} สินค้า, ${totalTypes} ประเภทกระดาษ, ${totalInvoices} Invoices, ${totalLots} Jumbo Lots, ${totalRolls} ม้วน\n`;
 
-  html += `<div class="report-box">
+  // Inject report ขึ้นไปบนสุด (แทน placeholder)
+  const reportHtml = `<div class="report-box report-box-top">
     <div class="report-header">
-      <div class="report-title">📄 รายงานพร้อมส่ง Supplier</div>
-      <button class="copy-btn" id="btn-copy-report">📋 Copy</button>
+      <div class="report-title">📄 รายงานพร้อมส่ง Supplier (พร้อม copy)</div>
+      <button class="copy-btn" id="btn-copy-report-top">📋 Copy</button>
     </div>
     <div class="report-content">${escapeHtml(report)}</div>
   </div>`;
+  html = html.replace('<div id="trace-report-placeholder"></div>', reportHtml);
 
   container.innerHTML = html;
   window._reportText = report;
 
-  document.getElementById('btn-copy-report').addEventListener('click', () => {
-    navigator.clipboard.writeText(window._reportText).then(() => {
-      const btn = document.getElementById('btn-copy-report');
-      const orig = btn.textContent;
-      btn.textContent = '✓ คัดลอกแล้ว';
-      setTimeout(() => btn.textContent = orig, 2000);
+  // Copy button
+  const btnCopy = document.getElementById('btn-copy-report-top');
+  if (btnCopy) {
+    btnCopy.addEventListener('click', () => {
+      navigator.clipboard.writeText(window._reportText).then(() => {
+        const orig = btnCopy.textContent;
+        btnCopy.textContent = '✓ คัดลอกแล้ว';
+        setTimeout(() => btnCopy.textContent = orig, 2000);
+      });
     });
-  });
+  }
 
   // Export CSV button
   document.getElementById('btn-export-trace').addEventListener('click', () => {
@@ -2227,6 +2302,20 @@ function renderTraceResult(container, data, params, invoiceMap) {
 }
 
 document.getElementById('btn-trace').addEventListener('click', runTrace);
+
+// Toggle product group expand/collapse
+window.toggleProdGroup = function(prodId) {
+  const el = document.getElementById(prodId);
+  const arrow = document.getElementById('arrow-' + prodId);
+  if (!el) return;
+  if (el.style.display === 'none') {
+    el.style.display = 'block';
+    if (arrow) arrow.textContent = '▼';
+  } else {
+    el.style.display = 'none';
+    if (arrow) arrow.textContent = '▶';
+  }
+};
 
 // ==================== VIEW 2: LOT LOOKUP ====================
 async function runLotLookup() {
