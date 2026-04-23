@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>พิมพ์ QR ม้วนกระดาษ · Asia Paper Tube</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<style>
+:root {
+  --bg: #f5f3ef; --panel: #ffffff; --panel-2: #faf7f2;
+  --text: #1c1917; --text-dim: #78716c; --border: #e7e5e4;
+  --accent: #c2410c; --accent-bg: #fff7ed;
+  --accent-2: #1e40af; --accent-2-bg: #dbeafe;
+  --success: #15803d; --success-bg: #f0fdf4;
+  --danger: #b91c1c; --danger-bg: #fef2f2;
+  --warn: #b45309; --warn-bg: #fef3c7;
+  --mono: 'JetBrains Mono', monospace;
+}
+* { box-sizing: border-box; }
+body { font-family: 'IBM Plex Sans Thai', sans-serif; margin: 0; background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; }
+.container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
+.header h1 { margin: 0; font-size: 26px; font-weight: 800; }
+.header h1 .accent { color: var(--accent); }
+.back-link { padding: 8px 16px; background: white; color: var(--text); border: 1.5px solid var(--border); border-radius: 8px; text-decoration: none; font-weight: 700; font-size: 13px; }
+.back-link:hover { background: var(--panel-2); }
+.main-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+@media (max-width: 900px) { .main-grid { grid-template-columns: 1fr; } }
+.panel { background: var(--panel); border-radius: 14px; padding: 22px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); border: 1.5px solid var(--border); }
+.panel-title { font-size: 17px; font-weight: 800; margin-bottom: 4px; }
+.panel-sub { color: var(--text-dim); font-size: 13px; margin-bottom: 16px; }
+.field { margin-bottom: 16px; position: relative; }
+.field-label { font-size: 13px; font-weight: 700; margin-bottom: 6px; display: block; }
+.field-label .req { color: var(--danger); margin-left: 3px; }
+.field input[type="text"], .field input[type="date"], .field input[type="number"] {
+  width: 100%; padding: 12px 14px; border: 1.5px solid var(--border); border-radius: 10px;
+  font-family: inherit; font-size: 16px; font-weight: 600; background: white;
+}
+.field input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(194,65,12,0.12); }
+.slitter-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.slitter-btn { padding: 12px 20px; background: white; color: var(--text); border: 1.5px solid var(--border); border-radius: 10px; font-family: inherit; font-size: 15px; font-weight: 700; cursor: pointer; min-width: 54px; }
+.slitter-btn:hover { background: var(--panel-2); }
+.slitter-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
+.qty-input-group { display: flex; align-items: center; gap: 8px; }
+.qty-input-group input { flex: 1; text-align: center; font-family: var(--mono); font-size: 18px !important; font-weight: 800 !important; }
+.qty-btn { width: 48px; height: 48px; border: 1.5px solid var(--border); background: white; color: var(--accent); border-radius: 10px; font-size: 22px; font-weight: 800; cursor: pointer; }
+.qty-btn:hover { background: var(--accent); color: white; }
+.hint { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+.ac-suggest { position: absolute; z-index: 40; top: calc(100% + 2px); left: 0; right: 0; background: white; border: 1.5px solid var(--border); border-radius: 10px; max-height: 260px; overflow-y: auto; box-shadow: 0 10px 25px rgba(0,0,0,0.08); }
+.ac-item { padding: 10px 14px; cursor: pointer; border-bottom: 1px solid #f1f5f9; font-size: 14px; font-weight: 500; }
+.ac-item:last-child { border-bottom: none; }
+.ac-item:nth-child(even) { background: #f8fafc; }
+.ac-item:hover, .ac-item.active { background: var(--accent); color: white; }
+.ac-item .hit { font-weight: 800; background: #fef3c7; padding: 0 2px; border-radius: 2px; }
+.ac-item:hover .hit, .ac-item.active .hit { color: #fff7ed; background: rgba(255,255,255,0.25); }
+.validation-box { background: var(--warn-bg); border-left: 4px solid var(--warn); padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; font-size: 13px; color: #78350f; font-weight: 600; }
+.validation-box.error { background: var(--danger-bg); border-color: var(--danger); color: #7f1d1d; }
+.validation-box.ok { background: var(--success-bg); border-color: var(--success); color: #14532d; }
+.preview-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+.preview-info { font-family: var(--mono); font-size: 13px; color: var(--text-dim); font-weight: 700; }
+.preview-count { background: var(--accent); color: white; padding: 4px 12px; border-radius: 6px; font-size: 13px; font-weight: 800; }
+.preview-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 14px; background: var(--panel-2); border-radius: 10px; max-height: 600px; overflow-y: auto; }
+.label-preview { aspect-ratio: 32 / 25; background: white; border: 1px dashed #94a3b8; border-radius: 4px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4px; gap: 2px; position: relative; }
+.label-preview .roll-num { position: absolute; top: 2px; right: 4px; font-size: 8px; font-family: var(--mono); color: var(--text-dim); font-weight: 700; }
+.label-preview canvas, .label-preview img { max-width: 80%; max-height: 60%; object-fit: contain; }
+.label-preview .label-text { font-family: var(--mono); font-size: 10px; font-weight: 700; line-height: 1.1; text-align: center; color: #000; }
+.full-barcode-preview { margin-top: 12px; padding: 10px; background: #1c1917; color: #fef3c7; font-family: var(--mono); font-size: 12px; border-radius: 6px; word-break: break-all; }
+.full-barcode-preview .label-small { color: #a8a29e; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; display: block; font-weight: 700; }
+.actions { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+.btn { padding: 14px 24px; font-family: inherit; font-size: 15px; font-weight: 800; border-radius: 10px; cursor: pointer; border: none; display: inline-flex; align-items: center; justify-content: center; gap: 8px; flex: 1; }
+.btn-print { background: var(--accent); color: white; }
+.btn-print:hover:not(:disabled) { background: #9a3412; }
+.btn-print:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-reset { background: white; color: var(--text); border: 1.5px solid var(--border); }
+.btn-reset:hover { background: var(--panel-2); }
+@media print {
+  @page { size: 32mm 25mm; margin: 0; }
+  body { background: white; margin: 0; padding: 0; }
+  .container > *:not(.print-sheet), .header, .main-grid { display: none !important; }
+  .print-sheet { display: block !important; }
+  .print-label { width: 32mm; height: 25mm; page-break-after: always; page-break-inside: avoid; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 1mm; gap: 0.3mm; box-sizing: border-box; border: none; }
+  .print-label:last-child { page-break-after: auto; }
+  .print-label img, .print-label canvas { max-width: 16mm; max-height: 16mm; }
+  .print-label .print-text { font-family: var(--mono); font-size: 7pt; font-weight: 700; line-height: 1.1; text-align: center; color: #000; }
+}
+.print-sheet { display: none; }
+.status-bar { padding: 6px 12px; background: var(--panel-2); border-radius: 8px; font-size: 12px; color: var(--text-dim); margin-bottom: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.status-bar .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); }
+.status-bar.offline .dot { background: var(--danger); }
+.toast { position: fixed; top: 24px; right: 24px; z-index: 100; padding: 14px 20px; background: var(--success); color: white; border-radius: 10px; font-weight: 700; box-shadow: 0 10px 25px rgba(0,0,0,0.15); transform: translateX(120%); transition: transform 0.3s; }
+.toast.show { transform: translateX(0); }
+.toast.error { background: var(--danger); }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>🏷️ พิมพ์ <span class="accent">QR ม้วนกระดาษ</span></h1>
+    <a href="./index.html" class="back-link">← กลับหน้าสแกน</a>
+  </div>
+  <div class="status-bar" id="status">
+    <span class="dot"></span>
+    <span id="status-text">กำลังเชื่อมต่อ...</span>
+  </div>
+  <div class="main-grid">
+    <div class="panel">
+      <div class="panel-title">📝 ข้อมูลสำหรับพิมพ์</div>
+      <div class="panel-sub">กรอกข้อมูลให้ถูกต้องก่อนพิมพ์</div>
+      <div class="field">
+        <label class="field-label">ประเภทกระดาษ <span class="req">*</span></label>
+        <input type="text" id="paper-type" placeholder="พิมพ์เพื่อค้น (เช่น CPS450)" autocomplete="off">
+        <div id="paper-suggest" class="ac-suggest" style="display:none;"></div>
+        <div class="hint">ต้องตรงกับ master list — เลือกจากที่แนะนำ</div>
+      </div>
+      <div class="field">
+        <label class="field-label">วันที่ตัดกระดาษ <span class="req">*</span></label>
+        <input type="date" id="cut-date">
+        <div class="hint">รูปแบบใน barcode: DDMMYY</div>
+      </div>
+      <div class="field">
+        <label class="field-label">Slitter เครื่องที่ <span class="req">*</span></label>
+        <div class="slitter-row" id="slitter-row">
+          <button class="slitter-btn" data-v="1">1</button>
+          <button class="slitter-btn" data-v="2">2</button>
+          <button class="slitter-btn" data-v="3">3</button>
+          <button class="slitter-btn" data-v="4">4</button>
+          <button class="slitter-btn" data-v="5">5</button>
+        </div>
+      </div>
+      <div class="field">
+        <label class="field-label">Jumbo Lot <span class="req">*</span></label>
+        <input type="text" id="jumbo-lot" placeholder="เช่น 77-4-A7914-4G" autocomplete="off" style="font-family: var(--mono); text-transform: uppercase;">
+        <div class="hint">พิมพ์ได้เอง — แปลงเป็นตัวพิมพ์ใหญ่อัตโนมัติ</div>
+      </div>
+      <div class="field">
+        <label class="field-label">จำนวนม้วน <span class="req">*</span></label>
+        <div class="qty-input-group">
+          <button class="qty-btn" id="qty-minus">−</button>
+          <input type="number" id="qty" min="1" max="100" value="1">
+          <button class="qty-btn" id="qty-plus">+</button>
+        </div>
+        <div class="hint">ม้วนที่ 1, 2, 3, ... auto-generate</div>
+      </div>
+      <div id="validation-msg"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">👀 Preview</div>
+      <div class="panel-sub">ตรวจสอบก่อนสั่งพิมพ์</div>
+      <div class="preview-bar">
+        <div class="preview-info" id="preview-sample">—</div>
+        <div class="preview-count" id="preview-count">0 ดวง</div>
+      </div>
+      <div class="preview-grid" id="preview-grid">
+        <div style="grid-column: 1 / -1; text-align: center; color: var(--text-dim); padding: 40px;">
+          กรอกข้อมูลด้านซ้ายเพื่อดู preview
+        </div>
+      </div>
+      <div class="full-barcode-preview" id="full-preview" style="display:none;">
+        <span class="label-small">Barcode ตัวอย่าง (ม้วน 1):</span>
+        <div id="full-preview-text">—</div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-reset" id="btn-reset">🔄 Reset</button>
+        <button class="btn btn-print" id="btn-print" disabled>🖨️ พิมพ์</button>
+      </div>
+      <div style="margin-top: 14px; padding: 10px 12px; background: var(--accent-2-bg); border-radius: 8px; font-size: 12px; color: #1e3a8a; font-weight: 600;">
+        💡 <strong>Tip:</strong> Chrome ตั้งค่า "Always print to TSC TTP-244 Pro" · TSC driver ตั้ง "3 labels across"
+      </div>
+    </div>
+  </div>
+</div>
+<div class="print-sheet" id="print-sheet"></div>
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+const SUPABASE_URL = 'https://lfrwghrlxaordpxrqyij.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxmcndnaHJseGFvcmRweHJxeWlqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MzQ5MjgsImV4cCI6MjA5MjQxMDkyOH0.M13hI5TUqEL8iVmGM3pWcjbyULSx_n7VPgI2TcHnNZA';
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const state = { paperType: '', cutDate: '', slitter: null, jumboLot: '', qty: 1, products: [] };
+
+function escapeHtml(s) { if (s == null) return ''; return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function escRegex(s) { return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+function highlightMatch(text, query) {
+  if (!query) return escapeHtml(text);
+  const re = new RegExp('(' + escRegex(query) + ')', 'gi');
+  return String(text).split(re).map((p, i) => i % 2 === 1 ? '<span class="hit">' + escapeHtml(p) + '</span>' : escapeHtml(p)).join('');
+}
+function formatCutDate(yyyymmdd) {
+  if (!yyyymmdd) return '';
+  const [y, m, d] = yyyymmdd.split('-');
+  return d + m + y.slice(2);
+}
+function showToast(msg, isError) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (isError ? ' error' : '');
+  setTimeout(() => t.className = 'toast' + (isError ? ' error' : ''), 2500);
+}
+
+async function loadMaster() {
+  try {
+    const { data, error } = await supabase.from('products').select('product_name').eq('is_active', true).order('product_name');
+    if (error) throw error;
+    state.products = (data || []).map(r => r.product_name);
+    document.getElementById('status-text').textContent = '✓ ' + state.products.length + ' สินค้า · พร้อมใช้';
+    document.getElementById('cut-date').valueAsDate = new Date();
+    state.cutDate = document.getElementById('cut-date').value;
+    updateAll();
+  } catch (err) {
+    console.error(err);
+    document.getElementById('status').classList.add('offline');
+    document.getElementById('status-text').textContent = '✗ เชื่อมต่อ DB ไม่ได้: ' + (err.message || err);
+  }
+}
+
+const paperInput = document.getElementById('paper-type');
+const paperBox = document.getElementById('paper-suggest');
+let acActiveIdx = -1;
+let acMatches = [];
+
+function renderAutocomplete() {
+  const q = paperInput.value.trim();
+  if (!q) {
+    acMatches = state.products.slice(0, 30);
+  } else {
+    const qLow = q.toLowerCase();
+    const starts = [], contains = [];
+    state.products.forEach(p => {
+      const pLow = p.toLowerCase();
+      if (pLow.startsWith(qLow)) starts.push(p);
+      else if (pLow.includes(qLow)) contains.push(p);
+    });
+    acMatches = [...starts, ...contains].slice(0, 30);
+  }
+  if (acMatches.length === 0) {
+    paperBox.innerHTML = '<div style="padding: 14px; text-align: center; color: var(--text-dim); font-size: 13px;">ไม่พบ — ต้องเลือกจาก master list</div>';
+  } else {
+    paperBox.innerHTML = acMatches.map((p, i) =>
+      '<div class="ac-item ' + (i === acActiveIdx ? 'active' : '') + '" data-v="' + escapeHtml(p) + '">' + highlightMatch(p, q) + '</div>'
+    ).join('');
+    paperBox.querySelectorAll('.ac-item').forEach(el => {
+      el.addEventListener('mousedown', e => { e.preventDefault(); selectPaper(el.dataset.v); });
+    });
+  }
+  paperBox.style.display = 'block';
+}
+function selectPaper(v) {
+  paperInput.value = v;
+  state.paperType = v;
+  paperBox.style.display = 'none';
+  validateAll();
+  updateAll();
+}
+paperInput.addEventListener('focus', () => { acActiveIdx = -1; renderAutocomplete(); });
+paperInput.addEventListener('input', () => {
+  state.paperType = paperInput.value.trim();
+  acActiveIdx = -1;
+  renderAutocomplete();
+  validateAll();
+  updateAll();
+});
+paperInput.addEventListener('blur', () => setTimeout(() => paperBox.style.display = 'none', 150));
+paperInput.addEventListener('keydown', e => {
+  if (paperBox.style.display === 'none') return;
+  if (e.key === 'ArrowDown') { e.preventDefault(); acActiveIdx = Math.min(acActiveIdx + 1, acMatches.length - 1); renderAutocomplete(); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); acActiveIdx = Math.max(acActiveIdx - 1, -1); renderAutocomplete(); }
+  else if (e.key === 'Enter' && acActiveIdx >= 0) { e.preventDefault(); selectPaper(acMatches[acActiveIdx]); }
+  else if (e.key === 'Escape') { paperBox.style.display = 'none'; }
+});
+
+document.getElementById('cut-date').addEventListener('change', e => { state.cutDate = e.target.value; validateAll(); updateAll(); });
+
+document.querySelectorAll('.slitter-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.slitter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.slitter = btn.dataset.v;
+    validateAll();
+    updateAll();
+  });
+});
+
+const lotInput = document.getElementById('jumbo-lot');
+lotInput.addEventListener('input', () => {
+  const pos = lotInput.selectionStart;
+  lotInput.value = lotInput.value.toUpperCase();
+  lotInput.setSelectionRange(pos, pos);
+  state.jumboLot = lotInput.value.trim();
+  validateAll();
+  updateAll();
+});
+
+const qtyInput = document.getElementById('qty');
+qtyInput.addEventListener('input', () => {
+  let v = parseInt(qtyInput.value) || 1;
+  if (v < 1) v = 1;
+  if (v > 100) v = 100;
+  state.qty = v;
+  updateAll();
+});
+document.getElementById('qty-minus').addEventListener('click', () => { state.qty = Math.max(1, state.qty - 1); qtyInput.value = state.qty; updateAll(); });
+document.getElementById('qty-plus').addEventListener('click', () => { state.qty = Math.min(100, state.qty + 1); qtyInput.value = state.qty; updateAll(); });
+
+function validateAll() {
+  const errors = [];
+  const warnings = [];
+  if (!state.paperType) errors.push('กรุณาเลือกประเภทกระดาษ');
+  else if (!state.products.includes(state.paperType)) errors.push('ประเภทกระดาษ "' + state.paperType + '" ไม่มีใน master list');
+  else if (state.paperType.includes('_') || state.paperType.includes(' ')) errors.push('ประเภทกระดาษห้ามมี _ หรือช่องว่าง');
+  if (!state.cutDate) errors.push('กรุณาเลือกวันที่ตัดกระดาษ');
+  if (!state.slitter) errors.push('กรุณาเลือก Slitter');
+  if (!state.jumboLot) {
+    errors.push('กรุณากรอก Jumbo Lot');
+  } else {
+    if (state.jumboLot.includes('_') || state.jumboLot.includes(' ')) errors.push('Jumbo Lot ห้ามมี _ หรือช่องว่าง');
+    const lot = state.jumboLot;
+    const isSCG = /^\d{2}-\d-[A-Z0-9]{5}-\d[A-Z]$/.test(lot);
+    const isMuda = /^\d{11}[A-Z]$/.test(lot);
+    const isUTP = lot.length === 11;
+    const isChingMei = lot.length === 8;
+    const isMPK = lot.length === 6;
+    if (!isSCG && !isMuda && !isUTP && !isChingMei && !isMPK) warnings.push('รูปแบบ Lot แปลก (SCG: XX-X-AXXXX-XX · Muda: 12 ตัวจบด้วยตัวอักษร)');
+  }
+  const box = document.getElementById('validation-msg');
+  const btn = document.getElementById('btn-print');
+  if (errors.length > 0) {
+    box.className = 'validation-box error';
+    box.innerHTML = '⚠️ <strong>กรุณาแก้ไข:</strong><br>' + errors.map(e => '• ' + e).join('<br>');
+    btn.disabled = true;
+  } else if (warnings.length > 0) {
+    box.className = 'validation-box';
+    box.innerHTML = '⚡ <strong>เตือน:</strong><br>' + warnings.map(w => '• ' + w).join('<br>');
+    btn.disabled = false;
+  } else {
+    box.className = 'validation-box ok';
+    box.innerHTML = '✓ ข้อมูลครบถ้วน พร้อมพิมพ์';
+    btn.disabled = false;
+  }
+  return errors.length === 0;
+}
+
+function buildBarcode(rollNo) {
+  return state.paperType + '_' + formatCutDate(state.cutDate) + '_' + rollNo + '_' + (state.slitter || '?') + '_' + state.jumboLot;
+}
+
+function updateAll() {
+  const grid = document.getElementById('preview-grid');
+  const sample = document.getElementById('preview-sample');
+  const count = document.getElementById('preview-count');
+  const full = document.getElementById('full-preview');
+  const fullText = document.getElementById('full-preview-text');
+  count.textContent = state.qty + ' ดวง';
+  if (!state.paperType || !state.cutDate || !state.slitter || !state.jumboLot) {
+    grid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; color: var(--text-dim); padding: 40px;">กรอกข้อมูลด้านซ้ายให้ครบเพื่อดู preview</div>';
+    sample.textContent = '—';
+    full.style.display = 'none';
+    return;
+  }
+  const sampleBarcode = buildBarcode(1);
+  sample.textContent = sampleBarcode.length + ' chars';
+  fullText.textContent = sampleBarcode;
+  full.style.display = 'block';
+  const maxPreview = Math.min(state.qty, 30);
+  let html = '';
+  for (let i = 1; i <= maxPreview; i++) {
+    const bc = buildBarcode(i);
+    const labelText = state.paperType + '<br>' + formatCutDate(state.cutDate);
+    html += '<div class="label-preview">' +
+      '<div class="roll-num">#' + i + '</div>' +
+      '<canvas class="qr-canvas" data-text="' + escapeHtml(bc) + '"></canvas>' +
+      '<div class="label-text">' + labelText + '</div>' +
+    '</div>';
+  }
+  if (state.qty > maxPreview) {
+    html += '<div style="grid-column: 1 / -1; text-align: center; color: var(--text-dim); padding: 14px; font-size: 13px; font-weight: 600;">... และอีก ' + (state.qty - maxPreview) + ' ดวง</div>';
+  }
+  grid.innerHTML = html;
+  grid.querySelectorAll('.qr-canvas').forEach(c => {
+    QRCode.toCanvas(c, c.dataset.text, { width: 100, margin: 0, errorCorrectionLevel: 'M' });
+  });
+}
+
+document.getElementById('btn-reset').addEventListener('click', () => {
+  if (!confirm('Reset ข้อมูลทั้งหมด?')) return;
+  state.paperType = ''; state.jumboLot = ''; state.slitter = null; state.qty = 1;
+  paperInput.value = ''; lotInput.value = ''; qtyInput.value = 1;
+  document.querySelectorAll('.slitter-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('cut-date').valueAsDate = new Date();
+  state.cutDate = document.getElementById('cut-date').value;
+  validateAll(); updateAll();
+  showToast('✓ Reset แล้ว');
+});
+
+document.getElementById('btn-print').addEventListener('click', async () => {
+  if (!validateAll()) { showToast('มีข้อมูลไม่ครบ', true); return; }
+  const sheet = document.getElementById('print-sheet');
+  let html = '';
+  for (let i = 1; i <= state.qty; i++) {
+    const bc = buildBarcode(i);
+    html += '<div class="print-label">' +
+      '<canvas class="print-qr" data-text="' + escapeHtml(bc) + '"></canvas>' +
+      '<div class="print-text">' + escapeHtml(state.paperType) + '<br>' + formatCutDate(state.cutDate) + '</div>' +
+    '</div>';
+  }
+  sheet.innerHTML = html;
+  const qrPromises = [];
+  sheet.querySelectorAll('.print-qr').forEach(c => {
+    qrPromises.push(new Promise(resolve => {
+      QRCode.toCanvas(c, c.dataset.text, { width: 200, margin: 0, errorCorrectionLevel: 'M' }, () => resolve());
+    }));
+  });
+  await Promise.all(qrPromises);
+  try {
+    await supabase.from('qr_print_log').insert({
+      paper_type: state.paperType,
+      cut_date: formatCutDate(state.cutDate),
+      slitter: state.slitter,
+      jumbo_lot: state.jumboLot,
+      roll_start: 1,
+      roll_end: state.qty,
+      quantity: state.qty
+    });
+  } catch (err) { console.warn('Log failed:', err); }
+  setTimeout(() => window.print(), 100);
+  showToast('🖨️ ส่งคำสั่งพิมพ์แล้ว (' + state.qty + ' ดวง)');
+});
+
+loadMaster();
+</script>
+</body>
+</html>
