@@ -756,6 +756,32 @@
     border-radius: 6px; cursor: pointer; font-size: 14px; color: var(--danger);
   }
   .scan-edit-row .del-btn:hover { background: var(--danger); color: white; }
+  
+  /* Group mode — highlight กลุ่มที่มีหลายม้วน */
+  .scan-edit-row.grouped {
+    background: linear-gradient(to right, #eef2ff, white);
+    border-left: 4px solid #4338ca;
+  }
+  .scan-edit-row.grouped.modified {
+    background: linear-gradient(to right, #fff7ed, white);
+    border-left: 4px solid var(--accent);
+  }
+  .group-count-badge {
+    display: inline-block;
+    padding: 3px 10px; min-width: 38px;
+    background: #4338ca; color: white;
+    border-radius: 12px; font-weight: 800; font-size: 12px;
+    text-align: center;
+    font-family: var(--mono);
+  }
+  .group-count-single {
+    display: inline-block;
+    padding: 3px 10px; min-width: 38px;
+    background: var(--panel-2); color: var(--text-dim);
+    border-radius: 12px; font-weight: 600; font-size: 11px;
+    text-align: center;
+    font-family: var(--mono);
+  }
 
   .editor-footer {
     display: flex; gap: 10px; padding: 14px 0 0; border-top: 2px solid var(--border);
@@ -3068,22 +3094,101 @@ function renderEditor() {
     </div>
   `).join('');
 
-  const scanRows = ed.scans.map((s, idx) => {
-    const isModified = JSON.stringify({a:s.barcode_raw,b:s.paper_type,c:s.cut_date,d:s.roll_no,e:s.slitter,f:s.jumbo_lot,g:s.batch_product_id}) !==
-                       JSON.stringify({a:s._original.barcode_raw,b:s._original.paper_type,c:s._original.cut_date,d:s._original.roll_no,e:s._original.slitter,f:s._original.jumbo_lot,g:s._original.batch_product_id});
-    const productOpts = ed.products.map(p =>
-      `<option value="${p.id}" ${p.id === s.batch_product_id ? 'selected' : ''}>${escapeHtml(p.product_name)}</option>`
-    ).join('');
-    return `<div class="scan-edit-row ${isModified ? 'modified' : ''} ${s._deleted ? 'deleted' : ''}" data-idx="${idx}">
-      <div class="row-num">${idx + 1}</div>
-      <select class="s-edit" data-field="batch_product_id" data-idx="${idx}" title="สินค้า">${productOpts}</select>
-      <input type="text" class="s-edit" data-field="paper_type" data-idx="${idx}" value="${escapeHtml(s.paper_type || '')}" placeholder="ประเภท">
-      <input type="text" class="s-edit" data-field="cut_date" data-idx="${idx}" value="${escapeHtml(s.cut_date || '')}" placeholder="ตัด">
-      <input type="text" class="s-edit" data-field="slitter" data-idx="${idx}" value="${escapeHtml(s.slitter || '')}" placeholder="slit">
-      <input type="text" class="s-edit" data-field="jumbo_lot" data-idx="${idx}" value="${escapeHtml(s.jumbo_lot || '')}" placeholder="ล็อต">
-      <button class="del-btn scan-del" data-idx="${idx}" title="${s._deleted ? 'ยกเลิกลบ' : 'ลบม้วนนี้'}">${s._deleted ? '↺' : '✕'}</button>
-    </div>`;
-  }).join('');
+  // Group scans ที่ข้อมูลเหมือนกัน (paper_type + cut_date + slitter + jumbo_lot + batch_product_id)
+  // เพื่อแก้ทีเดียวหลายม้วน
+  // toggle: groupEditMode (default = true)
+  if (typeof ed.groupEditMode === 'undefined') ed.groupEditMode = true;
+
+  let scanRows;
+  if (ed.groupEditMode) {
+    // ---- Grouped Mode ----
+    const groups = {};
+    ed.scans.forEach((s, originalIdx) => {
+      if (s._deleted) return;
+      // key ตามข้อมูลทุก field ที่อยู่ในฟอร์ม (ถ้าต่างแม้ field เดียว = คนละกลุ่ม)
+      const key = [
+        s.batch_product_id,
+        s.paper_type || '',
+        s.cut_date || '',
+        s.slitter || '',
+        s.jumbo_lot || ''
+      ].join('|');
+      if (!groups[key]) {
+        groups[key] = { ...s, _indices: [], _isGroup: true };
+      }
+      groups[key]._indices.push(originalIdx);
+    });
+    
+    // Also add deleted scans as individual entries (ไม่ group)
+    const deletedScans = ed.scans.map((s, idx) => ({ scan: s, idx })).filter(x => x.scan._deleted);
+    
+    const groupList = Object.values(groups);
+    
+    scanRows = groupList.map((g, gIdx) => {
+      const isModified = g._indices.some(origIdx => {
+        const s = ed.scans[origIdx];
+        return JSON.stringify({a:s.barcode_raw,b:s.paper_type,c:s.cut_date,d:s.roll_no,e:s.slitter,f:s.jumbo_lot,g:s.batch_product_id}) !==
+               JSON.stringify({a:s._original.barcode_raw,b:s._original.paper_type,c:s._original.cut_date,d:s._original.roll_no,e:s._original.slitter,f:s._original.jumbo_lot,g:s._original.batch_product_id});
+      });
+      const productOpts = ed.products.map(p =>
+        `<option value="${p.id}" ${p.id === g.batch_product_id ? 'selected' : ''}>${escapeHtml(p.product_name)}</option>`
+      ).join('');
+      const count = g._indices.length;
+      const countBadge = count > 1 
+        ? `<span class="group-count-badge" title="${count} ม้วนที่ข้อมูลเหมือนกัน">×${count}</span>`
+        : `<span class="group-count-single">×1</span>`;
+      
+      return `<div class="scan-edit-row ${isModified ? 'modified' : ''} ${count > 1 ? 'grouped' : ''}" data-gidx="${gIdx}">
+        <div class="row-num">${countBadge}</div>
+        <select class="s-edit-g" data-field="batch_product_id" data-gidx="${gIdx}" title="สินค้า">${productOpts}</select>
+        <input type="text" class="s-edit-g" data-field="paper_type" data-gidx="${gIdx}" value="${escapeHtml(g.paper_type || '')}" placeholder="ประเภท">
+        <input type="text" class="s-edit-g" data-field="cut_date" data-gidx="${gIdx}" value="${escapeHtml(g.cut_date || '')}" placeholder="ตัด">
+        <input type="text" class="s-edit-g" data-field="slitter" data-gidx="${gIdx}" value="${escapeHtml(g.slitter || '')}" placeholder="slit">
+        <input type="text" class="s-edit-g" data-field="jumbo_lot" data-gidx="${gIdx}" value="${escapeHtml(g.jumbo_lot || '')}" placeholder="ล็อต">
+        <button class="del-btn scan-del-g" data-gidx="${gIdx}" title="ลบทั้งกลุ่ม (${count} ม้วน)">✕</button>
+      </div>`;
+    }).join('');
+    
+    // Add deleted scans ต่อท้าย (individual, ไม่ group)
+    if (deletedScans.length > 0) {
+      scanRows += `<div style="margin-top:10px;padding:8px;background:#fef3c7;border-radius:6px;font-size:12px;color:#78350f;font-weight:700;">🗑️ ม้วนที่จะถูกลบ (${deletedScans.length}):</div>`;
+      deletedScans.forEach(({ scan: s, idx }) => {
+        const productOpts = ed.products.map(p =>
+          `<option value="${p.id}" ${p.id === s.batch_product_id ? 'selected' : ''}>${escapeHtml(p.product_name)}</option>`
+        ).join('');
+        scanRows += `<div class="scan-edit-row deleted" data-idx="${idx}">
+          <div class="row-num">${idx + 1}</div>
+          <select class="s-edit" data-field="batch_product_id" data-idx="${idx}" disabled>${productOpts}</select>
+          <input type="text" class="s-edit" data-field="paper_type" data-idx="${idx}" value="${escapeHtml(s.paper_type || '')}" disabled>
+          <input type="text" class="s-edit" data-field="cut_date" data-idx="${idx}" value="${escapeHtml(s.cut_date || '')}" disabled>
+          <input type="text" class="s-edit" data-field="slitter" data-idx="${idx}" value="${escapeHtml(s.slitter || '')}" disabled>
+          <input type="text" class="s-edit" data-field="jumbo_lot" data-idx="${idx}" value="${escapeHtml(s.jumbo_lot || '')}" disabled>
+          <button class="del-btn scan-del" data-idx="${idx}" title="ยกเลิกลบ">↺</button>
+        </div>`;
+      });
+    }
+    
+    // เก็บ group map สำหรับใช้ใน event handlers
+    ed._currentGroups = groupList;
+  } else {
+    // ---- Individual Mode (เดิม) ----
+    scanRows = ed.scans.map((s, idx) => {
+      const isModified = JSON.stringify({a:s.barcode_raw,b:s.paper_type,c:s.cut_date,d:s.roll_no,e:s.slitter,f:s.jumbo_lot,g:s.batch_product_id}) !==
+                         JSON.stringify({a:s._original.barcode_raw,b:s._original.paper_type,c:s._original.cut_date,d:s._original.roll_no,e:s._original.slitter,f:s._original.jumbo_lot,g:s._original.batch_product_id});
+      const productOpts = ed.products.map(p =>
+        `<option value="${p.id}" ${p.id === s.batch_product_id ? 'selected' : ''}>${escapeHtml(p.product_name)}</option>`
+      ).join('');
+      return `<div class="scan-edit-row ${isModified ? 'modified' : ''} ${s._deleted ? 'deleted' : ''}" data-idx="${idx}">
+        <div class="row-num">${idx + 1}</div>
+        <select class="s-edit" data-field="batch_product_id" data-idx="${idx}" title="สินค้า">${productOpts}</select>
+        <input type="text" class="s-edit" data-field="paper_type" data-idx="${idx}" value="${escapeHtml(s.paper_type || '')}" placeholder="ประเภท">
+        <input type="text" class="s-edit" data-field="cut_date" data-idx="${idx}" value="${escapeHtml(s.cut_date || '')}" placeholder="ตัด">
+        <input type="text" class="s-edit" data-field="slitter" data-idx="${idx}" value="${escapeHtml(s.slitter || '')}" placeholder="slit">
+        <input type="text" class="s-edit" data-field="jumbo_lot" data-idx="${idx}" value="${escapeHtml(s.jumbo_lot || '')}" placeholder="ล็อต">
+        <button class="del-btn scan-del" data-idx="${idx}" title="${s._deleted ? 'ยกเลิกลบ' : 'ลบม้วนนี้'}">${s._deleted ? '↺' : '✕'}</button>
+      </div>`;
+    }).join('');
+  }
 
   panel.innerHTML = `
     <div class="editor-header">
@@ -3114,9 +3219,18 @@ function renderEditor() {
     </div>
 
     <div class="editor-section">
-      <div class="editor-section-title">🧾 ม้วนที่สแกน (${ed.scans.filter(s => !s._deleted).length} / ${ed.scans.length})</div>
+      <div class="editor-section-title" style="display:flex;justify-content:space-between;align-items:center;">
+        <span>🧾 ม้วนที่สแกน (${ed.scans.filter(s => !s._deleted).length} / ${ed.scans.length})${ed.groupEditMode ? ` · <span style="color:var(--accent);">${ed._currentGroups ? ed._currentGroups.length : 0} กลุ่ม</span>` : ''}</span>
+        <label style="font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;cursor:pointer;">
+          <input type="checkbox" id="toggle-group-mode" ${ed.groupEditMode ? 'checked' : ''}>
+          🔗 รวมข้อมูลเหมือนกัน
+        </label>
+      </div>
       <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 8px;">
-        💡 Tip: คลิกช่องเพื่อแก้ค่า · ปุ่ม ✕ = ลบม้วน (กลับได้ก่อน save)
+        ${ed.groupEditMode 
+          ? '💡 <strong>Group Mode:</strong> ม้วนที่ข้อมูลเหมือนกันทุกช่อง = รวมเป็น 1 แถว (×จำนวน) · แก้ที่เดียว = อัพเดตทุกม้วน · ลบ = ลบทั้งกลุ่ม'
+          : '💡 Tip: คลิกช่องเพื่อแก้ค่า · ปุ่ม ✕ = ลบม้วน (กลับได้ก่อน save)'
+        }
       </div>
       ${scanRows}
     </div>
@@ -3180,18 +3294,17 @@ function renderEditor() {
     renderEditor();
   });
 
-  // Scan edit
+  // Scan edit (individual mode)
   panel.querySelectorAll('.s-edit').forEach(inp => {
     inp.addEventListener('input', e => {
       const idx = parseInt(e.target.dataset.idx);
       const field = e.target.dataset.field;
       const val = e.target.value;
       ed.scans[idx][field] = field === 'batch_product_id' ? val : val;
-      // Also reconstruct barcode_raw from parts
       const s = ed.scans[idx];
       s.barcode_raw = `${s.paper_type}_${s.cut_date}_${s.roll_no}_${s.slitter}_${s.jumbo_lot}`;
     });
-    inp.addEventListener('blur', renderEditor);  // re-render to show 'modified' highlight
+    inp.addEventListener('blur', renderEditor);
   });
   panel.querySelectorAll('.scan-del').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -3200,6 +3313,90 @@ function renderEditor() {
       renderEditor();
     });
   });
+  
+  // Scan edit (group mode) — แก้ทีเดียว อัพเดตทุกม้วนในกลุ่ม
+  // เพิ่ม confirmation เมื่อจะแก้ครั้งแรกในแต่ละ input ที่เป็นกลุ่ม >1 ม้วน
+  panel.querySelectorAll('.s-edit-g').forEach(inp => {
+    const gidx = parseInt(inp.dataset.gidx);
+    const group = ed._currentGroups[gidx];
+    const count = group ? group._indices.length : 1;
+    const field = inp.dataset.field;
+    
+    // เก็บค่าเดิมไว้ตอนโฟกัส (กรณี user ยกเลิก)
+    let originalVal = inp.value;
+    let confirmed = false;
+    
+    inp.addEventListener('focus', e => {
+      originalVal = e.target.value;
+      confirmed = false;
+    });
+    
+    inp.addEventListener('input', e => {
+      // ถ้ายังไม่ confirmed และเป็นกลุ่มที่มี >1 ม้วน → เตือน
+      if (count > 1 && !confirmed) {
+        const fieldLabel = {
+          'batch_product_id': 'สินค้า',
+          'paper_type': 'ประเภทกระดาษ',
+          'cut_date': 'วันที่ตัด',
+          'slitter': 'Slitter',
+          'jumbo_lot': 'Jumbo Lot'
+        }[field] || field;
+        
+        const ok = confirm(
+          `⚠️ ยืนยันการแก้ไข\n\n` +
+          `คุณกำลังแก้ "${fieldLabel}" ของกลุ่มที่มี ${count} ม้วน\n` +
+          `การแก้ไขนี้จะส่งผลกับทั้ง ${count} ม้วนพร้อมกัน\n\n` +
+          `ต้องการดำเนินการต่อหรือไม่?`
+        );
+        
+        if (!ok) {
+          // ยกเลิก → คืนค่าเดิม
+          e.target.value = originalVal;
+          e.target.blur();
+          return;
+        }
+        confirmed = true;  // ถือว่ายืนยันแล้ว = ไม่เตือนอีกใน focus นี้
+      }
+      
+      const val = e.target.value;
+      // Apply to all scans in group
+      group._indices.forEach(origIdx => {
+        const s = ed.scans[origIdx];
+        s[field] = val;
+        s.barcode_raw = `${s.paper_type}_${s.cut_date}_${s.roll_no}_${s.slitter}_${s.jumbo_lot}`;
+      });
+      // Also update the group object for re-render
+      group[field] = val;
+    });
+    inp.addEventListener('blur', renderEditor);
+  });
+  panel.querySelectorAll('.scan-del-g').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const gidx = parseInt(btn.dataset.gidx);
+      const group = ed._currentGroups[gidx];
+      if (!group) return;
+      const count = group._indices.length;
+      const groupInfo = `${group.paper_type || '-'} · ตัด ${group.cut_date || '-'} · Slitter ${group.slitter || '-'} · Lot ${group.jumbo_lot || '-'}`;
+      if (count > 1) {
+        if (!confirm(`⚠️ ยืนยันการลบ\n\nลบ ${count} ม้วนที่มีข้อมูลเหมือนกันนี้?\n\n${groupInfo}\n\n(กลับได้ก่อน save)`)) return;
+      } else {
+        if (!confirm(`ลบม้วนนี้?\n\n${groupInfo}\n\n(กลับได้ก่อน save)`)) return;
+      }
+      group._indices.forEach(origIdx => {
+        ed.scans[origIdx]._deleted = true;
+      });
+      renderEditor();
+    });
+  });
+  
+  // Toggle group mode
+  const toggleGroupBtn = document.getElementById('toggle-group-mode');
+  if (toggleGroupBtn) {
+    toggleGroupBtn.addEventListener('change', e => {
+      ed.groupEditMode = e.target.checked;
+      renderEditor();
+    });
+  }
 }
 
 function closeEditor() {
