@@ -164,6 +164,32 @@
   }
   .paper-header .paper-name { color: var(--accent-2); font-size: 15px; }
   .paper-header .paper-count { color: var(--text-dim); font-size: 12px; font-family: var(--mono); }
+  
+  /* Invoice sub-header inside paper group */
+  .invoice-sub-header {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 6px 12px; margin: 8px 0 6px; border-left: 3px solid #4338ca;
+    background: #eef2ff; border-radius: 4px;
+    font-size: 12px;
+  }
+  .invoice-sub-header .invoice-label {
+    font-family: var(--mono); font-weight: 800; color: #4338ca;
+  }
+  .invoice-sub-header .invoice-supplier {
+    padding: 1px 7px; background: white; color: #4338ca;
+    border-radius: 4px; font-weight: 700; font-size: 11px;
+    border: 1px solid #c7d2fe;
+  }
+  .invoice-sub-header .invoice-date {
+    color: var(--text-dim); font-size: 11px;
+  }
+  .invoice-sub-header .invoice-lots-count {
+    margin-left: auto; font-family: var(--mono); font-size: 11px;
+    color: var(--text-dim); font-weight: 700;
+  }
+  .paper-subgroup .lot-row {
+    padding-left: 12px;
+  }
   .lot-row {
     display: flex; justify-content: space-between; align-items: center;
     padding: 6px 0; border-bottom: 1px dashed var(--border);
@@ -1946,41 +1972,76 @@ async function runTrace() {
     const { data, error } = await query;
     if (error) throw error;
 
+    // โหลด invoice info สำหรับ lots ที่เจอ
+    const lotNorms = [...new Set((data || []).map(s => (s.jumbo_lot || '').replace(/-/g, '').toUpperCase()).filter(x => x))];
+    let invoiceMap = {};
+    if (lotNorms.length > 0) {
+      const { data: invData } = await supabase
+        .from('paper_invoices')
+        .select('paper_lot_normalized, invoice_no, supplier, receive_date, weight_kg, paper_type')
+        .in('paper_lot_normalized', lotNorms);
+      (invData || []).forEach(inv => {
+        invoiceMap[inv.paper_lot_normalized] = inv;
+      });
+    }
+
     window._traceData = data;  // เก็บไว้สำหรับ export
+    window._traceInvoiceMap = invoiceMap;
     window._traceParams = { date, machineId, product };
-    renderTraceResult(container, data, { date, machineId, product });
+    renderTraceResult(container, data, { date, machineId, product }, invoiceMap);
   } catch (err) {
     console.error(err);
     container.innerHTML = `<div class="empty"><span class="emoji">⚠️</span><div class="empty-title">ค้นหาไม่สำเร็จ</div><div>${escapeHtml(err.message)}</div></div>`;
   }
 }
 
-function renderTraceResult(container, data, params) {
+function renderTraceResult(container, data, params, invoiceMap) {
+  invoiceMap = invoiceMap || {};
   if (!data || data.length === 0) {
     container.innerHTML = '<div class="empty"><span class="emoji">📭</span><div class="empty-title">ไม่พบข้อมูล</div><div>ลองเปลี่ยนเงื่อนไขการค้นหา</div></div>';
     return;
   }
 
-  // Group by product → paper_type → jumbo_lot
+  // Group: product → paper_type → invoice_no → jumbo_lot
   const byProduct = {};
   data.forEach(s => {
     const pkey = s.product_name + '|' + (s.is_new_product ? '1' : '0');
     if (!byProduct[pkey]) byProduct[pkey] = { name: s.product_name, isNew: s.is_new_product, types: {} };
+    
     if (!byProduct[pkey].types[s.paper_type]) byProduct[pkey].types[s.paper_type] = {};
-    const lotKey = s.jumbo_lot;
-    if (!byProduct[pkey].types[s.paper_type][lotKey]) {
-      byProduct[pkey].types[s.paper_type][lotKey] = { count: 0, cut_date: s.cut_date, slitter: s.slitter, machine_name: s.machine_name };
+    
+    // หา invoice จาก normalized lot
+    const lotNorm = (s.jumbo_lot || '').replace(/-/g, '').toUpperCase();
+    const inv = invoiceMap[lotNorm];
+    const invKey = inv?.invoice_no || '__NO_INVOICE__';
+    
+    if (!byProduct[pkey].types[s.paper_type][invKey]) {
+      byProduct[pkey].types[s.paper_type][invKey] = {
+        invoice_no: inv?.invoice_no || null,
+        supplier: inv?.supplier || null,
+        receive_date: inv?.receive_date || null,
+        lots: {}
+      };
     }
-    byProduct[pkey].types[s.paper_type][lotKey].count++;
+    
+    const invGroup = byProduct[pkey].types[s.paper_type][invKey];
+    const lotKey = s.jumbo_lot;
+    if (!invGroup.lots[lotKey]) {
+      invGroup.lots[lotKey] = { count: 0, cut_date: s.cut_date, slitter: s.slitter, machine_name: s.machine_name };
+    }
+    invGroup.lots[lotKey].count++;
   });
 
   const totalTypes = new Set(data.map(s => s.paper_type)).size;
-  const totalRolls = data.length;  // scan records
-  // นับ unique ม้วน = barcode_raw ที่ไม่ซ้ำกัน (ตัด duplicate จาก shared rolls)
+  const totalRolls = data.length;
   const uniqueBarcodes = new Set(data.map(s => s.barcode_raw)).size;
   const hasSharedRolls = uniqueBarcodes < totalRolls;
   const totalLots = new Set(data.map(s => s.jumbo_lot)).size;
   const totalProducts = new Set(data.map(s => s.product_name)).size;
+  const totalInvoices = new Set(data.map(s => {
+    const norm = (s.jumbo_lot || '').replace(/-/g, '').toUpperCase();
+    return invoiceMap[norm]?.invoice_no;
+  }).filter(x => x)).size;
 
   let html = `<div class="panel-actions">
     <button class="export-btn" id="btn-export-trace">📥 Export CSV (${totalRolls} rows)</button>
@@ -1989,6 +2050,7 @@ function renderTraceResult(container, data, params) {
     <div class="stat"><div class="stat-label">สินค้า</div><div class="stat-value">${totalProducts}</div></div>
     <div class="stat"><div class="stat-label">ประเภทกระดาษ</div><div class="stat-value blue">${totalTypes}</div></div>
     <div class="stat"><div class="stat-label">Jumbo Lots</div><div class="stat-value accent">${totalLots}</div></div>
+    <div class="stat"><div class="stat-label">Invoices</div><div class="stat-value" style="color:#4338ca;">${totalInvoices}</div></div>
     <div class="stat">
       <div class="stat-label">ม้วนกระดาษ</div>
       <div class="stat-value">${uniqueBarcodes}</div>
@@ -1998,13 +2060,15 @@ function renderTraceResult(container, data, params) {
 
   // Sort products by scan count desc
   const sortedProducts = Object.values(byProduct).sort((a, b) => {
-    const sumA = Object.values(a.types).reduce((s, t) => s + Object.values(t).reduce((ss, v) => ss + v.count, 0), 0);
-    const sumB = Object.values(b.types).reduce((s, t) => s + Object.values(t).reduce((ss, v) => ss + v.count, 0), 0);
+    const sumA = Object.values(a.types).reduce((s, t) => s + Object.values(t).reduce((ss, inv) => ss + Object.values(inv.lots).reduce((sss, v) => sss + v.count, 0), 0), 0);
+    const sumB = Object.values(b.types).reduce((s, t) => s + Object.values(t).reduce((ss, inv) => ss + Object.values(inv.lots).reduce((sss, v) => sss + v.count, 0), 0), 0);
     return sumB - sumA;
   });
 
   sortedProducts.forEach(prod => {
-    const productTotal = Object.values(prod.types).reduce((s, t) => s + Object.values(t).reduce((ss, v) => ss + v.count, 0), 0);
+    const productTotal = Object.values(prod.types).reduce((s, t) => 
+      s + Object.values(t).reduce((ss, inv) => 
+        ss + Object.values(inv.lots).reduce((sss, v) => sss + v.count, 0), 0), 0);
 
     html += `<div class="trace-group">
       <div class="trace-group-header">
@@ -2015,38 +2079,70 @@ function renderTraceResult(container, data, params) {
         <div class="trace-group-count">${productTotal} ม้วน</div>
       </div>`;
 
-    // Sort paper types by count
+    // Sort paper types by total count
     const sortedTypes = Object.entries(prod.types).sort((a, b) => {
-      const sumA = Object.values(a[1]).reduce((s, v) => s + v.count, 0);
-      const sumB = Object.values(b[1]).reduce((s, v) => s + v.count, 0);
+      const sumA = Object.values(a[1]).reduce((ss, inv) => ss + Object.values(inv.lots).reduce((sss, v) => sss + v.count, 0), 0);
+      const sumB = Object.values(b[1]).reduce((ss, inv) => ss + Object.values(inv.lots).reduce((sss, v) => sss + v.count, 0), 0);
       return sumB - sumA;
     });
 
-    sortedTypes.forEach(([type, lots]) => {
-      const typeTotal = Object.values(lots).reduce((s, v) => s + v.count, 0);
-      const sortedLots = Object.entries(lots).sort((a, b) => b[1].count - a[1].count);
+    sortedTypes.forEach(([type, invoices]) => {
+      const typeTotal = Object.values(invoices).reduce((s, inv) => s + Object.values(inv.lots).reduce((ss, v) => ss + v.count, 0), 0);
+      const numInvoices = Object.keys(invoices).length;
+      const numLots = Object.values(invoices).reduce((s, inv) => s + Object.keys(inv.lots).length, 0);
 
       html += `<div class="paper-subgroup">
         <div class="paper-header">
           <span class="paper-name">${escapeHtml(type)}</span>
-          <span class="paper-count">${Object.keys(lots).length} lots · ${typeTotal} ม้วน</span>
+          <span class="paper-count">${numInvoices} invoices · ${numLots} lots · ${typeTotal} ม้วน</span>
         </div>`;
-      sortedLots.forEach(([lot, info]) => {
-        html += `<div class="lot-row">
-          <div>
-            <div class="lot-name">${escapeHtml(lot)}</div>
-            <div class="lot-meta">ตัด ${escapeHtml(info.cut_date)} · Slitter ${escapeHtml(info.slitter)}${!params.machineId ? ' · ' + escapeHtml(info.machine_name) : ''}</div>
-          </div>
-          <div class="lot-count">${info.count}×</div>
-        </div>`;
+      
+      // Sort invoices: __NO_INVOICE__ last, then by receive_date desc
+      const sortedInvoices = Object.entries(invoices).sort((a, b) => {
+        if (a[0] === '__NO_INVOICE__') return 1;
+        if (b[0] === '__NO_INVOICE__') return -1;
+        return (b[1].receive_date || '').localeCompare(a[1].receive_date || '');
       });
+
+      sortedInvoices.forEach(([invKey, invData]) => {
+        const invTotal = Object.values(invData.lots).reduce((s, v) => s + v.count, 0);
+        const numLotsInInv = Object.keys(invData.lots).length;
+        
+        // Invoice sub-header
+        if (invKey === '__NO_INVOICE__') {
+          html += `<div class="invoice-sub-header" style="background:#fef3c7;border-left:3px solid #d97706;">
+            <span style="color:#78350f;font-weight:700;">❓ ไม่มีข้อมูล Invoice</span>
+            <span style="color:#92400e;font-size:11px;margin-left:6px;">(${numLotsInInv} lots · ${invTotal} ม้วน)</span>
+          </div>`;
+        } else {
+          html += `<div class="invoice-sub-header">
+            <span class="invoice-label">📄 ${escapeHtml(invData.invoice_no)}</span>
+            <span class="invoice-supplier">${escapeHtml(invData.supplier || '-')}</span>
+            ${invData.receive_date ? `<span class="invoice-date">รับเข้า ${invData.receive_date}</span>` : ''}
+            <span class="invoice-lots-count">${numLotsInInv} lots · ${invTotal} ม้วน</span>
+          </div>`;
+        }
+        
+        // Lots under this invoice
+        const sortedLots = Object.entries(invData.lots).sort((a, b) => b[1].count - a[1].count);
+        sortedLots.forEach(([lot, info]) => {
+          html += `<div class="lot-row">
+            <div>
+              <div class="lot-name">${escapeHtml(lot)}</div>
+              <div class="lot-meta">ตัด ${escapeHtml(info.cut_date)} · Slitter ${escapeHtml(info.slitter)}${!params.machineId ? ' · ' + escapeHtml(info.machine_name) : ''}</div>
+            </div>
+            <div class="lot-count">${info.count}×</div>
+          </div>`;
+        });
+      });
+      
       html += `</div>`;
     });
 
     html += `</div>`;
   });
 
-  // Supplier report
+  // ==================== Supplier Report (text) ====================
   let report = `รายงานสอบกลับวัตถุดิบกระดาษ\n`;
   report += `════════════════════════════════════════\n`;
   report += `วันที่ผลิต : ${params.date}\n`;
@@ -2056,19 +2152,42 @@ function renderTraceResult(container, data, params) {
   report += `════════════════════════════════════════\n\n`;
 
   sortedProducts.forEach(prod => {
-    const productTotal = Object.values(prod.types).reduce((s, t) => s + Object.values(t).reduce((ss, v) => ss + v.count, 0), 0);
+    const productTotal = Object.values(prod.types).reduce((s, t) => 
+      s + Object.values(t).reduce((ss, inv) => 
+        ss + Object.values(inv.lots).reduce((sss, v) => sss + v.count, 0), 0), 0);
     report += `📦 ${prod.name}${prod.isNew ? ' (สินค้าใหม่)' : ''} — ${productTotal} ม้วน\n`;
-    Object.entries(prod.types).forEach(([type, lots]) => {
-      const typeTotal = Object.values(lots).reduce((s, v) => s + v.count, 0);
-      report += `  ● ${type} (${Object.keys(lots).length} lots, ${typeTotal} ม้วน)\n`;
-      Object.entries(lots).sort((a, b) => b[1].count - a[1].count).forEach(([lot, info]) => {
-        report += `     - ${lot}  (ตัด ${info.cut_date}) × ${info.count}\n`;
+    
+    Object.entries(prod.types).forEach(([type, invoices]) => {
+      const typeTotal = Object.values(invoices).reduce((s, inv) => s + Object.values(inv.lots).reduce((ss, v) => ss + v.count, 0), 0);
+      const numInvoices = Object.keys(invoices).length;
+      const numLots = Object.values(invoices).reduce((s, inv) => s + Object.keys(inv.lots).length, 0);
+      report += `  ● ${type} (${numInvoices} invoices, ${numLots} lots, ${typeTotal} ม้วน)\n`;
+      
+      // Sort invoices
+      const sortedInvs = Object.entries(invoices).sort((a, b) => {
+        if (a[0] === '__NO_INVOICE__') return 1;
+        if (b[0] === '__NO_INVOICE__') return -1;
+        return (b[1].receive_date || '').localeCompare(a[1].receive_date || '');
+      });
+      
+      sortedInvs.forEach(([invKey, invData]) => {
+        if (invKey === '__NO_INVOICE__') {
+          report += `     📄 (ไม่มีข้อมูล Invoice)\n`;
+        } else {
+          const supInfo = invData.supplier ? `${invData.supplier}` : '';
+          const dateInfo = invData.receive_date ? `, รับเข้า ${invData.receive_date}` : '';
+          report += `     📄 Invoice: ${invData.invoice_no} (${supInfo}${dateInfo})\n`;
+        }
+        
+        Object.entries(invData.lots).sort((a, b) => b[1].count - a[1].count).forEach(([lot, info]) => {
+          report += `        - ${lot}  (ตัด ${info.cut_date}) × ${info.count}\n`;
+        });
       });
     });
     report += '\n';
   });
   report += `════════════════════════════════════════\n`;
-  report += `รวม: ${totalProducts} สินค้า, ${totalTypes} ประเภทกระดาษ, ${totalLots} Jumbo Lots, ${totalRolls} ม้วน\n`;
+  report += `รวม: ${totalProducts} สินค้า, ${totalTypes} ประเภทกระดาษ, ${totalInvoices} Invoices, ${totalLots} Jumbo Lots, ${totalRolls} ม้วน\n`;
 
   html += `<div class="report-box">
     <div class="report-header">
