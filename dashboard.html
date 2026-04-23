@@ -1951,13 +1951,13 @@ async function runLotLookup() {
     }
 
     // ดึง invoice info สำหรับ lots ที่เจอ
-    const uniqueLots = [...new Set(data.map(s => (s.jumbo_lot || '').replace(/-/g, '').toUpperCase()))];
+    const lotsForInvQuery = [...new Set(data.map(s => (s.jumbo_lot || '').replace(/-/g, '').toUpperCase()))];
     let invoiceMap = {};
-    if (uniqueLots.length > 0) {
+    if (lotsForInvQuery.length > 0) {
       const { data: invData } = await supabase
         .from('paper_invoices')
         .select('paper_lot, paper_lot_normalized, invoice_no, supplier, receive_date, weight_kg')
-        .in('paper_lot_normalized', uniqueLots);
+        .in('paper_lot_normalized', lotsForInvQuery);
       (invData || []).forEach(inv => {
         invoiceMap[inv.paper_lot_normalized] = inv;
       });
