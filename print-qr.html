@@ -104,7 +104,7 @@ body { font-family: 'IBM Plex Sans Thai', sans-serif; margin: 0; background: var
 .btn-reset { background: white; color: var(--text); border: 1.5px solid var(--border); }
 .btn-reset:hover { background: var(--panel-2); }
 @media print {
-  @page { size: 32mm 25mm; margin: 0; }
+  @page { size: 106mm 25mm; margin: 0; }
 
   /* ซ่อนทุกอย่างยกเว้น print-sheet */
   body * { visibility: hidden !important; }
@@ -117,12 +117,20 @@ body { font-family: 'IBM Plex Sans Thai', sans-serif; margin: 0; background: var
     display: block !important;
     position: absolute !important;
     left: 0 !important; top: 0 !important;
-    width: auto !important;
+    width: 100% !important;
   }
-  .print-label {
-    width: 32mm; height: 25mm;
+  .print-row {
+    display: flex !important;
+    flex-direction: row;
+    width: 106mm;
+    height: 25mm;
     page-break-after: always;
     page-break-inside: avoid;
+    gap: 0;
+  }
+  .print-row:last-child { page-break-after: auto; }
+  .print-label {
+    width: 32mm; height: 25mm;
     display: flex !important; flex-direction: column;
     align-items: center; justify-content: center;
     padding: 1mm; gap: 0.3mm;
@@ -130,8 +138,12 @@ body { font-family: 'IBM Plex Sans Thai', sans-serif; margin: 0; background: var
     border: none !important;
     background: white !important;
     overflow: hidden;
+    margin-right: 2mm;
   }
-  .print-label:last-child { page-break-after: auto; }
+  .print-label:last-child { margin-right: 0; }
+  .print-label.empty {
+    visibility: hidden !important;
+  }
   .print-label img, .print-label canvas {
     width: 16mm !important; height: 16mm !important;
     max-width: 16mm !important; max-height: 16mm !important;
@@ -486,19 +498,32 @@ document.getElementById('btn-print').addEventListener('click', async () => {
   if (!validateAll()) { showToast('มีข้อมูลไม่ครบ', true); return; }
   const sheet = document.getElementById('print-sheet');
   const useLib = typeof QRCode !== 'undefined';
-  let html = '';
-  for (let i = 1; i <= state.qty; i++) {
-    const bc = buildBarcode(i);
-    const qrMarkup = useLib
-      ? '<canvas class="print-qr" data-text="' + escapeHtml(bc) + '" width="200" height="200"></canvas>'
-      : '<img class="print-qr" src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=0&ecc=M&data=' + encodeURIComponent(bc) + '" width="200" height="200">';
-    html += '<div class="print-label">' + qrMarkup +
-      '<div class="print-text">' + escapeHtml(state.paperType) + '<br>' + formatCutDate(state.cutDate) + '</div>' +
-    '</div>';
-  }
-  sheet.innerHTML = html;
 
-  // ถ้าใช้ library → render canvas
+  // สร้าง labels ทั้งหมด จัดเป็น rows ของ 3 (ถ้าไม่ครบ 3 เพิ่ม empty label ให้ครบ)
+  const rowsHtml = [];
+  for (let row = 0; row < Math.ceil(state.qty / 3); row++) {
+    let rowHtml = '<div class="print-row">';
+    for (let col = 0; col < 3; col++) {
+      const i = row * 3 + col + 1;  // ม้วนที่
+      if (i <= state.qty) {
+        const bc = buildBarcode(i);
+        const qrMarkup = useLib
+          ? '<canvas class="print-qr" data-text="' + escapeHtml(bc) + '" width="200" height="200"></canvas>'
+          : '<img class="print-qr" src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=0&ecc=M&data=' + encodeURIComponent(bc) + '" width="200" height="200">';
+        rowHtml += '<div class="print-label">' + qrMarkup +
+          '<div class="print-text">' + escapeHtml(state.paperType) + '<br>' + formatCutDate(state.cutDate) + '</div>' +
+          '</div>';
+      } else {
+        // empty slot
+        rowHtml += '<div class="print-label empty"></div>';
+      }
+    }
+    rowHtml += '</div>';
+    rowsHtml.push(rowHtml);
+  }
+  sheet.innerHTML = rowsHtml.join('');
+
+  // Render QR
   if (useLib) {
     const qrPromises = [];
     sheet.querySelectorAll('canvas.print-qr').forEach(c => {
@@ -513,7 +538,7 @@ document.getElementById('btn-print').addEventListener('click', async () => {
     });
     await Promise.all(qrPromises);
   } else {
-    // รอ img โหลดเสร็จ (สำคัญ — ถ้าไม่รอ print จะได้รูปโหลดไม่เสร็จ)
+    // รอ img โหลดเสร็จ
     const imgPromises = [];
     sheet.querySelectorAll('img.print-qr').forEach(img => {
       if (img.complete) return;
