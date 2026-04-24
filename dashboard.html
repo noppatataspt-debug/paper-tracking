@@ -2395,10 +2395,12 @@ async function runLotLookup() {
           lot: s.jumbo_lot,
           paper_type: s.paper_type,
           cut_date: s.cut_date,
+          slitters: new Set(),
           totalCount: 0,
           usages: {}  // key: date|machine|product
         };
       }
+      if (s.slitter) byLot[lotKey].slitters.add(String(s.slitter));
       const useKey = `${s.production_date}|${s.machine_id}|${s.product_name}`;
       if (!byLot[lotKey].usages[useKey]) {
         byLot[lotKey].usages[useKey] = {
@@ -2461,7 +2463,7 @@ async function runLotLookup() {
         <div class="lot-group-header">
           <div class="lot-group-title">
             📦 <strong class="lot-no">${highlightMatch(lg.lot, q, 'lot-hl')}</strong>
-            <span class="lot-group-meta">${escapeHtml(lg.paper_type)} · ตัด ${escapeHtml(lg.cut_date)}</span>
+            <span class="lot-group-meta">${escapeHtml(lg.paper_type)} · ตัด ${escapeHtml(lg.cut_date)}${lg.slitters && lg.slitters.size > 0 ? ` · ✂️ Slitter ${[...lg.slitters].sort().join(',')}` : ''}</span>
           </div>
           <div class="lot-group-total">${lg.totalCount} ม้วน</div>
         </div>
