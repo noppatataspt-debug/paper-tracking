@@ -782,6 +782,20 @@
     text-align: center;
     font-family: var(--mono);
   }
+  
+  /* Product badges (เมื่อม้วนเดียวใช้กับหลายสินค้า) */
+  .product-badges {
+    display: flex; flex-wrap: wrap; gap: 4px;
+    padding: 6px 8px; min-height: 36px;
+    background: #f0fdf4; border: 1.5px solid #86efac;
+    border-radius: 6px; align-items: center;
+  }
+  .product-badge {
+    display: inline-block;
+    padding: 3px 9px; background: #16a34a; color: white;
+    border-radius: 10px; font-size: 11px; font-weight: 700;
+    font-family: var(--mono);
+  }
 
   .editor-footer {
     display: flex; gap: 10px; padding: 14px 0 0; border-top: 2px solid var(--border);
@@ -3104,27 +3118,41 @@ function renderEditor() {
   let scanRows;
   if (ed.groupEditMode) {
     // ---- Grouped Mode ----
+    // Key = paper_type + cut_date + slitter + jumbo_lot (ไม่รวม batch_product_id)
+    // ถ้าม้วนเดียวกันใช้กับหลายสินค้า → รวมเป็น 1 แถว, แสดงสินค้าทั้งหมดในช่อง multi-badges
     const groups = {};
     ed.scans.forEach((s, originalIdx) => {
       if (s._deleted) return;
-      // key ตามข้อมูลทุก field ที่อยู่ในฟอร์ม (ถ้าต่างแม้ field เดียว = คนละกลุ่ม)
       const key = [
-        s.batch_product_id,
         s.paper_type || '',
         s.cut_date || '',
         s.slitter || '',
         s.jumbo_lot || ''
       ].join('|');
       if (!groups[key]) {
-        groups[key] = { ...s, _indices: [], _isGroup: true };
+        groups[key] = { ...s, _indices: [], _productIds: new Set(), _isGroup: true };
       }
       groups[key]._indices.push(originalIdx);
+      if (s.batch_product_id) groups[key]._productIds.add(s.batch_product_id);
     });
     
     // Also add deleted scans as individual entries (ไม่ group)
     const deletedScans = ed.scans.map((s, idx) => ({ scan: s, idx })).filter(x => x.scan._deleted);
     
-    const groupList = Object.values(groups);
+    let groupList = Object.values(groups);
+    
+    // Sort: paper_type → cut_date → slitter
+    groupList.sort((a, b) => {
+      const pt = (a.paper_type || '').localeCompare(b.paper_type || '');
+      if (pt !== 0) return pt;
+      const cd = (a.cut_date || '').localeCompare(b.cut_date || '');
+      if (cd !== 0) return cd;
+      // slitter เป็นตัวเลข — parse ก่อน compare
+      const sA = parseInt(a.slitter) || 0;
+      const sB = parseInt(b.slitter) || 0;
+      if (sA !== sB) return sA - sB;
+      return (a.jumbo_lot || '').localeCompare(b.jumbo_lot || '');
+    });
     
     scanRows = groupList.map((g, gIdx) => {
       const isModified = g._indices.some(origIdx => {
@@ -3132,17 +3160,33 @@ function renderEditor() {
         return JSON.stringify({a:s.barcode_raw,b:s.paper_type,c:s.cut_date,d:s.roll_no,e:s.slitter,f:s.jumbo_lot,g:s.batch_product_id}) !==
                JSON.stringify({a:s._original.barcode_raw,b:s._original.paper_type,c:s._original.cut_date,d:s._original.roll_no,e:s._original.slitter,f:s._original.jumbo_lot,g:s._original.batch_product_id});
       });
-      const productOpts = ed.products.map(p =>
-        `<option value="${p.id}" ${p.id === g.batch_product_id ? 'selected' : ''}>${escapeHtml(p.product_name)}</option>`
-      ).join('');
       const count = g._indices.length;
       const countBadge = count > 1 
         ? `<span class="group-count-badge" title="${count} ม้วนที่ข้อมูลเหมือนกัน">×${count}</span>`
         : `<span class="group-count-single">×1</span>`;
       
+      // Product display: ถ้าใช้สินค้าเดียว → select แก้ได้, ถ้าหลายสินค้า → badges (read-only)
+      const productIds = [...g._productIds];
+      let productCell;
+      if (productIds.length > 1) {
+        // Multiple products → badges ไม่ให้แก้
+        const productNames = productIds.map(pid => {
+          const p = ed.products.find(pp => pp.id === pid);
+          return p ? p.product_name : '?';
+        });
+        productCell = `<div class="product-badges" title="ม้วนเดียวใช้กับหลายสินค้า — ไม่สามารถเปลี่ยนสินค้าในโหมดรวมได้">
+          ${productNames.map(n => `<span class="product-badge">${escapeHtml(n)}</span>`).join('')}
+        </div>`;
+      } else {
+        const productOpts = ed.products.map(p =>
+          `<option value="${p.id}" ${p.id === g.batch_product_id ? 'selected' : ''}>${escapeHtml(p.product_name)}</option>`
+        ).join('');
+        productCell = `<select class="s-edit-g" data-field="batch_product_id" data-gidx="${gIdx}" title="สินค้า">${productOpts}</select>`;
+      }
+      
       return `<div class="scan-edit-row ${isModified ? 'modified' : ''} ${count > 1 ? 'grouped' : ''}" data-gidx="${gIdx}">
         <div class="row-num">${countBadge}</div>
-        <select class="s-edit-g" data-field="batch_product_id" data-gidx="${gIdx}" title="สินค้า">${productOpts}</select>
+        ${productCell}
         <input type="text" class="s-edit-g" data-field="paper_type" data-gidx="${gIdx}" value="${escapeHtml(g.paper_type || '')}" placeholder="ประเภท">
         <input type="text" class="s-edit-g" data-field="cut_date" data-gidx="${gIdx}" value="${escapeHtml(g.cut_date || '')}" placeholder="ตัด">
         <input type="text" class="s-edit-g" data-field="slitter" data-gidx="${gIdx}" value="${escapeHtml(g.slitter || '')}" placeholder="slit">
