@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>รับเข้ากระดาษ — Paper-In</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/paper-in.css">
+</head>
+<body>
+<div class="toast" id="toast"></div>
+
+<div class="conn-status online" id="conn-status">
+  <span class="dot"></span>
+  <span id="conn-text">เชื่อมต่อ DB</span>
+</div>
+
+<div class="loading-overlay" id="loading-overlay">
+  <div class="spinner"></div>
+  <div class="loading-text" id="loading-text">กำลังโหลด...</div>
+</div>
+
+<div class="container">
+  <header class="header">
+    <div>
+      <h1>รับเข้า<span>กระดาษ</span></h1>
+      <p class="subtitle">Upload ไฟล์จาก Supplier หรือกรอกมือ</p>
+    </div>
+    <div class="nav-links">
+      <a href="index.html" class="nav-link">📝 บันทึก</a>
+      <a href="dashboard.html" class="nav-link">📊 Dashboard</a>
+    </div>
+  </header>
+
+  <!-- Tabs -->
+  <nav class="tabs">
+    <button class="tab active" data-tab="upload">
+      <span class="tab-icon">📤</span> Upload ไฟล์
+    </button>
+    <button class="tab" data-tab="manual">
+      <span class="tab-icon">✏️</span> กรอกมือ
+    </button>
+    <button class="tab" data-tab="list">
+      <span class="tab-icon">📋</span> รายการ
+      <span class="tab-badge" id="list-count">—</span>
+    </button>
+  </nav>
+
+  <!-- ============================================
+       TAB 1: UPLOAD FILE
+       ============================================ -->
+  <section class="tab-content active" id="tab-upload">
+    <div class="panel">
+      <div class="panel-title">
+        <span class="panel-title-icon">🤖</span>
+        <span>Auto-Import จาก Supplier</span>
+      </div>
+
+      <div class="supplier-badges">
+        <span class="supp-badge supp-ok">SCG ✓</span>
+        <span class="supp-badge supp-ok">MPK ✓</span>
+        <span class="supp-badge supp-ok">United ✓</span>
+        <span class="supp-badge supp-ok">Muda ✓</span>
+        <span class="supp-badge supp-pending">AP</span>
+        <span class="supp-badge supp-pending">TPC</span>
+        <span class="supp-badge supp-pending">Ching Mei</span>
+        <span class="supp-badge supp-pending">NTPM</span>
+        <span class="supp-badge supp-pending">SNP</span>
+      </div>
+
+      <div class="upload-zone" id="upload-zone">
+        <div class="upload-icon">📁</div>
+        <div class="upload-title">ลากไฟล์มาวาง หรือคลิกเลือก</div>
+        <div class="upload-hint">รองรับ: .txt, .csv, .xlsx, .xls (ได้หลายไฟล์พร้อมกัน)</div>
+        <input type="file" id="file-input" multiple accept=".txt,.csv,.xlsx,.xls" hidden>
+      </div>
+
+      <div id="parsed-invoices"></div>
+    </div>
+
+    <div class="help-panel">
+      <div class="help-title">💡 วิธีใช้</div>
+      <ul>
+        <li><strong>SCG:</strong> Upload ไฟล์ .txt (ชื่อ 0535xxxxxx.txt) — พร้อมไฟล์ COA .xlsx ถ้ามี</li>
+        <li><strong>MPK:</strong> Upload ไฟล์ Packing List .csv</li>
+        <li><strong>United:</strong> Upload ไฟล์ .xlsx (ASPT-xxxx.xlsx)</li>
+        <li><strong>Muda:</strong> Upload ไฟล์ .xls (Asia_Tube_PL_xxxx.xls)</li>
+        <li><strong>Supplier อื่น:</strong> ใช้ Tab "กรอกมือ" ก่อน</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ============================================
+       TAB 2: MANUAL
+       ============================================ -->
+  <section class="tab-content" id="tab-manual">
+    <div class="panel">
+      <div class="panel-title">
+        <span class="panel-title-icon">📋</span>
+        <span>ข้อมูล Invoice</span>
+      </div>
+
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Supplier <span class="required">*</span></label>
+          <select id="m-supplier"></select>
+        </div>
+        <div class="form-group">
+          <label>เลขที่ Invoice <span class="required">*</span></label>
+          <input type="text" id="m-invoice-no" placeholder="e.g. 69/0327">
+        </div>
+        <div class="form-group">
+          <label>PO No.</label>
+          <input type="text" id="m-po-no" placeholder="e.g. Po-690295">
+        </div>
+        <div class="form-group">
+          <label>วันที่บน Invoice</label>
+          <input type="date" id="m-invoice-date">
+        </div>
+        <div class="form-group">
+          <label>วันที่รับเข้า <span class="required">*</span></label>
+          <input type="date" id="m-receive-date">
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">
+        <span class="panel-title-icon">📦</span>
+        <span>ม้วนในใบนี้ <span class="rolls-count-inline">(<span id="m-rolls-count">0</span> ม้วน)</span></span>
+      </div>
+      <div id="m-rolls-list"></div>
+      <button class="btn" id="m-add-roll">+ เพิ่มม้วน</button>
+    </div>
+
+    <div class="panel">
+      <div class="form-group">
+        <label>หมายเหตุ</label>
+        <textarea id="m-notes" rows="2" placeholder="บันทึกเพิ่มเติม..."></textarea>
+      </div>
+    </div>
+
+    <div class="summary">
+      <div class="summary-stats">
+        <div class="summary-stat">
+          <div class="label">จำนวนม้วน</div>
+          <div class="value" id="m-total-rolls">0</div>
+        </div>
+        <div class="summary-stat">
+          <div class="label">น้ำหนักรวม</div>
+          <div class="value"><span id="m-total-weight">0</span> kg</div>
+        </div>
+      </div>
+      <div class="actions-footer-inline">
+        <button class="btn" id="m-clear">ล้างทั้งหมด</button>
+        <button class="btn btn-primary" id="m-save">💾 บันทึก</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================
+       TAB 3: LIST
+       ============================================ -->
+  <section class="tab-content" id="tab-list">
+    <div class="panel">
+      <div class="list-toolbar">
+        <input type="text" class="search-input" id="l-search" placeholder="🔍 ค้นหา lot / invoice / supplier...">
+        <select class="filter-select" id="l-filter-supplier">
+          <option value="">ทุก Supplier</option>
+        </select>
+        <select class="filter-select" id="l-filter-status">
+          <option value="">ทุก Status</option>
+          <option value="in_stock">in_stock</option>
+          <option value="used">used</option>
+          <option value="partial">partial</option>
+          <option value="damaged">damaged</option>
+        </select>
+        <button class="btn btn-sm" id="l-refresh">🔄 Refresh</button>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table id="l-table">
+        <thead>
+          <tr>
+            <th>วันที่รับ</th>
+            <th>Invoice</th>
+            <th>Supplier</th>
+            <th>Paper Lot</th>
+            <th>ประเภท</th>
+            <th class="td-right">กว้าง</th>
+            <th class="td-right">น้ำหนัก</th>
+            <th class="td-right">คงเหลือ</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="l-tbody">
+          <tr><td colspan="9" style="text-align:center; padding:40px; color:var(--text-dim)">กำลังโหลด...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="pagination" id="l-pagination"></div>
+  </section>
+</div>
+
+<!-- Libraries -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+<script type="module" src="js/paper-in.js"></script>
+</body>
+</html>
