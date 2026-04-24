@@ -621,10 +621,10 @@
     z-index: 2;
   }
   .camera-target {
-    width: 72%; aspect-ratio: 1; max-width: 300px;
+    width: 85%; aspect-ratio: 1; max-width: 360px;
     border: 3px solid rgba(255,255,255,0.9);
     border-radius: 18px; position: relative;
-    box-shadow: 0 0 0 9999px rgba(0,0,0,0.35);
+    box-shadow: 0 0 0 9999px rgba(0,0,0,0.3);
   }
   .camera-target::before,
   .camera-target::after,
@@ -689,11 +689,11 @@
     border-radius: 16px;
   }
   .camera-flash.flash {
-    animation: flashSuccess 0.5s ease-out;
+    animation: flashSuccess 0.3s ease-out;
   }
   @keyframes flashSuccess {
     0% { opacity: 0; }
-    30% { opacity: 0.5; }
+    30% { opacity: 0.4; }
     100% { opacity: 0; }
   }
 
@@ -2244,8 +2244,8 @@ const CameraScanner = {
   torchOn: false,
   lastScanTime: 0,
   lastScanValue: '',
-  COOLDOWN_MS: 1500,  // ป้องกันสแกนซ้ำม้วนเดิม 1.5 วินาที
-  SAME_VALUE_COOLDOWN_MS: 3000,  // ถ้าเป็น barcode เดิม รอ 3 วินาทีก่อนยอมรับ
+  COOLDOWN_MS: 500,   // ป้องกันสแกนซ้ำม้วนเดิม 0.5 วินาที (เร็วขึ้น)
+  SAME_VALUE_COOLDOWN_MS: 1500,  // ถ้าเป็น barcode เดิม รอ 1.5 วินาทีก่อนยอมรับซ้ำ
 
   async init() {
     if (typeof Html5Qrcode === 'undefined') {
@@ -2294,13 +2294,28 @@ const CameraScanner = {
     }
 
     const config = {
-      fps: 10,
+      fps: 25,  // เพิ่มจาก 10 → 25 fps เพื่อสแกนเร็วขึ้นมาก
       qrbox: (vw, vh) => {
+        // ขยายกรอบใหญ่ขึ้น (85% ของด้านสั้น) → เล็งง่ายขึ้น
         const minEdge = Math.min(vw, vh);
-        const size = Math.floor(minEdge * 0.70);
+        const size = Math.floor(minEdge * 0.85);
         return { width: size, height: size };
       },
       aspectRatio: 1.3333,
+      // บังคับความละเอียดกล้องให้สูง เพื่ออ่าน QR เล็กๆ ได้
+      videoConstraints: {
+        deviceId: this.currentCameraId,
+        width: { ideal: 1920, min: 1280 },
+        height: { ideal: 1080, min: 720 },
+        facingMode: { ideal: 'environment' },
+        // continuous autofocus — สำคัญมากสำหรับสแกน
+        focusMode: 'continuous',
+        advanced: [
+          { focusMode: 'continuous' },
+          { exposureMode: 'continuous' },
+          { whiteBalanceMode: 'continuous' }
+        ]
+      },
       // รองรับทั้ง QR Code และ Barcode หลายประเภท
       formatsToSupport: [
         Html5QrcodeSupportedFormats.QR_CODE,
@@ -2311,22 +2326,40 @@ const CameraScanner = {
         Html5QrcodeSupportedFormats.DATA_MATRIX
       ],
       experimentalFeatures: {
-        useBarCodeDetectorIfSupported: true
-      }
+        useBarCodeDetectorIfSupported: true  // ใช้ native API ถ้ามี (เร็วกว่ามากบน Android Chrome)
+      },
+      // ไม่ต้อง mirror (default false) และ disable เสียง default
+      disableFlip: false,
+      rememberLastUsedCamera: true
     };
 
     try {
-      await this.html5QrCode.start(
-        this.currentCameraId,
-        config,
-        (decodedText) => this.onScanSuccess(decodedText),
-        (errorMessage) => { /* silent - fires continuously when no QR visible */ }
-      );
+      // ลองวิธีแรก: ระบุ cameraId
+      try {
+        await this.html5QrCode.start(
+          this.currentCameraId,
+          config,
+          (decodedText) => this.onScanSuccess(decodedText),
+          (errorMessage) => { /* silent */ }
+        );
+      } catch (firstErr) {
+        // Fallback: ใช้ facingMode environment (บางอุปกรณ์ไม่ยอมรับ deviceId)
+        console.warn('Retry with facingMode:', firstErr);
+        await this.html5QrCode.start(
+          { facingMode: 'environment' },
+          config,
+          (decodedText) => this.onScanSuccess(decodedText),
+          (errorMessage) => { /* silent */ }
+        );
+      }
       this.isScanning = true;
       this.showContainer(true);
       this.updateBtn();
       this.updateTorchButton();
       this.setStatus('พร้อมสแกน — เล็งไปที่ QR บนม้วนกระดาษ', 'ready');
+
+      // เพิ่ม focus distance hint ถ้ารองรับ (macro mode)
+      this.applyFocusHints();
     } catch (err) {
       console.error('Camera start failed:', err);
       this.showPermissionMsg(true);
@@ -2335,6 +2368,26 @@ const CameraScanner = {
         showToast('⚠️ ไม่ได้รับสิทธิ์กล้อง — กรุณาอนุญาตในการตั้งค่าเบราว์เซอร์', true);
       } else {
         showToast('⚠️ เปิดกล้องไม่สำเร็จ: ' + msg, true);
+      }
+    }
+  },
+
+  async applyFocusHints() {
+    if (!this.html5QrCode || !this.isScanning) return;
+    // พยายาม apply video constraints หลัง start — จะได้ continuous autofocus
+    // บางอุปกรณ์ (โดยเฉพาะ Android Chrome ล่าสุด) ต้องเซ็ตตรงนี้ถึงจะ work
+    const attempts = [
+      { advanced: [{ focusMode: 'continuous' }] },
+      { advanced: [{ focusMode: 'continuous' }, { exposureMode: 'continuous' }] },
+      { focusMode: 'continuous' }
+    ];
+    for (const constraint of attempts) {
+      try {
+        await this.html5QrCode.applyVideoConstraints(constraint);
+        console.log('Focus hint applied:', constraint);
+        return;
+      } catch (e) {
+        // ลอง constraint ต่อไป
       }
     }
   },
@@ -2407,11 +2460,11 @@ const CameraScanner = {
     if (indicator && barcodeEl) {
       barcodeEl.textContent = decodedText;
       indicator.classList.add('show');
-      // ซ่อนหลัง 2.5 วินาที
+      // ซ่อนหลัง 1.5 วินาที (ลดจาก 2.5 วินาที)
       clearTimeout(this._indicatorTimer);
       this._indicatorTimer = setTimeout(() => {
         indicator.classList.remove('show');
-      }, 2500);
+      }, 1500);
     }
 
     // ส่งเข้า scan-input แล้ว trigger handleScan (เหมือน hardware scanner)
@@ -2421,13 +2474,13 @@ const CameraScanner = {
       handleScan();
     }
 
-    // กลับมาเป็น ready status หลังจาก 1 วินาที
+    // กลับมาเป็น ready status หลังจาก 600ms (ลดจาก 1200ms)
     clearTimeout(this._statusTimer);
     this._statusTimer = setTimeout(() => {
       if (this.isScanning) {
         this.setStatus('พร้อมสแกน — เล็งไปที่ QR บนม้วนกระดาษ', 'ready');
       }
-    }, 1200);
+    }, 600);
   },
 
   flashSuccess() {
