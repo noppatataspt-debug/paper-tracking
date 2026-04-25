@@ -745,30 +745,30 @@
   }
   .edit-group-toggle:hover { color: var(--text); border-color: var(--accent); }
 
-  /* === LEVEL 1: Date group (outermost — strongest visual weight) === */
+  /* === LEVEL 1: Date group — ORANGE TONE (แบรนด์, สำคัญสุด) === */
   .edit-date-group {
     margin-bottom: 14px;
-    border: 1.5px solid #cbd5e1;
+    border: 2px solid #fdba74;
     border-radius: 12px; overflow: hidden;
     background: var(--panel);
-    box-shadow: 0 1px 3px rgba(15,23,42,0.04);
+    box-shadow: 0 1px 3px rgba(194,65,12,0.08);
   }
   .edit-date-header {
     display: flex; align-items: center; gap: 12px;
     padding: 14px 18px;
-    background: linear-gradient(180deg, #f8fafc 0%, #eef1f6 100%);
+    background: linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%);
     cursor: pointer; user-select: none;
     font-weight: 700; transition: background 0.15s;
-    border-bottom: 1.5px solid transparent;
+    border-bottom: 2px solid transparent;
   }
   .edit-date-header:hover {
-    background: linear-gradient(180deg, #f1f5f9 0%, #e2e8f0 100%);
+    background: linear-gradient(180deg, #ffedd5 0%, #fed7aa 100%);
   }
   .edit-date-group.open .edit-date-header {
-    border-bottom-color: #cbd5e1;
+    border-bottom-color: #fdba74;
   }
   .edit-date-caret {
-    font-size: 11px; color: #64748b;
+    font-size: 11px; color: #c2410c;
     transition: transform 0.15s;
     width: 14px; display: inline-block; text-align: center;
   }
@@ -778,68 +778,71 @@
     font-size: 16px; font-weight: 800;
   }
   .edit-date-weekday {
-    font-size: 13px; color: #64748b;
+    font-size: 13px; color: #9a3412;
     font-weight: 600;
   }
   .edit-date-stats {
     margin-left: auto; font-size: 13px;
-    color: #64748b; font-weight: 600;
+    color: #9a3412; font-weight: 600;
     display: flex; gap: 14px; align-items: center;
   }
-  .edit-date-stats b { color: #0f172a; font-size: 14px; }
+  .edit-date-stats b { color: #7c2d12; font-size: 14px; }
   .edit-date-body {
-    display: none; padding: 8px 10px 10px;
-    background: var(--panel);
+    display: none; padding: 10px 12px;
+    background: #fffbf5;
   }
   .edit-date-group.open .edit-date-body { display: block; }
 
-  /* === LEVEL 2: Machine group (middle — distinctive but lighter) === */
+  /* === LEVEL 2: Machine group — BLUE TONE (สีรอง คุมกับชื่อเครื่อง) === */
   .edit-machine-group {
-    margin-bottom: 6px;
+    margin-bottom: 8px;
     background: var(--panel);
-    border: 1px solid #e2e8f0;
-    border-left: 3px solid var(--accent-2);
+    border: 1.5px solid #bfdbfe;
     border-radius: 8px;
     overflow: hidden;
+    transition: border-color 0.12s;
   }
   .edit-machine-group:last-child { margin-bottom: 0; }
+  .edit-machine-group.open {
+    border-color: #93c5fd;
+  }
   .edit-machine-header {
     display: flex; align-items: center; gap: 10px;
     padding: 10px 14px;
-    background: var(--panel);
+    background: #eff6ff;
     cursor: pointer; user-select: none;
     transition: background 0.12s;
   }
   .edit-machine-header:hover {
-    background: #f8fafc;
+    background: #dbeafe;
   }
   .edit-machine-group.open .edit-machine-header {
-    background: #f8fafc;
-    border-bottom: 1px solid #e2e8f0;
+    background: #dbeafe;
+    border-bottom: 1.5px solid #93c5fd;
   }
   .edit-machine-caret {
-    font-size: 10px; color: #94a3b8;
+    font-size: 10px; color: #1d4ed8;
     transition: transform 0.15s;
     width: 12px;
   }
   .edit-machine-group.open .edit-machine-caret { transform: rotate(90deg); }
   .edit-machine-name {
-    font-weight: 700; color: var(--accent-2); font-size: 14px;
+    font-weight: 700; color: #1e3a8a; font-size: 14px;
   }
   .edit-machine-stats {
     margin-left: auto; font-size: 12px;
-    color: #64748b; font-weight: 600;
+    color: #3730a3; font-weight: 600;
   }
   .edit-machine-body {
     display: none;
-    padding: 8px 10px;
-    background: #fafbfc;
+    padding: 10px 12px;
+    background: var(--panel);
   }
   .edit-machine-group.open .edit-machine-body {
     display: grid; gap: 6px;
   }
 
-  /* === LEVEL 3: Batch row (innermost — clean white card) === */
+  /* === LEVEL 3: Batch row — CLEAN WHITE (content จริง) === */
   .edit-batch-row {
     display: grid; grid-template-columns: 1fr auto;
     gap: 12px; padding: 10px 14px;
