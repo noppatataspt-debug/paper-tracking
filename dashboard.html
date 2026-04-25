@@ -2215,6 +2215,55 @@ function isCombo(name) {
   return false;
 }
 
+// splitCombo(name) — แยก combo เป็น array ของชื่อสินค้าเดี่ยว
+// ถ้าไม่ใช่ combo จะ return [name] เดิม
+function splitCombo(name) {
+  if (!isCombo(name)) return [name.trim()];
+  const s = name.trim();
+  if (/,/.test(s)) {
+    return s.split(',').map(p => p.trim()).filter(Boolean);
+  }
+  if (/\.\s+/.test(s)) {
+    return s.split(/\.\s+/).map(p => p.replace(/\.$/, '').trim()).filter(Boolean);
+  }
+  if ((s.match(/\./g) || []).length >= 2) {
+    const parts = s.split('.').map(p => p.trim()).filter(Boolean);
+    if (parts.length >= 3 && parts.every(isProductLikeToken)) return parts;
+  }
+  if (/\s/.test(s)) {
+    const parts = s.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2 && parts.every(isProductLikeToken)) return parts;
+  }
+  if (s.includes('-')) {
+    const parts = s.split('-').filter(Boolean);
+    if (parts.length >= 3 && parts.every(isProductLikeToken)) return parts;
+    if (parts.length === 2 && parts.every(isFullProductToken)) return parts;
+  }
+  return [s];
+}
+
+// normalizeProductName(name) — สำหรับ "fuzzy match" ตอนค้นสอบกลับ
+//   - uppercase ให้ตรงกัน
+//   - ตัด space, dash, dot ออก
+//   - "SKIC-4400" / "SKIC 4400" / "SKIC.4400" → "SKIC4400"
+// ใช้เทียบ token ต่อ token เท่านั้น ไม่เอา combo เต็มมา normalize
+// (combo เต็มจะแยกด้วย splitCombo ก่อน แล้วค่อย normalize ทีละชิ้น)
+function normalizeProductName(name) {
+  if (!name) return '';
+  return String(name).toUpperCase().replace(/[\s\-.]/g, '');
+}
+
+// productMatchesQuery(rowName, queryName)
+//   เช็คว่า row.product_name (อาจเป็น combo) มี token ตรงกับ queryName มั้ย
+//   ตัวอย่าง: rowName="SKIC6750-SKIC5370-SKIC4400", query="SKIC-4400" → true
+function productMatchesQuery(rowName, queryName) {
+  if (!queryName) return true;
+  const qNorm = normalizeProductName(queryName);
+  if (!qNorm) return true;
+  const tokens = splitCombo(rowName);  // ถ้าไม่ใช่ combo จะได้ [rowName]
+  return tokens.some(t => normalizeProductName(t) === qNorm);
+}
+
 // Escape regex special chars
 function escRegex(s) {
   return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -2352,13 +2401,21 @@ async function runTrace() {
       .eq('production_date', date);
 
     if (machineId) query = query.eq('machine_id', parseInt(machineId));
-    if (product) query = query.eq('product_name', product);
+    // ⚠️ ไม่ใช้ .eq('product_name', product) ตรงนี้ — เพราะข้อมูลเก่ามี combo
+    //    เช่น "SKIC6750-SKIC5370-SKIC4400" ที่ผู้ใช้ค้น "SKIC-4400" ก็ควรเจอ
+    //    เลย filter ฝั่ง client โดย split combo + normalize ก่อนเทียบ
 
     const { data, error } = await query;
     if (error) throw error;
 
+    // Client-side product filter: รองรับทั้งสินค้าเดี่ยวและ combo เก่า
+    let filtered = data || [];
+    if (product) {
+      filtered = filtered.filter(s => productMatchesQuery(s.product_name, product));
+    }
+
     // โหลด invoice info สำหรับ lots ที่เจอ
-    const lotNorms = [...new Set((data || []).map(s => (s.jumbo_lot || '').replace(/-/g, '').toUpperCase()).filter(x => x))];
+    const lotNorms = [...new Set(filtered.map(s => (s.jumbo_lot || '').replace(/-/g, '').toUpperCase()).filter(x => x))];
     let invoiceMap = {};
     if (lotNorms.length > 0) {
       const { data: invData } = await supabase
@@ -2370,10 +2427,10 @@ async function runTrace() {
       });
     }
 
-    window._traceData = data;  // เก็บไว้สำหรับ export
+    window._traceData = filtered;  // เก็บไว้สำหรับ export
     window._traceInvoiceMap = invoiceMap;
     window._traceParams = { date, machineId, product };
-    renderTraceResult(container, data, { date, machineId, product }, invoiceMap);
+    renderTraceResult(container, filtered, { date, machineId, product }, invoiceMap);
   } catch (err) {
     console.error(err);
     container.innerHTML = `<div class="empty"><span class="emoji">⚠️</span><div class="empty-title">ค้นหาไม่สำเร็จ</div><div>${escapeHtml(err.message)}</div></div>`;
