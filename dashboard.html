@@ -191,6 +191,49 @@
   .trace-details-title {
     font-size: 14px; font-weight: 800; color: var(--text);
   }
+  /* Trace: collapsible date wrapper (เฉพาะตอนค้นช่วงหลายวัน) */
+  .trace-date-group {
+    margin-top: 14px;
+    border: 2px solid #fdba74;
+    border-radius: 12px; overflow: hidden;
+    background: var(--panel);
+    box-shadow: 0 1px 3px rgba(194,65,12,0.08);
+  }
+  .trace-date-header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 18px;
+    background: linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%);
+    cursor: pointer; user-select: none;
+    font-weight: 700; transition: background 0.15s;
+    border-bottom: 2px solid transparent;
+  }
+  .trace-date-header:hover {
+    background: linear-gradient(180deg, #ffedd5 0%, #fed7aa 100%);
+  }
+  .trace-date-group.open .trace-date-header {
+    border-bottom-color: #fdba74;
+  }
+  .trace-date-label {
+    font-family: var(--mono); color: var(--accent);
+    font-size: 16px; font-weight: 800;
+  }
+  .trace-date-weekday {
+    font-size: 13px; color: #9a3412; font-weight: 600;
+  }
+  .trace-date-stats {
+    margin-left: auto; font-size: 13px;
+    color: #9a3412; font-weight: 600;
+  }
+  .trace-date-stats b { color: #7c2d12; font-size: 14px; }
+  .trace-date-body {
+    display: none; padding: 10px 12px;
+    background: #fffbf5;
+  }
+  .trace-date-group.open .trace-date-body { display: block; }
+  /* product groups inside date — ลด margin บนเล็กน้อย */
+  .trace-date-body .trace-group { margin-top: 8px; }
+  .trace-date-body .trace-group:first-child { margin-top: 0; }
+
   .trace-group.collapsible .trace-group-header.clickable {
     cursor: pointer;
     user-select: none;
@@ -1201,12 +1244,16 @@
   <div class="view active" id="view-trace">
     <div class="panel">
       <div class="panel-title">🔍 สอบกลับตามเงื่อนไข</div>
-      <div class="panel-sub">เลือกวันที่ (จำเป็น) + สินค้า/เครื่อง (เฉพาะเจาะจง) → ดูกระดาษและ Jumbo Lot ที่ใช้</div>
+      <div class="panel-sub">เลือกช่วงวันที่ (จำเป็น) + สินค้า/เครื่อง (เฉพาะเจาะจง) → ดูกระดาษและ Jumbo Lot ที่ใช้</div>
 
       <div class="form-grid">
         <div>
-          <label class="field-label">วันที่ผลิต *</label>
-          <input type="date" id="t-date">
+          <label class="field-label">วันที่ผลิต — จาก *</label>
+          <input type="date" id="t-from">
+        </div>
+        <div>
+          <label class="field-label">ถึง *</label>
+          <input type="date" id="t-to">
         </div>
         <div>
           <label class="field-label">เครื่องจักร</label>
@@ -1226,8 +1273,8 @@
       <div id="t-result">
         <div class="empty">
           <span class="emoji">🔍</span>
-          <div class="empty-title">เลือกวันที่แล้วกดค้นหา</div>
-          <div>จะเห็นกระดาษที่ใช้ทั้งหมดในวันนั้น</div>
+          <div class="empty-title">เลือกช่วงวันที่แล้วกดค้นหา</div>
+          <div>จะเห็นกระดาษที่ใช้ทั้งหมดในช่วงนั้น</div>
         </div>
       </div>
     </div>
@@ -2136,16 +2183,18 @@ async function loadMaster() {
     setConnStatus(true, `✓ ${machinesRes.data.length} เครื่อง · ${productsRes.data.length} สินค้า`);
 
     // Default date = today
-    document.getElementById('t-date').valueAsDate = new Date();
+    const today = new Date();
+    const sevenDaysAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+    // Trace view: ค่าเริ่มต้นช่วง 7 วันล่าสุด
+    document.getElementById('t-from').valueAsDate = sevenDaysAgo;
+    document.getElementById('t-to').valueAsDate = today;
 
     // Default history filter: last 30 days
-    const today = new Date();
     const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
     document.getElementById('h-from').valueAsDate = thirtyDaysAgo;
     document.getElementById('h-to').valueAsDate = today;
 
     // Edit view: last 7 days by default
-    const sevenDaysAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
     document.getElementById('e-from').valueAsDate = sevenDaysAgo;
     document.getElementById('e-to').valueAsDate = today;
 
@@ -2382,12 +2431,17 @@ function setupProductAutocomplete() {
 
 // ==================== VIEW 1: TRACE ====================
 async function runTrace() {
-  const date = document.getElementById('t-date').value;
+  const from = document.getElementById('t-from').value;
+  const to = document.getElementById('t-to').value;
   const machineId = document.getElementById('t-machine').value;
   const product = document.getElementById('t-product').value;
 
-  if (!date) {
-    alert('กรุณาเลือกวันที่');
+  if (!from || !to) {
+    alert('กรุณาเลือกช่วงวันที่ทั้ง "จาก" และ "ถึง"');
+    return;
+  }
+  if (from > to) {
+    alert('"จาก" ต้องไม่หลังกว่า "ถึง"');
     return;
   }
 
@@ -2398,7 +2452,9 @@ async function runTrace() {
     let query = supabase
       .from('v_scan_details')
       .select('*')
-      .eq('production_date', date);
+      .gte('production_date', from)
+      .lte('production_date', to)
+      .order('production_date', { ascending: false });
 
     if (machineId) query = query.eq('machine_id', parseInt(machineId));
     // ⚠️ ไม่ใช้ .eq('product_name', product) ตรงนี้ — เพราะข้อมูลเก่ามี combo
@@ -2429,34 +2485,26 @@ async function runTrace() {
 
     window._traceData = filtered;  // เก็บไว้สำหรับ export
     window._traceInvoiceMap = invoiceMap;
-    window._traceParams = { date, machineId, product };
-    renderTraceResult(container, filtered, { date, machineId, product }, invoiceMap);
+    window._traceParams = { from, to, machineId, product };
+    renderTraceResult(container, filtered, { from, to, machineId, product }, invoiceMap);
   } catch (err) {
     console.error(err);
     container.innerHTML = `<div class="empty"><span class="emoji">⚠️</span><div class="empty-title">ค้นหาไม่สำเร็จ</div><div>${escapeHtml(err.message)}</div></div>`;
   }
 }
 
-function renderTraceResult(container, data, params, invoiceMap) {
-  invoiceMap = invoiceMap || {};
-  if (!data || data.length === 0) {
-    container.innerHTML = '<div class="empty"><span class="emoji">📭</span><div class="empty-title">ไม่พบข้อมูล</div><div>ลองเปลี่ยนเงื่อนไขการค้นหา</div></div>';
-    return;
-  }
-
-  // Group: product → paper_type → invoice_no → jumbo_lot
+// Helper: สร้าง byProduct map จาก list ของ scans (ใช้ทั้ง single และ multi-date)
+function buildByProductGroups(scans, invoiceMap) {
   const byProduct = {};
-  data.forEach(s => {
+  scans.forEach(s => {
     const pkey = s.product_name + '|' + (s.is_new_product ? '1' : '0');
     if (!byProduct[pkey]) byProduct[pkey] = { name: s.product_name, isNew: s.is_new_product, types: {} };
-    
     if (!byProduct[pkey].types[s.paper_type]) byProduct[pkey].types[s.paper_type] = {};
-    
-    // หา invoice จาก normalized lot
+
     const lotNorm = (s.jumbo_lot || '').replace(/-/g, '').toUpperCase();
     const inv = invoiceMap[lotNorm];
     const invKey = inv?.invoice_no || '__NO_INVOICE__';
-    
+
     if (!byProduct[pkey].types[s.paper_type][invKey]) {
       byProduct[pkey].types[s.paper_type][invKey] = {
         invoice_no: inv?.invoice_no || null,
@@ -2465,7 +2513,7 @@ function renderTraceResult(container, data, params, invoiceMap) {
         lots: {}
       };
     }
-    
+
     const invGroup = byProduct[pkey].types[s.paper_type][invKey];
     const lotKey = s.jumbo_lot;
     if (!invGroup.lots[lotKey]) {
@@ -2473,52 +2521,25 @@ function renderTraceResult(container, data, params, invoiceMap) {
     }
     invGroup.lots[lotKey].count++;
   });
+  return byProduct;
+}
 
-  const totalTypes = new Set(data.map(s => s.paper_type)).size;
-  const totalRolls = data.length;
-  const uniqueBarcodes = new Set(data.map(s => s.barcode_raw)).size;
-  const hasSharedRolls = uniqueBarcodes < totalRolls;
-  const totalLots = new Set(data.map(s => s.jumbo_lot)).size;
-  const totalProducts = new Set(data.map(s => s.product_name)).size;
-  const totalInvoices = new Set(data.map(s => {
-    const norm = (s.jumbo_lot || '').replace(/-/g, '').toUpperCase();
-    return invoiceMap[norm]?.invoice_no;
-  }).filter(x => x)).size;
-
-  let html = `<div class="panel-actions">
-    <button class="export-btn" id="btn-export-trace">📥 Export CSV (${totalRolls} rows)</button>
-  </div>
-  <div class="stats">
-    <div class="stat"><div class="stat-label">สินค้า</div><div class="stat-value">${totalProducts}</div></div>
-    <div class="stat"><div class="stat-label">ประเภทกระดาษ</div><div class="stat-value blue">${totalTypes}</div></div>
-    <div class="stat"><div class="stat-label">Jumbo Lots</div><div class="stat-value accent">${totalLots}</div></div>
-    <div class="stat"><div class="stat-label">Invoices</div><div class="stat-value" style="color:#4338ca;">${totalInvoices}</div></div>
-    <div class="stat">
-      <div class="stat-label">ม้วนกระดาษ</div>
-      <div class="stat-value">${uniqueBarcodes}</div>
-      ${hasSharedRolls ? `<div style="font-size:11px;color:var(--text-dim);margin-top:2px;">(${totalRolls} รายการ - มีม้วนใช้ร่วม)</div>` : ''}
-    </div>
-  </div>
-  <div id="trace-report-placeholder"></div>`;  // report จะ inject ตรงนี้ ด้านบน product groups
-
-  // Sort products by scan count desc
+// Helper: แปลง byProduct → HTML ของ product groups (ใช้ใน date group หรือ stand-alone)
+// idPrefix ช่วยให้ id ของ product group ไม่ชนกันระหว่างวัน
+function renderProductGroupsHtml(byProduct, params, idPrefix) {
   const sortedProducts = Object.values(byProduct).sort((a, b) => {
     const sumA = Object.values(a.types).reduce((s, t) => s + Object.values(t).reduce((ss, inv) => ss + Object.values(inv.lots).reduce((sss, v) => sss + v.count, 0), 0), 0);
     const sumB = Object.values(b.types).reduce((s, t) => s + Object.values(t).reduce((ss, inv) => ss + Object.values(inv.lots).reduce((sss, v) => sss + v.count, 0), 0), 0);
     return sumB - sumA;
   });
 
-  html += `<div class="trace-details-section">
-    <div class="trace-details-title">📋 รายละเอียดการใช้วัตถุดิบ <span style="font-weight:400;color:var(--text-dim);font-size:12px;">(คลิกที่สินค้าเพื่อขยาย)</span></div>
-  </div>`;
-
+  let html = '';
   sortedProducts.forEach((prod, prodIdx) => {
-    const productTotal = Object.values(prod.types).reduce((s, t) => 
-      s + Object.values(t).reduce((ss, inv) => 
+    const productTotal = Object.values(prod.types).reduce((s, t) =>
+      s + Object.values(t).reduce((ss, inv) =>
         ss + Object.values(inv.lots).reduce((sss, v) => sss + v.count, 0), 0), 0);
 
-    const prodId = 'prod-' + prodIdx;
-    // Summary compact line per paper type (สั้น ๆ ให้เห็นเลย ก่อน expand)
+    const prodId = idPrefix + '-prod-' + prodIdx;
     const typeSummary = Object.entries(prod.types).map(([type, invoices]) => {
       const typeTotal = Object.values(invoices).reduce((s, inv) => s + Object.values(inv.lots).reduce((ss, v) => ss + v.count, 0), 0);
       const numInvoices = Object.keys(invoices).length;
@@ -2541,7 +2562,6 @@ function renderTraceResult(container, data, params, invoiceMap) {
       <div class="trace-group-summary">${typeSummary}</div>
       <div class="trace-group-details" id="${prodId}" style="display:none;">`;
 
-    // Sort paper types by total count
     const sortedTypes = Object.entries(prod.types).sort((a, b) => {
       const sumA = Object.values(a[1]).reduce((ss, inv) => ss + Object.values(inv.lots).reduce((sss, v) => sss + v.count, 0), 0);
       const sumB = Object.values(b[1]).reduce((ss, inv) => ss + Object.values(inv.lots).reduce((sss, v) => sss + v.count, 0), 0);
@@ -2558,8 +2578,7 @@ function renderTraceResult(container, data, params, invoiceMap) {
           <span class="paper-name">${escapeHtml(type)}</span>
           <span class="paper-count">${numInvoices} invoices · ${numLots} lots · ${typeTotal} ม้วน</span>
         </div>`;
-      
-      // Sort invoices: __NO_INVOICE__ last, then by receive_date desc
+
       const sortedInvoices = Object.entries(invoices).sort((a, b) => {
         if (a[0] === '__NO_INVOICE__') return 1;
         if (b[0] === '__NO_INVOICE__') return -1;
@@ -2569,8 +2588,7 @@ function renderTraceResult(container, data, params, invoiceMap) {
       sortedInvoices.forEach(([invKey, invData]) => {
         const invTotal = Object.values(invData.lots).reduce((s, v) => s + v.count, 0);
         const numLotsInInv = Object.keys(invData.lots).length;
-        
-        // Invoice sub-header
+
         if (invKey === '__NO_INVOICE__') {
           html += `<div class="invoice-sub-header" style="background:#fef3c7;border-left:3px solid #d97706;">
             <span style="color:#78350f;font-weight:700;">❓ ไม่มีข้อมูล Invoice</span>
@@ -2584,8 +2602,7 @@ function renderTraceResult(container, data, params, invoiceMap) {
             <span class="invoice-lots-count">${numLotsInInv} lots · ${invTotal} ม้วน</span>
           </div>`;
         }
-        
-        // Lots under this invoice
+
         const sortedLots = Object.entries(invData.lots).sort((a, b) => b[1].count - a[1].count);
         sortedLots.forEach(([lot, info]) => {
           html += `<div class="lot-row">
@@ -2597,59 +2614,183 @@ function renderTraceResult(container, data, params, invoiceMap) {
           </div>`;
         });
       });
-      
+
       html += `</div>`;
     });
 
     html += `</div></div>`;  // close trace-group-details, trace-group
   });
 
-  // ==================== Supplier Report (text) ====================
-  let report = `รายงานสอบกลับวัตถุดิบกระดาษ\n`;
-  report += `════════════════════════════════════════\n`;
-  report += `วันที่ผลิต : ${params.date}\n`;
-  const machineName = params.machineId ? (document.getElementById('t-machine').options[document.getElementById('t-machine').selectedIndex].text) : '(ทุกเครื่อง)';
-  report += `เครื่อง    : ${machineName}\n`;
-  report += `สินค้า     : ${params.product || '(ทุกสินค้า)'}\n`;
-  report += `════════════════════════════════════════\n\n`;
+  return { html, sortedProducts };
+}
 
+// Helper: สร้าง report text สำหรับ product groups (ใช้ทั้งโหมด single และ multi date)
+function buildProductReportText(sortedProducts, indent) {
+  indent = indent || '';
+  let report = '';
   sortedProducts.forEach(prod => {
-    const productTotal = Object.values(prod.types).reduce((s, t) => 
-      s + Object.values(t).reduce((ss, inv) => 
+    const productTotal = Object.values(prod.types).reduce((s, t) =>
+      s + Object.values(t).reduce((ss, inv) =>
         ss + Object.values(inv.lots).reduce((sss, v) => sss + v.count, 0), 0), 0);
-    report += `📦 ${prod.name}${prod.isNew ? ' (สินค้าใหม่)' : ''} — ${productTotal} ม้วน\n`;
-    
+    report += `${indent}📦 ${prod.name}${prod.isNew ? ' (สินค้าใหม่)' : ''} — ${productTotal} ม้วน\n`;
+
     Object.entries(prod.types).forEach(([type, invoices]) => {
       const typeTotal = Object.values(invoices).reduce((s, inv) => s + Object.values(inv.lots).reduce((ss, v) => ss + v.count, 0), 0);
       const numInvoices = Object.keys(invoices).length;
       const numLots = Object.values(invoices).reduce((s, inv) => s + Object.keys(inv.lots).length, 0);
-      report += `  ● ${type} (${numInvoices} invoices, ${numLots} lots, ${typeTotal} ม้วน)\n`;
-      
-      // Sort invoices
+      report += `${indent}  ● ${type} (${numInvoices} invoices, ${numLots} lots, ${typeTotal} ม้วน)\n`;
+
       const sortedInvs = Object.entries(invoices).sort((a, b) => {
         if (a[0] === '__NO_INVOICE__') return 1;
         if (b[0] === '__NO_INVOICE__') return -1;
         return (b[1].receive_date || '').localeCompare(a[1].receive_date || '');
       });
-      
+
       sortedInvs.forEach(([invKey, invData]) => {
         if (invKey === '__NO_INVOICE__') {
-          report += `     📄 (ไม่มีข้อมูล Invoice)\n`;
+          report += `${indent}     📄 (ไม่มีข้อมูล Invoice)\n`;
         } else {
           const supInfo = invData.supplier ? `${invData.supplier}` : '';
           const dateInfo = invData.receive_date ? `, รับเข้า ${invData.receive_date}` : '';
-          report += `     📄 Invoice: ${invData.invoice_no} (${supInfo}${dateInfo})\n`;
+          report += `${indent}     📄 Invoice: ${invData.invoice_no} (${supInfo}${dateInfo})\n`;
         }
-        
+
         Object.entries(invData.lots).sort((a, b) => b[1].count - a[1].count).forEach(([lot, info]) => {
-          report += `        - ${lot}  (ตัด ${info.cut_date}) × ${info.count}\n`;
+          report += `${indent}        - ${lot}  (ตัด ${info.cut_date}) × ${info.count}\n`;
         });
       });
     });
     report += '\n';
   });
+  return report;
+}
+
+// Helper: format date เป็น "23 เม.ย. 2569 (พฤหัสบดี)"
+function formatThaiDate(isoDate) {
+  if (!isoDate) return '';
+  const d = new Date(isoDate + 'T00:00:00');
+  const dayNames = ['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์'];
+  const monthNames = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const day = d.getDate();
+  const month = monthNames[d.getMonth()];
+  const year = d.getFullYear() + 543;  // พ.ศ.
+  const wd = dayNames[d.getDay()];
+  return `${day} ${month} ${year} (${wd})`;
+}
+
+function renderTraceResult(container, data, params, invoiceMap) {
+  invoiceMap = invoiceMap || {};
+  if (!data || data.length === 0) {
+    container.innerHTML = '<div class="empty"><span class="emoji">📭</span><div class="empty-title">ไม่พบข้อมูล</div><div>ลองเปลี่ยนเงื่อนไขการค้นหา</div></div>';
+    return;
+  }
+
+  // Group ตามวันที่ก่อน
+  const byDate = {};
+  data.forEach(s => {
+    const d = s.production_date;
+    if (!byDate[d]) byDate[d] = [];
+    byDate[d].push(s);
+  });
+  const dateKeys = Object.keys(byDate).sort().reverse();  // ใหม่ → เก่า
+  const isMultiDate = dateKeys.length > 1;
+
+  // Stats รวม
+  const totalTypes = new Set(data.map(s => s.paper_type)).size;
+  const totalRolls = data.length;
+  const uniqueBarcodes = new Set(data.map(s => s.barcode_raw)).size;
+  const hasSharedRolls = uniqueBarcodes < totalRolls;
+  const totalLots = new Set(data.map(s => s.jumbo_lot)).size;
+  const totalProducts = new Set(data.map(s => s.product_name)).size;
+  const totalInvoices = new Set(data.map(s => {
+    const norm = (s.jumbo_lot || '').replace(/-/g, '').toUpperCase();
+    return invoiceMap[norm]?.invoice_no;
+  }).filter(x => x)).size;
+
+  let html = `<div class="panel-actions">
+    <button class="export-btn" id="btn-export-trace">📥 Export CSV (${totalRolls} rows)</button>
+  </div>
+  <div class="stats">
+    <div class="stat"><div class="stat-label">วัน</div><div class="stat-value">${dateKeys.length}</div></div>
+    <div class="stat"><div class="stat-label">สินค้า</div><div class="stat-value">${totalProducts}</div></div>
+    <div class="stat"><div class="stat-label">ประเภทกระดาษ</div><div class="stat-value blue">${totalTypes}</div></div>
+    <div class="stat"><div class="stat-label">Jumbo Lots</div><div class="stat-value accent">${totalLots}</div></div>
+    <div class="stat"><div class="stat-label">Invoices</div><div class="stat-value" style="color:#4338ca;">${totalInvoices}</div></div>
+    <div class="stat">
+      <div class="stat-label">ม้วนกระดาษ</div>
+      <div class="stat-value">${uniqueBarcodes}</div>
+      ${hasSharedRolls ? `<div style="font-size:11px;color:var(--text-dim);margin-top:2px;">(${totalRolls} รายการ - มีม้วนใช้ร่วม)</div>` : ''}
+    </div>
+  </div>
+  <div id="trace-report-placeholder"></div>`;
+
+  html += `<div class="trace-details-section">
+    <div class="trace-details-title">📋 รายละเอียดการใช้วัตถุดิบ <span style="font-weight:400;color:var(--text-dim);font-size:12px;">(คลิกที่${isMultiDate ? 'วัน/' : ''}สินค้าเพื่อขยาย)</span></div>
+  </div>`;
+
+  // เก็บ sortedProducts ของแต่ละวันไว้สำหรับสร้าง report text
+  const sortedProductsByDate = {};
+
+  if (!isMultiDate) {
+    // Single date — เรนเดอร์ flat เหมือนเดิม ไม่มี date group ครอบ
+    const onlyDate = dateKeys[0];
+    const byProduct = buildByProductGroups(byDate[onlyDate], invoiceMap);
+    const r = renderProductGroupsHtml(byProduct, params, 'd0');
+    html += r.html;
+    sortedProductsByDate[onlyDate] = r.sortedProducts;
+  } else {
+    // Multi-date — เรนเดอร์ใน date group, default expanded
+    dateKeys.forEach((dateKey, dIdx) => {
+      const scansOfDate = byDate[dateKey];
+      const byProduct = buildByProductGroups(scansOfDate, invoiceMap);
+      const dateRolls = scansOfDate.length;
+      const dateProducts = Object.keys(byProduct).length;
+      const dateLots = new Set(scansOfDate.map(s => s.jumbo_lot)).size;
+      const dateId = 'date-' + dIdx;
+
+      html += `<div class="trace-date-group open" id="grp-${dateId}">
+        <div class="trace-date-header" onclick="toggleDateGroup('${dateId}')">
+          <span class="toggle-arrow" id="arrow-${dateId}">▼</span>
+          <span class="trace-date-label">📅 ${escapeHtml(dateKey)}</span>
+          <span class="trace-date-weekday">${escapeHtml(formatThaiDate(dateKey))}</span>
+          <span class="trace-date-stats">${dateProducts} สินค้า · ${dateLots} lots · <b>${dateRolls} ม้วน</b></span>
+        </div>
+        <div class="trace-date-body" id="${dateId}">`;
+
+      const r = renderProductGroupsHtml(byProduct, params, dateId);
+      html += r.html;
+      sortedProductsByDate[dateKey] = r.sortedProducts;
+
+      html += `</div></div>`;
+    });
+  }
+
+  // ==================== Supplier Report (text) ====================
+  let report = `รายงานสอบกลับวัตถุดิบกระดาษ\n`;
   report += `════════════════════════════════════════\n`;
-  report += `รวม: ${totalProducts} สินค้า, ${totalTypes} ประเภทกระดาษ, ${totalInvoices} Invoices, ${totalLots} Jumbo Lots, ${totalRolls} ม้วน\n`;
+  if (params.from === params.to) {
+    report += `วันที่ผลิต : ${params.from}\n`;
+  } else {
+    report += `ช่วงวันที่ : ${params.from} ถึง ${params.to}\n`;
+  }
+  const machineName = params.machineId ? (document.getElementById('t-machine').options[document.getElementById('t-machine').selectedIndex].text) : '(ทุกเครื่อง)';
+  report += `เครื่อง    : ${machineName}\n`;
+  report += `สินค้า     : ${params.product || '(ทุกสินค้า)'}\n`;
+  report += `════════════════════════════════════════\n\n`;
+
+  if (!isMultiDate) {
+    report += buildProductReportText(sortedProductsByDate[dateKeys[0]], '');
+  } else {
+    dateKeys.forEach(dateKey => {
+      const scansOfDate = byDate[dateKey];
+      const dateRolls = scansOfDate.length;
+      report += `━━━ 📅 ${dateKey}  (${dateRolls} ม้วน) ━━━\n`;
+      report += buildProductReportText(sortedProductsByDate[dateKey], '');
+    });
+  }
+
+  report += `════════════════════════════════════════\n`;
+  report += `รวม: ${dateKeys.length} วัน, ${totalProducts} สินค้า, ${totalTypes} ประเภทกระดาษ, ${totalInvoices} Invoices, ${totalLots} Jumbo Lots, ${totalRolls} ม้วน\n`;
 
   // Inject report ขึ้นไปบนสุด (แทน placeholder)
   const reportHtml = `<div class="report-box report-box-top">
@@ -2679,7 +2820,8 @@ function renderTraceResult(container, data, params, invoiceMap) {
   // Export CSV button
   document.getElementById('btn-export-trace').addEventListener('click', () => {
     const rows = window._traceData
-      .sort((a, b) => (a.product_name || '').localeCompare(b.product_name || '') ||
+      .sort((a, b) => (b.production_date || '').localeCompare(a.production_date || '') ||
+                      (a.product_name || '').localeCompare(b.product_name || '') ||
                       (a.paper_type || '').localeCompare(b.paper_type || '') ||
                       (a.jumbo_lot || '').localeCompare(b.jumbo_lot || ''))
       .map(scanToRow);
@@ -2688,7 +2830,8 @@ function renderTraceResult(container, data, params, invoiceMap) {
     const machineName = p.machineId
       ? document.getElementById('t-machine').options[document.getElementById('t-machine').selectedIndex].text.replace(/\s.*$/, '')
       : 'all';
-    const fname = `trace_${p.date}_${machineName}${p.product ? '_' + p.product : ''}_${timestamp()}.csv`;
+    const dateStr = (p.from === p.to) ? p.from : (p.from + '_to_' + p.to);
+    const fname = `trace_${dateStr}_${machineName}${p.product ? '_' + p.product : ''}_${timestamp()}.csv`;
     downloadCSV(csv, fname);
   });
 }
@@ -2707,6 +2850,15 @@ window.toggleProdGroup = function(prodId) {
     el.style.display = 'none';
     if (arrow) arrow.textContent = '▶';
   }
+};
+
+// Toggle date group expand/collapse (สำหรับ trace แบบหลายวัน)
+window.toggleDateGroup = function(dateId) {
+  const wrap = document.getElementById('grp-' + dateId);
+  const arrow = document.getElementById('arrow-' + dateId);
+  if (!wrap) return;
+  const isOpen = wrap.classList.toggle('open');
+  if (arrow) arrow.textContent = isOpen ? '▼' : '▶';
 };
 
 // ==================== VIEW 2: LOT LOOKUP ====================
