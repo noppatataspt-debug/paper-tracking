@@ -731,6 +731,128 @@
   .edit-batch-list {
     display: grid; gap: 10px;
   }
+
+  /* Hierarchical grouped view */
+  .edit-group-actions {
+    display: flex; gap: 8px; margin-bottom: 10px;
+    justify-content: flex-end;
+  }
+  .edit-group-toggle {
+    padding: 6px 14px; background: var(--panel-2);
+    border: 1.5px solid var(--border); border-radius: 16px;
+    font-size: 12px; font-weight: 700; color: var(--text-dim);
+    cursor: pointer; font-family: inherit;
+  }
+  .edit-group-toggle:hover { color: var(--text); border-color: var(--accent); }
+
+  .edit-date-group {
+    margin-bottom: 12px;
+    border: 1.5px solid var(--border);
+    border-radius: 12px; overflow: hidden;
+    background: var(--panel);
+  }
+  .edit-date-header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 16px; background: var(--panel-2);
+    cursor: pointer; user-select: none;
+    font-weight: 700; transition: background 0.15s;
+    border-bottom: 1.5px solid transparent;
+  }
+  .edit-date-header:hover { background: #f1ede8; }
+  .edit-date-group.open .edit-date-header {
+    border-bottom-color: var(--border);
+  }
+  .edit-date-caret {
+    font-size: 11px; color: var(--text-dim);
+    transition: transform 0.15s;
+    width: 14px; display: inline-block; text-align: center;
+  }
+  .edit-date-group.open .edit-date-caret { transform: rotate(90deg); }
+  .edit-date-label {
+    font-family: var(--mono); color: var(--accent);
+    font-size: 16px; font-weight: 800;
+  }
+  .edit-date-weekday {
+    font-size: 13px; color: var(--text-dim);
+    font-weight: 600;
+  }
+  .edit-date-stats {
+    margin-left: auto; font-size: 13px;
+    color: var(--text-dim); font-weight: 600;
+    display: flex; gap: 14px; align-items: center;
+  }
+  .edit-date-stats b { color: var(--text); font-size: 14px; }
+  .edit-date-body {
+    display: none; padding: 10px 12px;
+  }
+  .edit-date-group.open .edit-date-body { display: block; }
+
+  .edit-machine-group {
+    margin-bottom: 8px;
+    border-left: 3px solid var(--accent-2);
+    padding-left: 10px;
+  }
+  .edit-machine-group:last-child { margin-bottom: 0; }
+  .edit-machine-header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 4px;
+    cursor: pointer; user-select: none;
+  }
+  .edit-machine-header:hover .edit-machine-name {
+    color: var(--accent);
+  }
+  .edit-machine-caret {
+    font-size: 10px; color: var(--text-dim);
+    transition: transform 0.15s;
+    width: 12px;
+  }
+  .edit-machine-group.open .edit-machine-caret { transform: rotate(90deg); }
+  .edit-machine-name {
+    font-weight: 700; color: var(--accent-2); font-size: 14px;
+    transition: color 0.15s;
+  }
+  .edit-machine-stats {
+    margin-left: auto; font-size: 12px;
+    color: var(--text-dim); font-weight: 600;
+  }
+  .edit-machine-body {
+    display: none; padding-top: 4px; padding-bottom: 4px;
+    display: none;
+  }
+  .edit-machine-group.open .edit-machine-body {
+    display: grid; gap: 6px;
+  }
+
+  /* Compact batch row (used inside groups) */
+  .edit-batch-row {
+    display: grid; grid-template-columns: 1fr auto;
+    gap: 12px; padding: 10px 14px;
+    background: var(--panel-2);
+    border: 1.5px solid transparent;
+    border-radius: 8px; align-items: center;
+    transition: all 0.15s;
+  }
+  .edit-batch-row:hover {
+    border-color: var(--accent);
+    background: #fff7ed;
+  }
+  .edit-batch-row.voided {
+    background: #fef2f2; opacity: 0.75;
+  }
+  .edit-batch-row.match {
+    border-color: var(--accent); background: #fff7ed;
+  }
+  .edit-batch-row-info { min-width: 0; }
+  .edit-batch-row-products {
+    font-weight: 700; color: var(--text); font-size: 14px;
+    margin-bottom: 2px;
+  }
+  .edit-batch-row-meta {
+    font-size: 12px; color: var(--text-dim);
+    display: flex; gap: 10px; flex-wrap: wrap;
+  }
+  .edit-batch-row-meta .roll-count { color: var(--accent); font-weight: 700; }
+
   .edit-batch-card {
     display: grid; grid-template-columns: 1fr auto;
     gap: 12px; padding: 14px 16px;
@@ -1191,6 +1313,10 @@
           <input type="checkbox" id="h-show-voided" style="width: 18px; height: 18px; cursor: pointer;">
           แสดง batches ที่ยกเลิกแล้วด้วย
         </label>
+        <div style="margin-left:auto; display:flex; gap:6px;" id="h-group-actions" hidden>
+          <button type="button" class="edit-group-toggle" id="btn-h-expand-all">▽ ขยายทั้งหมด</button>
+          <button type="button" class="edit-group-toggle" id="btn-h-collapse-all">▷ ปิดทั้งหมด</button>
+        </div>
       </div>
 
       <div class="stats" id="stats-box" style="display:none;">
@@ -1268,6 +1394,10 @@
           <input type="checkbox" id="e-show-voided" style="width: 18px; height: 18px; cursor: pointer;">
           แสดง batches ที่ยกเลิกแล้วด้วย
         </label>
+        <div style="margin-left:auto; display:flex; gap:6px;" id="e-group-actions" hidden>
+          <button type="button" class="edit-group-toggle" id="btn-expand-all">▽ ขยายทั้งหมด</button>
+          <button type="button" class="edit-group-toggle" id="btn-collapse-all">▷ ปิดทั้งหมด</button>
+        </div>
       </div>
 
       <div id="e-result">
@@ -2801,6 +2931,8 @@ async function loadHistory() {
     if (bErr) throw bErr;
 
     if (!batches || batches.length === 0) {
+      const hGA = document.getElementById('h-group-actions');
+      if (hGA) hGA.hidden = true;
       container.innerHTML = '<div class="empty"><span class="emoji">📭</span><div class="empty-title">ไม่พบ batch ในช่วงเวลานี้</div><div>ลองขยายช่วงวันที่ หรือเปลี่ยนเครื่อง</div></div>';
       return;
     }
@@ -2858,35 +2990,119 @@ async function loadHistory() {
 
     let html = `<div class="panel-actions">
       <button class="export-btn" id="btn-export-history">📥 Export CSV (ทุกม้วนใน ${batches.length} batches)</button>
-    </div>
-    <div class="batch-list">`;
+    </div>`;
+
+    // ===== Grouped view: date → machine =====
+    // Compute today/yesterday for default-open logic
+    const todayObj = new Date();
+    const today = todayObj.getFullYear() + '-' +
+      String(todayObj.getMonth() + 1).padStart(2, '0') + '-' +
+      String(todayObj.getDate()).padStart(2, '0');
+    const yObj = new Date(todayObj); yObj.setDate(yObj.getDate() - 1);
+    const yesterday = yObj.getFullYear() + '-' +
+      String(yObj.getMonth() + 1).padStart(2, '0') + '-' +
+      String(yObj.getDate()).padStart(2, '0');
+
+    // Group: date → machineName → [batches]
+    const byDate = {};
     batches.forEach(b => {
-      const productNames = (b.batch_products || [])
-        .sort((a, b) => a.sequence - b.sequence)
-        .map(p => p.product_name + (p.is_new_product ? ' (ใหม่)' : ''))
-        .join(', ');
-      const machineName = b.machines ? b.machines.name : '-';
-      const cnt = countsByBatch[b.id] || 0;
-      const isVoided = b.voided;
-      const voidedBadge = isVoided
-        ? `<span style="display:inline-block;padding:2px 8px;background:var(--danger);color:white;border-radius:5px;font-size:10px;font-weight:800;margin-left:8px;">ยกเลิกแล้ว</span>`
-        : '';
-      html += `<div class="batch-item" data-batch-id="${b.id}" style="cursor:pointer; ${isVoided ? 'opacity:0.6; background:#fef2f2;' : ''}">
-        <div>
-          <div class="batch-date">${b.production_date}${voidedBadge}</div>
-          <div style="font-size:11px;color:var(--text-dim);">${new Date(b.submitted_at).toLocaleString('th-TH')}${isVoided && b.voided_reason ? ' · ' + escapeHtml(b.voided_reason) : ''}</div>
-        </div>
-        <div class="batch-machine">${escapeHtml(machineName)}</div>
-        <div class="batch-products" title="${escapeHtml(productNames)}">${escapeHtml(productNames.length > 50 ? productNames.substring(0, 47) + '...' : productNames)}</div>
-        <div class="batch-count">${cnt} ม้วน</div>
-        <div class="batch-arrow">›</div>
-      </div>`;
+      const d = b.production_date;
+      if (!byDate[d]) byDate[d] = {};
+      const m = (b.machines ? b.machines.name : '') || '(ไม่ระบุ)';
+      if (!byDate[d][m]) byDate[d][m] = [];
+      byDate[d][m].push(b);
     });
-    html += '</div>';
+    const sortedDates = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
+
+    sortedDates.forEach(date => {
+      const machinesObj = byDate[date];
+      const sortedMachines = Object.keys(machinesObj).sort();
+      let dateBatches = 0, dateRolls = 0;
+      sortedMachines.forEach(m => {
+        machinesObj[m].forEach(b => {
+          dateBatches++;
+          dateRolls += (countsByBatch[b.id] || 0);
+        });
+      });
+      const isOpen = (date === today || date === yesterday);
+      const dateObj = new Date(date);
+      const weekday = dateObj.toLocaleDateString('th-TH', { weekday: 'short', day: 'numeric', month: 'short' });
+
+      html += `<div class="edit-date-group ${isOpen ? 'open' : ''}" data-date="${date}">
+        <div class="edit-date-header" data-toggle="date">
+          <span class="edit-date-caret">▶</span>
+          <span class="edit-date-label">${date}</span>
+          <span class="edit-date-weekday">(${weekday})</span>
+          <span class="edit-date-stats">
+            <span><b>${sortedMachines.length}</b> เครื่อง</span>
+            <span><b>${dateBatches}</b> batch</span>
+            <span><b>${dateRolls}</b> ม้วน</span>
+          </span>
+        </div>
+        <div class="edit-date-body">`;
+
+      sortedMachines.forEach(m => {
+        const mBatches = machinesObj[m];
+        const mRolls = mBatches.reduce((s, b) => s + (countsByBatch[b.id] || 0), 0);
+        html += `<div class="edit-machine-group open" data-machine="${escapeHtml(m)}">
+          <div class="edit-machine-header" data-toggle="machine">
+            <span class="edit-machine-caret">▶</span>
+            <span class="edit-machine-name">🏭 ${escapeHtml(m)}</span>
+            <span class="edit-machine-stats">${mBatches.length} batch · ${mRolls} ม้วน</span>
+          </div>
+          <div class="edit-machine-body">`;
+
+        mBatches.forEach(b => {
+          const productNames = (b.batch_products || [])
+            .sort((a, b) => a.sequence - b.sequence)
+            .map(p => p.product_name + (p.is_new_product ? ' (ใหม่)' : ''))
+            .join(', ');
+          const cnt = countsByBatch[b.id] || 0;
+          const submittedTime = new Date(b.submitted_at).toLocaleString('th-TH');
+          const isVoided = b.voided;
+          const voidedBadge = isVoided
+            ? `<span class="voided-badge" style="margin-left:6px;">ยกเลิก</span>`
+            : '';
+
+          html += `<div class="edit-batch-row ${isVoided ? 'voided' : ''}" data-batch-id="${b.id}" style="cursor:pointer;">
+            <div class="edit-batch-row-info">
+              <div class="edit-batch-row-products">📦 ${escapeHtml(productNames)}${voidedBadge}</div>
+              <div class="edit-batch-row-meta">
+                <span class="roll-count">${cnt} ม้วน</span>
+                <span>🕒 ${escapeHtml(submittedTime)}</span>
+                ${isVoided && b.voided_reason ? `<span style="color:var(--danger);">เหตุผล: ${escapeHtml(b.voided_reason)}</span>` : ''}
+              </div>
+            </div>
+            <div class="batch-arrow" style="font-size:20px; padding-right:6px;">›</div>
+          </div>`;
+        });
+
+        html += `</div></div>`;
+      });
+      html += `</div></div>`;
+    });
+
     container.innerHTML = html;
 
-    // Click to open detail modal
-    container.querySelectorAll('.batch-item[data-batch-id]').forEach(item => {
+    // Show expand/collapse buttons
+    const hGroupActions = document.getElementById('h-group-actions');
+    if (hGroupActions) hGroupActions.hidden = false;
+
+    // Toggle handlers (scoped to history container)
+    container.querySelectorAll('[data-toggle="date"]').forEach(el => {
+      el.addEventListener('click', () => {
+        el.parentElement.classList.toggle('open');
+      });
+    });
+    container.querySelectorAll('[data-toggle="machine"]').forEach(el => {
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        el.parentElement.classList.toggle('open');
+      });
+    });
+
+    // Click batch row to open detail modal
+    container.querySelectorAll('.edit-batch-row[data-batch-id]').forEach(item => {
       item.addEventListener('click', () => openBatchDetail(item.dataset.batchId));
     });
 
@@ -2941,6 +3157,22 @@ document.getElementById('btn-h-preset').addEventListener('click', () => {
   document.getElementById('h-machine').value = '';
   loadHistory();
 });
+
+// Expand / collapse all groups for history
+const btnHExpandAll = document.getElementById('btn-h-expand-all');
+const btnHCollapseAll = document.getElementById('btn-h-collapse-all');
+if (btnHExpandAll) {
+  btnHExpandAll.addEventListener('click', () => {
+    document.querySelectorAll('#h-result .edit-date-group, #h-result .edit-machine-group')
+      .forEach(g => g.classList.add('open'));
+  });
+}
+if (btnHCollapseAll) {
+  btnHCollapseAll.addEventListener('click', () => {
+    document.querySelectorAll('#h-result .edit-date-group')
+      .forEach(g => g.classList.remove('open'));
+  });
+}
 
 // ==================== VIEW 5: EDIT DATA ====================
 
@@ -3061,16 +3293,20 @@ async function loadEditList() {
 }
 
 // Render edit list with current search filter applied (client-side)
+// - With search term → flat list (sorted by date desc)
+// - Without search   → grouped by date → machine
 function renderEditList() {
   const container = document.getElementById('e-result');
   const searchEl = document.getElementById('e-search');
   const searchTerm = (searchEl ? searchEl.value : '').trim().toLowerCase();
+  const groupActions = document.getElementById('e-group-actions');
 
   const filtered = searchTerm
     ? editBatchCache.filter(b => b._haystack.includes(searchTerm))
     : editBatchCache;
 
   if (filtered.length === 0) {
+    if (groupActions) groupActions.hidden = true;
     if (searchTerm) {
       container.innerHTML = `<div class="empty"><span class="emoji">🔍</span><div class="empty-title">ไม่พบ "${escapeHtml(searchTerm)}" ในผลลัพธ์</div><div>ลองเปลี่ยนคำค้น หรือล้างช่องค้นหา</div></div>`;
     } else {
@@ -3089,19 +3325,12 @@ function renderEditList() {
     } catch (e) { return safe; }
   };
 
-  // Summary bar
-  let html = `<div class="edit-result-summary">
-    <span>พบ <b>${filtered.length}</b> batch${searchTerm ? ` (กรองจาก ${editBatchCache.length})` : ''}</span>
-    ${searchTerm ? `<span style="color:var(--accent);">กำลังค้นหา: "${escapeHtml(searchTerm)}"</span>` : ''}
-  </div>`;
-
-  html += '<div class="edit-batch-list">';
-  filtered.forEach(b => {
+  // Build a single batch row (used in both modes)
+  const renderBatchRow = (b) => {
     const productsStr = b._products.join(', ');
     const submittedTime = new Date(b.submitted_at).toLocaleString('th-TH');
     const isMatch = !!searchTerm;
 
-    // Show a snippet of matching jumbo lots if search matched one
     let lotSnippet = '';
     if (searchTerm && b._jumboLots.length > 0) {
       const matched = b._jumboLots.filter(l => l.toLowerCase().includes(searchTerm));
@@ -3111,18 +3340,14 @@ function renderEditList() {
       }
     }
 
-    html += `<div class="edit-batch-card ${b.voided ? 'voided' : ''} ${isMatch ? 'match' : ''}">
-      <div class="edit-batch-info">
-        <div class="edit-batch-title">
-          <span class="date">${hl(b.production_date)}</span>
-          · <span class="machine">${hl(b._machineName || '-')}</span>
-          · ${b._scanCount} ม้วน
-          ${b.voided ? '<span class="voided-badge">ยกเลิกแล้ว</span>' : ''}
-        </div>
-        <div class="edit-batch-meta">
-          📦 <span class="product-name">${hl(productsStr)}</span>
-          ${lotSnippet ? '<br>🏷️ ' + lotSnippet : ''}
-          <br><small>บันทึกเมื่อ ${escapeHtml(submittedTime)}${b.voided ? ' · ยกเลิก: ' + escapeHtml(b.voided_reason || '-') : ''}</small>
+    return `<div class="edit-batch-row ${b.voided ? 'voided' : ''} ${isMatch ? 'match' : ''}">
+      <div class="edit-batch-row-info">
+        <div class="edit-batch-row-products">📦 ${hl(productsStr)}${b.voided ? ' <span class="voided-badge">ยกเลิก</span>' : ''}</div>
+        <div class="edit-batch-row-meta">
+          <span class="roll-count">${b._scanCount} ม้วน</span>
+          <span>🕒 ${escapeHtml(submittedTime)}</span>
+          ${lotSnippet ? `<span>🏷️ ${lotSnippet}</span>` : ''}
+          ${b.voided ? `<span style="color:var(--danger);">เหตุผล: ${escapeHtml(b.voided_reason || '-')}</span>` : ''}
         </div>
       </div>
       <div class="edit-batch-actions">
@@ -3132,11 +3357,161 @@ function renderEditList() {
           : `<button class="mini-btn void" data-id="${b.id}">✕ ยกเลิก</button>`}
       </div>
     </div>`;
+  };
+
+  // ========== MODE 1: SEARCH (flat list) ==========
+  if (searchTerm) {
+    if (groupActions) groupActions.hidden = true;
+
+    let html = `<div class="edit-result-summary">
+      <span>พบ <b>${filtered.length}</b> batch (กรองจาก ${editBatchCache.length})</span>
+      <span style="color:var(--accent);">กำลังค้นหา: "${escapeHtml(searchTerm)}"</span>
+    </div>`;
+    html += '<div class="edit-batch-list">';
+    filtered.forEach(b => {
+      // For flat list, prepend date + machine to the row
+      const productsStr = b._products.join(', ');
+      const submittedTime = new Date(b.submitted_at).toLocaleString('th-TH');
+
+      let lotSnippet = '';
+      if (b._jumboLots.length > 0) {
+        const matched = b._jumboLots.filter(l => l.toLowerCase().includes(searchTerm));
+        if (matched.length > 0) {
+          lotSnippet = matched.slice(0, 3).map(l => `<span class="scan-snippet">${hl(l)}</span>`).join(' ');
+          if (matched.length > 3) lotSnippet += ` <small>+${matched.length - 3} อื่น</small>`;
+        }
+      }
+
+      html += `<div class="edit-batch-card ${b.voided ? 'voided' : ''} match">
+        <div class="edit-batch-info">
+          <div class="edit-batch-title">
+            <span class="date">${hl(b.production_date)}</span>
+            · <span class="machine">${hl(b._machineName || '-')}</span>
+            · ${b._scanCount} ม้วน
+            ${b.voided ? '<span class="voided-badge">ยกเลิกแล้ว</span>' : ''}
+          </div>
+          <div class="edit-batch-meta">
+            📦 <span class="product-name">${hl(productsStr)}</span>
+            ${lotSnippet ? '<br>🏷️ ' + lotSnippet : ''}
+            <br><small>บันทึกเมื่อ ${escapeHtml(submittedTime)}${b.voided ? ' · ยกเลิก: ' + escapeHtml(b.voided_reason || '-') : ''}</small>
+          </div>
+        </div>
+        <div class="edit-batch-actions">
+          <button class="mini-btn edit" data-id="${b.id}">✏️ แก้ไข</button>
+          ${b.voided
+            ? `<button class="mini-btn restore" data-id="${b.id}">↻ กู้คืน</button>`
+            : `<button class="mini-btn void" data-id="${b.id}">✕ ยกเลิก</button>`}
+        </div>
+      </div>`;
+    });
+    html += '</div>';
+    container.innerHTML = html;
+    attachEditHandlers(container);
+    return;
+  }
+
+  // ========== MODE 2: NO SEARCH (grouped by date → machine) ==========
+  if (groupActions) groupActions.hidden = false;
+
+  // Compute today/yesterday for default-open logic
+  const todayObj = new Date();
+  const today = todayObj.getFullYear() + '-' +
+    String(todayObj.getMonth() + 1).padStart(2, '0') + '-' +
+    String(todayObj.getDate()).padStart(2, '0');
+  const yObj = new Date(todayObj); yObj.setDate(yObj.getDate() - 1);
+  const yesterday = yObj.getFullYear() + '-' +
+    String(yObj.getMonth() + 1).padStart(2, '0') + '-' +
+    String(yObj.getDate()).padStart(2, '0');
+
+  // Group: date → machineName → [batches]
+  const byDate = {};
+  filtered.forEach(b => {
+    const d = b.production_date;
+    if (!byDate[d]) byDate[d] = {};
+    const m = b._machineName || '(ไม่ระบุ)';
+    if (!byDate[d][m]) byDate[d][m] = [];
+    byDate[d][m].push(b);
   });
-  html += '</div>';
+
+  // Sort dates desc
+  const sortedDates = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
+
+  const totalRolls = filtered.reduce((s, b) => s + b._scanCount, 0);
+
+  let html = `<div class="edit-result-summary">
+    <span>พบ <b>${filtered.length}</b> batch · รวม <b>${totalRolls}</b> ม้วน · <b>${sortedDates.length}</b> วัน</span>
+  </div>`;
+
+  sortedDates.forEach(date => {
+    const machinesObj = byDate[date];
+    // Sort machines alphabetically
+    const sortedMachines = Object.keys(machinesObj).sort();
+
+    // Aggregate stats for date
+    let dateBatches = 0, dateRolls = 0;
+    sortedMachines.forEach(m => {
+      machinesObj[m].forEach(b => {
+        dateBatches++;
+        dateRolls += b._scanCount;
+      });
+    });
+
+    // Default open if today/yesterday
+    const isOpen = date === today || date === yesterday;
+    const dateObj = new Date(date);
+    const weekday = dateObj.toLocaleDateString('th-TH', { weekday: 'short', day: 'numeric', month: 'short' });
+
+    html += `<div class="edit-date-group ${isOpen ? 'open' : ''}" data-date="${date}">
+      <div class="edit-date-header" data-toggle="date">
+        <span class="edit-date-caret">▶</span>
+        <span class="edit-date-label">${date}</span>
+        <span class="edit-date-weekday">(${weekday})</span>
+        <span class="edit-date-stats">
+          <span><b>${sortedMachines.length}</b> เครื่อง</span>
+          <span><b>${dateBatches}</b> batch</span>
+          <span><b>${dateRolls}</b> ม้วน</span>
+        </span>
+      </div>
+      <div class="edit-date-body">`;
+
+    sortedMachines.forEach(m => {
+      const batches = machinesObj[m];
+      const machineRolls = batches.reduce((s, b) => s + b._scanCount, 0);
+      // Open machine groups by default within an open date
+      html += `<div class="edit-machine-group open" data-machine="${escapeHtml(m)}">
+        <div class="edit-machine-header" data-toggle="machine">
+          <span class="edit-machine-caret">▶</span>
+          <span class="edit-machine-name">🏭 ${escapeHtml(m)}</span>
+          <span class="edit-machine-stats">${batches.length} batch · ${machineRolls} ม้วน</span>
+        </div>
+        <div class="edit-machine-body">`;
+      batches.forEach(b => {
+        html += renderBatchRow(b);
+      });
+      html += `</div></div>`;
+    });
+
+    html += `</div></div>`;
+  });
+
   container.innerHTML = html;
 
-  // Attach handlers
+  // Attach toggle handlers
+  container.querySelectorAll('[data-toggle="date"]').forEach(el => {
+    el.addEventListener('click', () => {
+      el.parentElement.classList.toggle('open');
+    });
+  });
+  container.querySelectorAll('[data-toggle="machine"]').forEach(el => {
+    el.addEventListener('click', () => {
+      el.parentElement.classList.toggle('open');
+    });
+  });
+  attachEditHandlers(container);
+}
+
+// Helper: attach edit/void/restore button handlers
+function attachEditHandlers(container) {
   container.querySelectorAll('.mini-btn.edit').forEach(btn => {
     btn.addEventListener('click', () => openEditor(btn.dataset.id));
   });
@@ -3831,6 +4206,22 @@ document.querySelectorAll('.edit-quick-btn').forEach(btn => {
     loadEditList();
   });
 });
+
+// Expand / collapse all groups
+const btnExpandAll = document.getElementById('btn-expand-all');
+const btnCollapseAll = document.getElementById('btn-collapse-all');
+if (btnExpandAll) {
+  btnExpandAll.addEventListener('click', () => {
+    document.querySelectorAll('#e-result .edit-date-group, #e-result .edit-machine-group')
+      .forEach(g => g.classList.add('open'));
+  });
+}
+if (btnCollapseAll) {
+  btnCollapseAll.addEventListener('click', () => {
+    document.querySelectorAll('#e-result .edit-date-group')
+      .forEach(g => g.classList.remove('open'));
+  });
+}
 
 // ==================== VIEW 6: STATS ====================
 
