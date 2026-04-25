@@ -668,6 +668,66 @@
   .login-footer a:hover { color: var(--accent); }
 
   /* ============ Edit View ============ */
+  .edit-search-row {
+    display: flex; gap: 10px; align-items: stretch;
+    margin-bottom: 12px; flex-wrap: wrap;
+  }
+  .edit-search-box {
+    flex: 1; min-width: 250px; position: relative;
+  }
+  .edit-search-box input {
+    width: 100%; padding: 12px 14px 12px 40px;
+    font-size: 15px; font-weight: 500;
+    border: 2px solid var(--border); border-radius: 10px;
+    background: var(--panel); color: var(--text);
+    font-family: inherit;
+  }
+  .edit-search-box input:focus {
+    outline: none; border-color: var(--accent);
+    box-shadow: 0 0 0 4px var(--accent-bg);
+  }
+  .edit-search-box::before {
+    content: "🔍"; position: absolute; left: 12px; top: 50%;
+    transform: translateY(-50%); font-size: 16px;
+    pointer-events: none;
+  }
+  .edit-search-box .clear-btn {
+    position: absolute; right: 8px; top: 50%;
+    transform: translateY(-50%); background: var(--panel-2);
+    border: none; width: 26px; height: 26px;
+    border-radius: 50%; cursor: pointer;
+    display: none; align-items: center; justify-content: center;
+    font-size: 14px; color: var(--text-dim);
+  }
+  .edit-search-box .clear-btn.show { display: flex; }
+  .edit-search-box .clear-btn:hover { background: var(--border); color: var(--text); }
+  .edit-quick-filters {
+    display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap;
+  }
+  .edit-quick-btn {
+    padding: 8px 16px; background: var(--panel-2);
+    border: 1.5px solid var(--border); border-radius: 18px;
+    font-size: 13px; font-weight: 700; color: var(--text-dim);
+    cursor: pointer; transition: all 0.15s;
+    font-family: inherit;
+  }
+  .edit-quick-btn:hover { color: var(--text); border-color: var(--accent); }
+  .edit-quick-btn.active {
+    background: var(--accent); color: white; border-color: var(--accent);
+  }
+  .edit-result-summary {
+    padding: 10px 14px; background: var(--panel-2);
+    border-radius: 8px; margin-bottom: 12px;
+    font-size: 13px; font-weight: 600; color: var(--text-dim);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .edit-result-summary b { color: var(--accent); font-size: 15px; }
+  mark.search-hl {
+    background: #fef08a; color: #713f12;
+    padding: 1px 3px; border-radius: 3px;
+    font-weight: 700;
+  }
+
   .edit-batch-list {
     display: grid; gap: 10px;
   }
@@ -683,10 +743,15 @@
     background: #fef2f2; opacity: 0.75;
     border-color: #fecaca;
   }
+  .edit-batch-card.match {
+    border-color: var(--accent); background: #fff7ed;
+    box-shadow: 0 0 0 2px rgba(194,65,12,0.15);
+  }
   .edit-batch-info { min-width: 0; }
   .edit-batch-title {
     font-weight: 700; font-size: 15px;
     display: flex; align-items: center; gap: 8px; margin-bottom: 4px;
+    flex-wrap: wrap;
   }
   .edit-batch-title .date { font-family: var(--mono); color: var(--accent); }
   .edit-batch-title .machine { color: var(--accent-2); }
@@ -695,6 +760,15 @@
     padding: 2px 8px; border-radius: 5px; font-size: 11px; font-weight: 700;
   }
   .edit-batch-meta { font-size: 13px; color: var(--text-dim); font-weight: 500; }
+  .edit-batch-meta .product-name {
+    color: var(--text); font-weight: 700; font-size: 14px;
+  }
+  .edit-batch-meta .scan-snippet {
+    display: inline-block; margin-left: 6px;
+    padding: 1px 8px; background: var(--panel-2);
+    border-radius: 10px; font-family: var(--mono);
+    font-size: 12px; color: var(--accent-2);
+  }
   .edit-batch-actions { display: flex; gap: 6px; }
   .mini-btn {
     padding: 8px 14px; font-family: inherit; font-weight: 700;
@@ -1152,7 +1226,24 @@
     <!-- Sub-view: Batch list -->
     <div class="panel" id="edit-list-panel">
       <div class="panel-title">⚙️ แก้ไขข้อมูล Batch</div>
-      <div class="panel-sub">ค้นหา batch แล้วคลิก "แก้ไข" เพื่อแก้ข้อมูล หรือ "ยกเลิก" เพื่อ mark voided</div>
+      <div class="panel-sub">ค้นหาด้วยเลขม้วน / ชื่อสินค้า / Jumbo lot หรือเลือกช่วงวันที่</div>
+
+      <!-- Search box: full-width, primary search method -->
+      <div class="edit-search-row">
+        <div class="edit-search-box">
+          <input type="text" id="e-search" placeholder="🔎 พิมพ์เลขม้วน, ชื่อสินค้า, Jumbo lot, หรือเครื่องจักร..." autocomplete="off">
+          <button type="button" class="clear-btn" id="e-search-clear" title="ล้าง">✕</button>
+        </div>
+      </div>
+
+      <!-- Quick date filters -->
+      <div class="edit-quick-filters">
+        <button type="button" class="edit-quick-btn" data-days="0">วันนี้</button>
+        <button type="button" class="edit-quick-btn" data-days="1">เมื่อวาน</button>
+        <button type="button" class="edit-quick-btn active" data-days="7">7 วัน</button>
+        <button type="button" class="edit-quick-btn" data-days="30">30 วัน</button>
+        <button type="button" class="edit-quick-btn" data-days="90">90 วัน</button>
+      </div>
 
       <div class="form-grid" style="grid-template-columns: 1fr 1fr 1fr auto;">
         <div>
@@ -2877,6 +2968,9 @@ async function logEdit(action, tableName, recordId, fieldName, oldVal, newVal, b
 }
 
 // ---- Batch list ----
+// Cached batch data for client-side filtering
+let editBatchCache = [];
+
 async function loadEditList() {
   const from = document.getElementById('e-from').value;
   const to = document.getElementById('e-to').value;
@@ -2911,66 +3005,147 @@ async function loadEditList() {
     if (error) throw error;
 
     if (!batches || batches.length === 0) {
+      editBatchCache = [];
       container.innerHTML = '<div class="empty"><span class="emoji">📭</span><div class="empty-title">ไม่พบ batch</div></div>';
       return;
     }
 
-    // Get scan counts
+    // Get scans for all batches (for both count + searching by roll number / jumbo lot)
     const batchIds = batches.map(b => b.id);
     const { data: scans } = await supabase
       .from('paper_scans')
-      .select('batch_id')
+      .select('batch_id, paper_type, jumbo_lot')
       .in('batch_id', batchIds);
-    const countsByBatch = {};
-    (scans || []).forEach(s => { countsByBatch[s.batch_id] = (countsByBatch[s.batch_id] || 0) + 1; });
 
-    let html = '<div class="edit-batch-list">';
-    batches.forEach(b => {
+    // Index scans per batch
+    const scansByBatch = {};
+    (scans || []).forEach(s => {
+      if (!scansByBatch[s.batch_id]) scansByBatch[s.batch_id] = [];
+      scansByBatch[s.batch_id].push(s);
+    });
+
+    // Enrich each batch with searchable text + scan data
+    editBatchCache = batches.map(b => {
+      const bScans = scansByBatch[b.id] || [];
       const products = (b.batch_products || [])
         .sort((a, b) => a.sequence - b.sequence)
-        .map(p => p.product_name).join(', ');
-      const machineName = b.machines ? b.machines.name : '-';
-      const cnt = countsByBatch[b.id] || 0;
-      const submittedTime = new Date(b.submitted_at).toLocaleString('th-TH');
+        .map(p => p.product_name);
+      const machineName = b.machines ? b.machines.name : '';
+      const machineDp = b.machines ? b.machines.dp : '';
+      const paperTypes = [...new Set(bScans.map(s => s.paper_type).filter(Boolean))];
+      const jumboLots = [...new Set(bScans.map(s => s.jumbo_lot).filter(Boolean))];
+      // Build a single lowercase haystack for fast contains-search
+      const haystack = [
+        b.production_date,
+        machineName, machineDp,
+        ...products,
+        ...paperTypes,
+        ...jumboLots
+      ].join(' ').toLowerCase();
+      return {
+        ...b,
+        _products: products,
+        _machineName: machineName,
+        _scanCount: bScans.length,
+        _paperTypes: paperTypes,
+        _jumboLots: jumboLots,
+        _haystack: haystack
+      };
+    });
 
-      html += `<div class="edit-batch-card ${b.voided ? 'voided' : ''}">
-        <div class="edit-batch-info">
-          <div class="edit-batch-title">
-            <span class="date">${b.production_date}</span>
-            · <span class="machine">${escapeHtml(machineName)}</span>
-            · ${cnt} ม้วน
-            ${b.voided ? '<span class="voided-badge">ยกเลิกแล้ว</span>' : ''}
-          </div>
-          <div class="edit-batch-meta">
-            📦 ${escapeHtml(products)}<br>
-            <small>บันทึกเมื่อ ${escapeHtml(submittedTime)}${b.voided ? ' · ยกเลิก: ' + escapeHtml(b.voided_reason || '-') : ''}</small>
-          </div>
-        </div>
-        <div class="edit-batch-actions">
-          <button class="mini-btn edit" data-id="${b.id}">✏️ แก้ไข</button>
-          ${b.voided
-            ? `<button class="mini-btn restore" data-id="${b.id}">↻ กู้คืน</button>`
-            : `<button class="mini-btn void" data-id="${b.id}">✕ ยกเลิก</button>`}
-        </div>
-      </div>`;
-    });
-    html += '</div>';
-    container.innerHTML = html;
-
-    // Attach handlers
-    container.querySelectorAll('.mini-btn.edit').forEach(btn => {
-      btn.addEventListener('click', () => openEditor(btn.dataset.id));
-    });
-    container.querySelectorAll('.mini-btn.void').forEach(btn => {
-      btn.addEventListener('click', () => voidBatch(btn.dataset.id));
-    });
-    container.querySelectorAll('.mini-btn.restore').forEach(btn => {
-      btn.addEventListener('click', () => restoreBatch(btn.dataset.id));
-    });
+    renderEditList();
   } catch (err) {
     console.error(err);
     container.innerHTML = `<div class="empty"><span class="emoji">⚠️</span><div class="empty-title">ค้นหาไม่สำเร็จ</div><div>${escapeHtml(err.message)}</div></div>`;
   }
+}
+
+// Render edit list with current search filter applied (client-side)
+function renderEditList() {
+  const container = document.getElementById('e-result');
+  const searchEl = document.getElementById('e-search');
+  const searchTerm = (searchEl ? searchEl.value : '').trim().toLowerCase();
+
+  const filtered = searchTerm
+    ? editBatchCache.filter(b => b._haystack.includes(searchTerm))
+    : editBatchCache;
+
+  if (filtered.length === 0) {
+    if (searchTerm) {
+      container.innerHTML = `<div class="empty"><span class="emoji">🔍</span><div class="empty-title">ไม่พบ "${escapeHtml(searchTerm)}" ในผลลัพธ์</div><div>ลองเปลี่ยนคำค้น หรือล้างช่องค้นหา</div></div>`;
+    } else {
+      container.innerHTML = '<div class="empty"><span class="emoji">📭</span><div class="empty-title">ไม่พบ batch</div></div>';
+    }
+    return;
+  }
+
+  // Highlight helper — escape regex special chars in user input
+  const hl = (text) => {
+    const safe = escapeHtml(text);
+    if (!searchTerm) return safe;
+    const escRe = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    try {
+      return safe.replace(new RegExp(escRe, 'gi'), m => `<mark class="search-hl">${m}</mark>`);
+    } catch (e) { return safe; }
+  };
+
+  // Summary bar
+  let html = `<div class="edit-result-summary">
+    <span>พบ <b>${filtered.length}</b> batch${searchTerm ? ` (กรองจาก ${editBatchCache.length})` : ''}</span>
+    ${searchTerm ? `<span style="color:var(--accent);">กำลังค้นหา: "${escapeHtml(searchTerm)}"</span>` : ''}
+  </div>`;
+
+  html += '<div class="edit-batch-list">';
+  filtered.forEach(b => {
+    const productsStr = b._products.join(', ');
+    const submittedTime = new Date(b.submitted_at).toLocaleString('th-TH');
+    const isMatch = !!searchTerm;
+
+    // Show a snippet of matching jumbo lots if search matched one
+    let lotSnippet = '';
+    if (searchTerm && b._jumboLots.length > 0) {
+      const matched = b._jumboLots.filter(l => l.toLowerCase().includes(searchTerm));
+      if (matched.length > 0) {
+        lotSnippet = matched.slice(0, 3).map(l => `<span class="scan-snippet">${hl(l)}</span>`).join(' ');
+        if (matched.length > 3) lotSnippet += ` <small>+${matched.length - 3} อื่น</small>`;
+      }
+    }
+
+    html += `<div class="edit-batch-card ${b.voided ? 'voided' : ''} ${isMatch ? 'match' : ''}">
+      <div class="edit-batch-info">
+        <div class="edit-batch-title">
+          <span class="date">${hl(b.production_date)}</span>
+          · <span class="machine">${hl(b._machineName || '-')}</span>
+          · ${b._scanCount} ม้วน
+          ${b.voided ? '<span class="voided-badge">ยกเลิกแล้ว</span>' : ''}
+        </div>
+        <div class="edit-batch-meta">
+          📦 <span class="product-name">${hl(productsStr)}</span>
+          ${lotSnippet ? '<br>🏷️ ' + lotSnippet : ''}
+          <br><small>บันทึกเมื่อ ${escapeHtml(submittedTime)}${b.voided ? ' · ยกเลิก: ' + escapeHtml(b.voided_reason || '-') : ''}</small>
+        </div>
+      </div>
+      <div class="edit-batch-actions">
+        <button class="mini-btn edit" data-id="${b.id}">✏️ แก้ไข</button>
+        ${b.voided
+          ? `<button class="mini-btn restore" data-id="${b.id}">↻ กู้คืน</button>`
+          : `<button class="mini-btn void" data-id="${b.id}">✕ ยกเลิก</button>`}
+      </div>
+    </div>`;
+  });
+  html += '</div>';
+  container.innerHTML = html;
+
+  // Attach handlers
+  container.querySelectorAll('.mini-btn.edit').forEach(btn => {
+    btn.addEventListener('click', () => openEditor(btn.dataset.id));
+  });
+  container.querySelectorAll('.mini-btn.void').forEach(btn => {
+    btn.addEventListener('click', () => voidBatch(btn.dataset.id));
+  });
+  container.querySelectorAll('.mini-btn.restore').forEach(btn => {
+    btn.addEventListener('click', () => restoreBatch(btn.dataset.id));
+  });
 }
 
 // ---- Void / Restore ----
@@ -3598,6 +3773,64 @@ async function saveEditor() {
 // ==== Hook handlers ====
 document.getElementById('btn-e-search').addEventListener('click', loadEditList);
 document.getElementById('e-show-voided').addEventListener('change', loadEditList);
+
+// Search box: client-side filter as you type (debounced)
+let editSearchTimer = null;
+const eSearchInput = document.getElementById('e-search');
+const eSearchClear = document.getElementById('e-search-clear');
+if (eSearchInput) {
+  eSearchInput.addEventListener('input', () => {
+    eSearchClear.classList.toggle('show', eSearchInput.value.length > 0);
+    clearTimeout(editSearchTimer);
+    editSearchTimer = setTimeout(() => {
+      if (editBatchCache.length > 0) renderEditList();
+    }, 150);
+  });
+  // Press Enter → search immediately
+  eSearchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      clearTimeout(editSearchTimer);
+      if (editBatchCache.length > 0) renderEditList();
+      else loadEditList();
+    } else if (e.key === 'Escape') {
+      eSearchInput.value = '';
+      eSearchClear.classList.remove('show');
+      if (editBatchCache.length > 0) renderEditList();
+    }
+  });
+}
+if (eSearchClear) {
+  eSearchClear.addEventListener('click', () => {
+    eSearchInput.value = '';
+    eSearchClear.classList.remove('show');
+    eSearchInput.focus();
+    if (editBatchCache.length > 0) renderEditList();
+  });
+}
+
+// Quick date filter buttons
+document.querySelectorAll('.edit-quick-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const days = parseInt(btn.dataset.days);
+    const today = new Date();
+    const from = new Date();
+    if (days === 0) {
+      // Today only
+      from.setTime(today.getTime());
+    } else if (days === 1) {
+      // Yesterday only — set both from and to to yesterday
+      from.setDate(today.getDate() - 1);
+      today.setDate(today.getDate() - 1);
+    } else {
+      from.setDate(today.getDate() - days);
+    }
+    document.getElementById('e-from').valueAsDate = from;
+    document.getElementById('e-to').valueAsDate = today;
+    document.querySelectorAll('.edit-quick-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    loadEditList();
+  });
+});
 
 // ==================== VIEW 6: STATS ====================
 

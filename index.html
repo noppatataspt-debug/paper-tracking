@@ -97,6 +97,43 @@
     box-shadow: 0 0 0 4px var(--accent-bg);
   }
 
+  /* Date backdate warning */
+  input[type="date"].is-backdate {
+    border-color: #f59e0b;
+    background: #fffbeb;
+    box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.15);
+  }
+  .date-warning {
+    margin-top: 10px; padding: 12px 14px;
+    background: #fef3c7; border: 1.5px solid #f59e0b;
+    border-radius: 10px; color: #92400e;
+    font-size: 14px; font-weight: 600;
+    display: none;
+    align-items: center; gap: 10px;
+  }
+  .date-warning.show { display: flex; }
+  .date-warning .icon { font-size: 20px; }
+  .date-warning .days-badge {
+    background: #f59e0b; color: white;
+    padding: 2px 10px; border-radius: 12px;
+    font-size: 13px; font-weight: 800;
+    margin-left: 4px;
+  }
+  .date-quick-row {
+    display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap;
+  }
+  .date-quick-btn {
+    padding: 6px 14px; background: var(--panel-2);
+    border: 1.5px solid var(--border); border-radius: 16px;
+    font-size: 13px; font-weight: 700; color: var(--text-dim);
+    cursor: pointer; transition: all 0.15s;
+    font-family: inherit;
+  }
+  .date-quick-btn:hover { color: var(--text); border-color: var(--accent); }
+  .date-quick-btn.active {
+    background: var(--accent); color: white; border-color: var(--accent);
+  }
+
   /* Department tabs for machine selection */
   .dp-tabs {
     display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap;
@@ -858,6 +895,19 @@
       <div class="field">
         <label class="field-label">วันที่ผลิต <span class="required">*</span></label>
         <input type="date" id="f-date">
+        <div class="date-quick-row" id="date-quick-row">
+          <button type="button" class="date-quick-btn" data-offset="0">วันนี้</button>
+          <button type="button" class="date-quick-btn" data-offset="-1">เมื่อวาน</button>
+          <button type="button" class="date-quick-btn" data-offset="-2">2 วันก่อน</button>
+          <button type="button" class="date-quick-btn" data-offset="-3">3 วันก่อน</button>
+        </div>
+        <div class="date-warning" id="date-warning">
+          <span class="icon">⚠️</span>
+          <div>
+            กำลังบันทึก<b>ย้อนหลัง</b> <span class="days-badge" id="date-days-back"></span>
+            <span style="margin-left:6px; font-weight:500;">— ตรวจสอบวันที่ก่อนกดบันทึก</span>
+          </div>
+        </div>
       </div>
 
       <div class="field">
@@ -1412,6 +1462,43 @@ function escapeHtml(s) {
 // --- Date ---
 const fDate = document.getElementById('f-date');
 fDate.valueAsDate = new Date();
+
+// Backdate warning + quick-select buttons
+function updateDateWarning() {
+  const selected = fDate.value;
+  if (!selected) return;
+  // Calculate days diff using local date components (avoid timezone shift)
+  const todayObj = new Date();
+  const today = todayObj.getFullYear() + '-' +
+    String(todayObj.getMonth() + 1).padStart(2, '0') + '-' +
+    String(todayObj.getDate()).padStart(2, '0');
+  const msPerDay = 86400000;
+  const daysDiff = Math.round((new Date(today) - new Date(selected)) / msPerDay);
+  const warning = document.getElementById('date-warning');
+  const badge = document.getElementById('date-days-back');
+  if (daysDiff > 0) {
+    fDate.classList.add('is-backdate');
+    badge.textContent = daysDiff + ' วัน';
+    warning.classList.add('show');
+  } else {
+    fDate.classList.remove('is-backdate');
+    warning.classList.remove('show');
+  }
+  // Highlight active quick-button (only if matches an offset)
+  document.querySelectorAll('.date-quick-btn').forEach(b => {
+    b.classList.toggle('active', parseInt(b.dataset.offset) === -daysDiff);
+  });
+}
+fDate.addEventListener('change', updateDateWarning);
+document.querySelectorAll('.date-quick-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const d = new Date();
+    d.setDate(d.getDate() + parseInt(btn.dataset.offset));
+    fDate.valueAsDate = d;
+    updateDateWarning();
+  });
+});
+updateDateWarning();
 
 // --- Machines with DP tabs ---
 const dpTabs = document.getElementById('dp-tabs');
@@ -2059,8 +2146,24 @@ function renderReview() {
       <span style="font-size: 12px;">ระบบจะบันทึกให้ แต่ mark ไว้ใน DB เพื่อให้ตรวจสอบภายหลัง</span>
     </div>`;
   }
+
+  // Backdate banner on review screen
+  let backdateBanner = '';
+  const todayObj = new Date();
+  const today = todayObj.getFullYear() + '-' +
+    String(todayObj.getMonth() + 1).padStart(2, '0') + '-' +
+    String(todayObj.getDate()).padStart(2, '0');
+  const daysDiff = Math.round((new Date(today) - new Date(state.date)) / 86400000);
+  if (daysDiff > 0) {
+    const dateStr = d.toLocaleDateString('th-TH', {weekday:'long', day:'numeric', month:'long', year:'numeric'});
+    backdateBanner = `<div style="padding: 14px 16px; background: #fef3c7; border: 2px solid #f59e0b; border-radius: 10px; margin-bottom: 16px; color: #92400e; font-size: 15px; font-weight: 600;">
+      ⚠️ <strong>กำลังบันทึกย้อนหลัง ${daysDiff} วัน</strong><br>
+      <span style="font-weight: 500; font-size: 14px;">วันที่ผลิต: ${dateStr}</span><br>
+      <span style="font-weight: 500; font-size: 13px; color: #78350f;">ถ้าไม่ถูกต้อง กดปุ่มย้อนกลับเพื่อแก้ไข</span>
+    </div>`;
+  }
   const container = document.getElementById('rv-groups');
-  container.innerHTML = invalidBanner;
+  container.innerHTML = backdateBanner + invalidBanner;
   // Sort products by scan count desc
   const sortedProducts = Object.entries(byProduct).sort((a, b) => {
     const countA = state.scans.filter(s => s.productName === a[0]).length;
@@ -2160,6 +2263,30 @@ async function loadMasterData() {
 
 // --- Submit batch to Supabase ---
 async function submitBatch() {
+  // Backdate safeguard — final guard before writing to DB
+  if (state.date) {
+    const todayObj = new Date();
+    const today = todayObj.getFullYear() + '-' +
+      String(todayObj.getMonth() + 1).padStart(2, '0') + '-' +
+      String(todayObj.getDate()).padStart(2, '0');
+    const daysDiff = Math.round((new Date(today) - new Date(state.date)) / 86400000);
+    if (daysDiff > 0) {
+      const dateObj = new Date(state.date);
+      const dateStr = dateObj.toLocaleDateString('th-TH', {
+        weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+      });
+      const ok = confirm(
+        '⚠️ ยืนยันวันที่ผลิต\n\n' +
+        'วันที่ผลิต: ' + dateStr + '\n' +
+        'ย้อนหลัง: ' + daysDiff + ' วัน จากวันนี้\n' +
+        'เครื่องจักร: ' + (state.machineName || '-') + '\n' +
+        'จำนวนม้วน: ' + state.scans.length + '\n\n' +
+        'กด OK เพื่อยืนยันบันทึก\n' +
+        'กด Cancel เพื่อกลับไปแก้ไข'
+      );
+      if (!ok) return;
+    }
+  }
   showLoading('กำลังบันทึกข้อมูล...');
   try {
     // Step 1: Insert production_batch
@@ -2816,7 +2943,10 @@ document.getElementById('btn-new').addEventListener('click', () => {
   state.products = [];
   state.currentProductIdx = 0;
   productEntries = [{ value: '', isValid: false }];
-  fDate.valueAsDate = new Date();
+  // ⚠️ Keep the previously-selected date (sticky) so users batch-recording
+  //    multiple machines on the same backdate don't have to reselect.
+  //    The backdate warning + submit confirm prevent accidental misuse.
+  updateDateWarning();
   document.getElementById('machine-hint').textContent = 'เลือกแผนกก่อน';
   renderMachineGrid();
   renderProductRows();
