@@ -2127,8 +2127,10 @@ async function loadMaster() {
       eMachine.appendChild(opt.cloneNode(true));
     });
 
-    // Save product list for autocomplete
-    window._allProducts = productsRes.data.map(p => p.product_name);
+    // Save product list for autocomplete — กรอง combo ออกเพื่อไม่ให้โผล่ใน dropdown
+    // (combo คือสินค้าหลายตัวที่บันทึกรวมเป็นชื่อเดียวกัน เช่น "AQP, SCE, TCPB")
+    const allProductNames = productsRes.data.map(p => p.product_name);
+    window._allProducts = allProductNames.filter(p => !isCombo(p));
     setupProductAutocomplete();
 
     setConnStatus(true, `✓ ${machinesRes.data.length} เครื่อง · ${productsRes.data.length} สินค้า`);
@@ -2161,6 +2163,48 @@ async function loadMaster() {
 }
 
 // ==================== AUTOCOMPLETE ====================
+
+// ============================================================
+// isCombo(name) — ตัดสินว่าชื่อสินค้านี้เป็น "combo" หรือไม่
+//   (= สินค้าหลายตัวที่ถูกบันทึกรวมกันไว้ในชื่อเดียว)
+//
+// ตัวอย่าง combo ที่ต้องจับ:
+//   "AQP, SCE, TCPB"           — comma คั่น
+//   "TVP FWS WWC"              — space คั่น
+//   "SCE. TW. FWS."            — period+space คั่น
+//   "SCE.TW.FWS"               — period ติดคั่น
+//   "TVP-FWS-WWC"              — dash คั่น (≥3 token)
+//   "SKIC6750-SKIC4400-SKIC5300"
+//
+// ตัวอย่างที่ "ไม่ใช่" combo (ห้ามตัดทิ้ง):
+//   "ZTH-76xT10"  (มี dash 1 จุด, มี lowercase, ไม่ใช่ token-like)
+//   "SKIC-5370"   (dash 1 จุด, 2 segments)
+//   "VKPC", "TK", "AQP", "SKIC4400"
+// ============================================================
+function isProductLikeToken(t) {
+  if (!t) return false;
+  return /^[A-Z]{2,}\d*$/.test(t);
+}
+function isCombo(name) {
+  if (!name || typeof name !== 'string') return false;
+  const s = name.trim();
+  if (!s) return false;
+  if (/,/.test(s)) return true;
+  if (/\.\s+\S/.test(s)) return true;
+  if ((s.match(/\./g) || []).length >= 2) {
+    const parts = s.split('.').filter(Boolean);
+    if (parts.length >= 3 && parts.every(isProductLikeToken)) return true;
+  }
+  if (/\s/.test(s)) {
+    const parts = s.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2 && parts.every(isProductLikeToken)) return true;
+  }
+  if (s.includes('-')) {
+    const parts = s.split('-').filter(Boolean);
+    if (parts.length >= 3 && parts.every(isProductLikeToken)) return true;
+  }
+  return false;
+}
 
 // Escape regex special chars
 function escRegex(s) {

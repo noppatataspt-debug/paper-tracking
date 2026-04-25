@@ -1560,10 +1560,88 @@ let activeAcRow = -1;  // which row's autocomplete is open
 let acActiveIdx = -1;
 let acItems = [];
 
+// ============================================================
+// isCombo(name) — ตัดสินว่าชื่อสินค้านี้เป็น "combo" หรือไม่
+//   (= สินค้าหลายตัวที่ถูกบันทึกรวมกันไว้ในชื่อเดียว)
+//
+// ตัวอย่าง combo ที่ต้องจับ:
+//   "AQP, SCE, TCPB"           — comma คั่น
+//   "TVP FWS WWC"              — space คั่น
+//   "SCE. TW. FWS."            — period+space คั่น
+//   "SCE.TW.FWS"               — period ติดคั่น
+//   "TVP-FWS-WWC"              — dash คั่น (≥3 token)
+//   "SKIC6750-SKIC4400-SKIC5300"
+//
+// ตัวอย่างที่ "ไม่ใช่" combo (ห้ามตัดทิ้ง):
+//   "ZTH-76xT10"  (มี dash 1 จุด, มี lowercase, ไม่ใช่ token-like)
+//   "SKIC-5370"   (dash 1 จุด, 2 segments)
+//   "VKPC", "TK", "AQP", "SKIC4400"
+// ============================================================
+function isProductLikeToken(t) {
+  // Token สินค้าเดี่ยวแบบสมบูรณ์ — ตัวอักษรพิมพ์ใหญ่ ≥ 2 ตัว ตามด้วยตัวเลข (จะมีหรือไม่ก็ได้)
+  if (!t) return false;
+  return /^[A-Z]{2,}\d*$/.test(t);
+}
+function isCombo(name) {
+  if (!name || typeof name !== 'string') return false;
+  const s = name.trim();
+  if (!s) return false;
+  // Rule 1: comma → combo เสมอ
+  if (/,/.test(s)) return true;
+  // Rule 2: ". " (period + space) → combo
+  if (/\.\s+\S/.test(s)) return true;
+  // Rule 2b: period ติดอย่างน้อย 2 จุด และทุก segment เป็น token-like → combo
+  if ((s.match(/\./g) || []).length >= 2) {
+    const parts = s.split('.').filter(Boolean);
+    if (parts.length >= 3 && parts.every(isProductLikeToken)) return true;
+  }
+  // Rule 3: whitespace แบ่ง ≥ 2 token-like → combo
+  if (/\s/.test(s)) {
+    const parts = s.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2 && parts.every(isProductLikeToken)) return true;
+  }
+  // Rule 4: dash แบ่ง ≥ 3 token-like → combo (≤2 segments ปล่อยผ่าน เช่น SKIC-5370)
+  if (s.includes('-')) {
+    const parts = s.split('-').filter(Boolean);
+    if (parts.length >= 3 && parts.every(isProductLikeToken)) return true;
+  }
+  return false;
+}
+
+// splitCombo(name) — แยก combo เป็น array ของชื่อสินค้าเดี่ยว
+// ใช้ logic เดียวกับ isCombo แต่ return array ของ token
+// ถ้าไม่ใช่ combo จะ return [name] เดิม
+function splitCombo(name) {
+  if (!isCombo(name)) return [name.trim()];
+  const s = name.trim();
+  // จัดลำดับ separator ตาม specificity (เฉพาะตัวที่ผ่าน isCombo มาแล้วเท่านั้น)
+  if (/,/.test(s)) {
+    return s.split(',').map(p => p.trim()).filter(Boolean);
+  }
+  if (/\.\s+/.test(s)) {
+    return s.split(/\.\s+/).map(p => p.replace(/\.$/, '').trim()).filter(Boolean);
+  }
+  if ((s.match(/\./g) || []).length >= 2) {
+    const parts = s.split('.').map(p => p.trim()).filter(Boolean);
+    if (parts.length >= 3 && parts.every(isProductLikeToken)) return parts;
+  }
+  if (/\s/.test(s)) {
+    const parts = s.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2 && parts.every(isProductLikeToken)) return parts;
+  }
+  if (s.includes('-')) {
+    const parts = s.split('-').filter(Boolean);
+    if (parts.length >= 3 && parts.every(isProductLikeToken)) return parts;
+  }
+  return [s];  // fallback
+}
+
 function filterProducts(q) {
   q = q.trim().toUpperCase();
-  if (!q) return DATA.products.slice(0, 50);
-  const scored = DATA.products.map(p => {
+  // กรอง combo ออกก่อนเสมอ — ไม่ให้โผล่ใน autocomplete
+  const pool = DATA.products.filter(p => !isCombo(p));
+  if (!q) return pool.slice(0, 50);
+  const scored = pool.map(p => {
     const pu = p.toUpperCase();
     let score = 0;
     if (pu === q) score = 1000;
@@ -1660,14 +1738,22 @@ function renderProductRows() {
         const val = input.value.trim();
         if (acActiveIdx >= 0 && acActiveIdx < acItems.length) {
           selectProductForRow(idx, acItems[acActiveIdx], false);
-        } else if (acActiveIdx === acItems.length && showingNewOption()) {
-          // selected "use this as new"
-          selectProductForRow(idx, val, true);
+        } else if (acActiveIdx === acItems.length && showingExtraOption()) {
+          // selected the extra option — could be "new" หรือ "split combo"
+          if (val && isCombo(val)) {
+            splitComboInRow(idx, val);
+          } else {
+            selectProductForRow(idx, val, true);
+          }
         } else if (acItems.length > 0) {
           selectProductForRow(idx, acItems[0], false);
         } else if (val) {
-          // nothing in list — commit as new
-          selectProductForRow(idx, val, true);
+          // nothing in list — ถ้าเป็น combo ให้ split, ไม่ใช่ค่อย commit เป็นใหม่
+          if (isCombo(val)) {
+            splitComboInRow(idx, val);
+          } else {
+            selectProductForRow(idx, val, true);
+          }
         }
       } else if (e.key === 'Escape') {
         renderAcDropdown(idx, false);
@@ -1686,12 +1772,30 @@ function renderProductRows() {
   });
 }
 
-function showingNewOption() {
-  // Check if current input value is non-empty and not in master
+// Helper — แยก combo ในแถวเดียวออกเป็นหลายแถวอัตโนมัติ
+function splitComboInRow(rowIdx, comboValue) {
+  const parts = splitCombo(comboValue);
+  if (parts.length <= 1) return;  // ไม่มีอะไรให้แยก
+  productEntries.splice(rowIdx, 1, ...parts.map(name => ({
+    value: name,
+    isValid: true,
+    isNew: !DATA.products.includes(name)
+  })));
+  renderProductRows();
+  checkSetup();
+}
+
+function showingExtraOption() {
+  // มี extra row ใต้ list มั้ย — ทั้ง "ใช้เป็นสินค้าใหม่" และ "แยก combo"
   if (activeAcRow < 0) return false;
   const val = productEntries[activeAcRow]?.value.trim();
   if (!val) return false;
+  // ไม่อยู่ใน master → มี extra แน่ (เป็น new หรือ split)
   return !DATA.products.includes(val);
+}
+// คงชื่อเดิมไว้เพื่อไม่ให้โค้ดส่วนอื่นพัง (ถ้ามี)
+function showingNewOption() {
+  return showingExtraOption();
 }
 
 function commitRowValue(idx) {
@@ -1703,8 +1807,38 @@ function commitRowValue(idx) {
   } else if (DATA.products.includes(val)) {
     entry.isValid = true;
     entry.isNew = false;
+  } else if (isCombo(val)) {
+    // ⚠️ ผู้ใช้พิมพ์ combo (เช่น "AQP, SCE, TCPB") — เสนอแยกอัตโนมัติ
+    const parts = splitCombo(val);
+    const ok = confirm(
+      '⚠️ ตรวจพบสินค้าหลายตัวรวมในช่องเดียว\n\n' +
+      'ที่กรอก: ' + val + '\n' +
+      'จะแยกเป็น ' + parts.length + ' รายการ:\n' +
+      parts.map((p, i) => '  ' + (i + 1) + '. ' + p).join('\n') + '\n\n' +
+      'กด OK เพื่อแยกเป็นหลายแถว\n' +
+      'กด Cancel เพื่อกลับไปแก้ไขเอง'
+    );
+    if (ok) {
+      // แทรก parts ทับแถวปัจจุบัน
+      productEntries.splice(idx, 1, ...parts.map(name => ({
+        value: name,
+        isValid: true,
+        isNew: !DATA.products.includes(name)
+      })));
+      renderProductRows();
+      checkSetup();
+      return;
+    } else {
+      // ผู้ใช้ปฏิเสธ — clear ค่าให้แก้เอง ไม่ปล่อยเป็น "ใหม่"
+      entry.value = '';
+      entry.isValid = false;
+      entry.isNew = false;
+      renderProductRows();
+      checkSetup();
+      return;
+    }
   } else {
-    // Non-empty, not in master → accept as new
+    // Non-empty, not in master, not a combo → accept as new
     entry.isValid = true;
     entry.isNew = true;
   }
@@ -1736,7 +1870,8 @@ function renderAcDropdown(rowIdx, show) {
   const input = productRows.querySelector(`.p-input[data-idx="${rowIdx}"]`);
   const q = input.value.trim();
   acItems = filterProducts(q);
-  const showNew = q && !DATA.products.includes(q);
+  const isQueryCombo = q && isCombo(q);
+  const showNew = q && !DATA.products.includes(q) && !isQueryCombo;
 
   let html = '';
   if (acItems.length === 0) {
@@ -1751,6 +1886,13 @@ function renderAcDropdown(rowIdx, show) {
     html += `<div class="autocomplete-new ${newActive ? 'active' : ''}" data-new="1">
       <span class="plus-icon">+</span>ใช้ "${escapeHtml(q)}" เป็นสินค้าใหม่
     </div>`;
+  } else if (isQueryCombo) {
+    // ผู้ใช้พิมพ์ combo — เสนอ split แทนที่จะให้บันทึกเป็นสินค้าใหม่ตัวเดียว
+    const parts = splitCombo(q);
+    const newActive = acActiveIdx === acItems.length;
+    html += `<div class="autocomplete-new ${newActive ? 'active' : ''}" data-split="1">
+      <span class="plus-icon">⇲</span>แยกเป็น ${parts.length} รายการ: ${parts.map(p => escapeHtml(p)).join(' · ')}
+    </div>`;
   }
   dd.innerHTML = html;
   dd.querySelectorAll('.autocomplete-item').forEach(el => {
@@ -1762,7 +1904,19 @@ function renderAcDropdown(rowIdx, show) {
   dd.querySelectorAll('.autocomplete-new').forEach(el => {
     el.addEventListener('mousedown', (e) => {
       e.preventDefault();
-      selectProductForRow(rowIdx, q, true);
+      if (el.dataset.split) {
+        // split mode: แยก combo ออกเป็นหลายแถว
+        const parts = splitCombo(q);
+        productEntries.splice(rowIdx, 1, ...parts.map(name => ({
+          value: name,
+          isValid: true,
+          isNew: !DATA.products.includes(name)
+        })));
+        renderProductRows();
+        checkSetup();
+      } else {
+        selectProductForRow(rowIdx, q, true);
+      }
     });
   });
   dd.classList.add('show');
@@ -2335,14 +2489,28 @@ async function submitBatch() {
     if (scanErr) throw scanErr;
 
     // Step 4: If there are new products, add them to master
-    const newProducts = state.products.filter(p => p.isNew).map(p => ({ product_name: p.name }));
+    // ⚠️ ต้องส่ง is_active: true ให้ชัดเจน เพราะการ query master ใช้
+    //    .eq('is_active', true) — ถ้า column นี้ไม่มี default true หรือ
+    //    เป็น null สินค้าใหม่จะไม่โผล่ในการโหลดครั้งถัดไป
+    // ⚠️ ใช้ ignoreDuplicates: false เพื่อให้กรณีที่สินค้าเคยถูก deactivate
+    //    (is_active = false) ถูก re-activate ขึ้นมาใหม่ได้ด้วย
+    const newProducts = state.products
+      .filter(p => p.isNew)
+      .map(p => ({ product_name: p.name, is_active: true }));
     if (newProducts.length > 0) {
-      // Use upsert with ignoreDuplicates to avoid conflict if added by another user
-      await supabase.from('products').upsert(newProducts, { onConflict: 'product_name', ignoreDuplicates: true });
-      // Update local master so subsequent entries recognize them
-      newProducts.forEach(np => {
-        if (!DATA.products.includes(np.product_name)) DATA.products.push(np.product_name);
-      });
+      const { error: upsertErr } = await supabase
+        .from('products')
+        .upsert(newProducts, { onConflict: 'product_name', ignoreDuplicates: false });
+      if (upsertErr) {
+        // ไม่ throw — ถือว่าบันทึก batch สำเร็จแล้ว แค่เตือน
+        console.warn('Insert new products failed:', upsertErr);
+        showToast('⚠️ เพิ่มสินค้าใหม่เข้า master ไม่สำเร็จ — โปรดลองใหม่ในรอบหน้า', true);
+      } else {
+        // Update local master so subsequent entries recognize them
+        newProducts.forEach(np => {
+          if (!DATA.products.includes(np.product_name)) DATA.products.push(np.product_name);
+        });
+      }
     }
 
     // Success
