@@ -1582,6 +1582,13 @@ function isProductLikeToken(t) {
   if (!t) return false;
   return /^[A-Z]{2,}\d*$/.test(t);
 }
+// Token ที่ "แน่ใจว่าเป็นสินค้าเดี่ยวสมบูรณ์" — ตัวอักษร ≥2 + ตัวเลข ≥1 ติดกันโดยไม่มีอักขระอื่น
+// ใช้สำหรับเคส 2-segment dash combo (เช่น "SKIC5370-SKIC6750")
+// เข้มกว่า isProductLikeToken เพราะต้องมีตัวเลข — เพื่อไม่ตัด "SKIC-5370" (segments แยก letter/digit)
+function isFullProductToken(t) {
+  if (!t) return false;
+  return /^[A-Z]{2,}\d+$/.test(t);
+}
 function isCombo(name) {
   if (!name || typeof name !== 'string') return false;
   const s = name.trim();
@@ -1600,10 +1607,15 @@ function isCombo(name) {
     const parts = s.split(/\s+/).filter(Boolean);
     if (parts.length >= 2 && parts.every(isProductLikeToken)) return true;
   }
-  // Rule 4: dash แบ่ง ≥ 3 token-like → combo (≤2 segments ปล่อยผ่าน เช่น SKIC-5370)
+  // Rule 4: dash
   if (s.includes('-')) {
     const parts = s.split('-').filter(Boolean);
+    // 4a: ≥3 segments token-like → combo (เช่น "TVP-FWS-WWC")
     if (parts.length >= 3 && parts.every(isProductLikeToken)) return true;
+    // 4b: 2 segments + ทั้งคู่เป็น "full token" (letter+digit ครบในตัว) → combo
+    // เช่น "SKIC5370-SKIC6750"
+    // แต่ไม่ตัด "SKIC-5370" (segments แยก letter/digit) หรือ "ZTH-76xT10" (มี lowercase)
+    if (parts.length === 2 && parts.every(isFullProductToken)) return true;
   }
   return false;
 }
@@ -1632,6 +1644,7 @@ function splitCombo(name) {
   if (s.includes('-')) {
     const parts = s.split('-').filter(Boolean);
     if (parts.length >= 3 && parts.every(isProductLikeToken)) return parts;
+    if (parts.length === 2 && parts.every(isFullProductToken)) return parts;
   }
   return [s];  // fallback
 }

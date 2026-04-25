@@ -2185,6 +2185,11 @@ function isProductLikeToken(t) {
   if (!t) return false;
   return /^[A-Z]{2,}\d*$/.test(t);
 }
+function isFullProductToken(t) {
+  // ตัวอักษร ≥2 + ตัวเลข ≥1 ติดกัน — ใช้สำหรับเคส 2-segment dash combo
+  if (!t) return false;
+  return /^[A-Z]{2,}\d+$/.test(t);
+}
 function isCombo(name) {
   if (!name || typeof name !== 'string') return false;
   const s = name.trim();
@@ -2201,7 +2206,11 @@ function isCombo(name) {
   }
   if (s.includes('-')) {
     const parts = s.split('-').filter(Boolean);
+    // ≥3 segments token-like → combo
     if (parts.length >= 3 && parts.every(isProductLikeToken)) return true;
+    // 2 segments + ทั้งคู่เป็น "full token" (letter+digit ครบในตัว) → combo
+    // เช่น "SKIC5370-SKIC6750" — แต่ไม่ตัด "SKIC-5370"
+    if (parts.length === 2 && parts.every(isFullProductToken)) return true;
   }
   return false;
 }
