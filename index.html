@@ -292,6 +292,93 @@
     font-family: var(--mono);
   }
 
+  /* ===== Product Input Modal (มือถือ — บังคับ soft keyboard) ===== */
+  .pim-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(15,23,42,0.55); z-index: 9998;
+    align-items: flex-start; justify-content: center;
+    padding: 24px 16px; overflow-y: auto;
+  }
+  .pim-overlay.show { display: flex; animation: fadeIn 0.15s ease; }
+  .pim-box {
+    background: var(--panel); border-radius: 16px;
+    width: 100%; max-width: 520px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+    overflow: hidden; margin-top: 8vh;
+  }
+  .pim-header {
+    padding: 18px 22px; border-bottom: 1.5px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .pim-title { font-size: 17px; font-weight: 700; color: var(--text); }
+  .pim-close {
+    background: none; border: none; font-size: 22px; color: var(--text-dim);
+    cursor: pointer; padding: 4px 8px; line-height: 1;
+  }
+  .pim-body { padding: 18px 22px 22px; }
+  .pim-input {
+    width: 100%; padding: 16px 18px;
+    border: 2px solid var(--border); border-radius: 12px;
+    font-family: inherit; font-size: 17px; font-weight: 600;
+    color: var(--text); background: var(--panel);
+  }
+  .pim-input:focus {
+    outline: none; border-color: var(--accent);
+    box-shadow: 0 0 0 4px var(--accent-bg);
+  }
+  .pim-warning {
+    margin-top: 10px; padding: 8px 12px;
+    background: #fef3c7; border: 1.5px solid #f59e0b;
+    border-radius: 8px; color: #92400e;
+    font-size: 13px; font-weight: 600;
+    display: none;
+  }
+  .pim-warning.show { display: block; animation: fadeIn 0.15s ease; }
+  .pim-list {
+    margin-top: 12px; max-height: 260px; overflow-y: auto;
+    border: 1px solid var(--border); border-radius: 10px;
+    display: none;
+  }
+  .pim-list.show { display: block; }
+  .pim-item {
+    padding: 13px 16px; cursor: pointer; font-size: 15px; font-weight: 600;
+    border-bottom: 1px solid #e5e7eb;
+    background: var(--panel);
+  }
+  .pim-item:last-child { border-bottom: none; }
+  .pim-item:nth-child(even) { background: #f9fafb; }
+  .pim-item:active, .pim-item.active {
+    background: var(--accent-bg) !important; color: var(--accent);
+  }
+  .pim-item mark {
+    background: transparent; color: var(--accent); font-weight: 800; padding: 0;
+    text-decoration: underline; text-decoration-thickness: 2px;
+    text-underline-offset: 3px;
+  }
+  .pim-new-item {
+    padding: 14px 16px; cursor: pointer; font-size: 15px;
+    background: var(--accent-2-bg); color: var(--accent-2);
+    font-weight: 700; border-top: 2px solid var(--accent-2);
+  }
+  .pim-new-item:active { background: var(--accent-2); color: white; }
+  .pim-empty {
+    padding: 14px 16px; color: var(--text-dim); font-size: 14px; font-weight: 500;
+  }
+  .pim-actions {
+    margin-top: 16px; display: flex; gap: 10px;
+  }
+  .pim-btn {
+    flex: 1; padding: 14px; border-radius: 10px;
+    font-family: inherit; font-size: 15px; font-weight: 700;
+    cursor: pointer; border: 2px solid transparent;
+  }
+  .pim-btn.primary {
+    background: var(--accent); color: white;
+  }
+  .pim-btn.ghost {
+    background: var(--panel); color: var(--text-dim); border-color: var(--border);
+  }
+
   .btn {
     padding: 16px 28px; background: var(--accent); color: white;
     border: none; border-radius: 12px; font-family: inherit; font-weight: 700;
@@ -860,6 +947,32 @@
   </div>
 </div>
 
+<!-- Product Input Modal — popup สำหรับพิมพ์ชื่อสินค้าบนมือถือ
+     แก้ปัญหา iOS Safari ไม่แสดง soft keyboard เมื่อมี Bluetooth scanner เชื่อมอยู่
+     โดยทำงานเป็น dedicated input field ที่ block scanner input -->
+<div class="pim-overlay" id="pim-overlay">
+  <div class="pim-box">
+    <div class="pim-header">
+      <span class="pim-title">พิมพ์ชื่อสินค้า</span>
+      <button class="pim-close" id="pim-close" aria-label="ปิด">✕</button>
+    </div>
+    <div class="pim-body">
+      <input type="text" class="pim-input" id="pim-input"
+             inputmode="text" autocomplete="off"
+             autocorrect="off" autocapitalize="characters"
+             placeholder="พิมพ์เพื่อค้นหา เช่น VKPC, TK, SKIC...">
+      <div class="pim-warning" id="pim-warning">
+        ⚠️ ตรวจพบการยิงจาก scanner — ช่องนี้สำหรับพิมพ์ชื่อสินค้าด้วยมือเท่านั้น
+      </div>
+      <div class="pim-list" id="pim-list"></div>
+      <div class="pim-actions">
+        <button class="pim-btn ghost" id="pim-cancel">ยกเลิก</button>
+        <button class="pim-btn primary" id="pim-confirm">ตกลง</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="conn-status online" id="conn-status">
   <span class="dot"></span>
   <span id="conn-label">เชื่อมต่อ DB</span>
@@ -1014,7 +1127,7 @@
         <div class="scanner-icon">📷</div>
         <div class="scanner-label">วาง cursor ในช่อง แล้วยิง QR ได้เลย</div>
         <input type="text" class="scan-input" id="scan-input"
-               placeholder="รอรับการสแกน..." autocomplete="off">
+               placeholder="รอรับการสแกน..." autocomplete="off" autofocus>
         <div class="scan-hint">สแกนต่อเนื่องได้เรื่อย ๆ — ไม่ต้องกดอะไรระหว่างสแกน</div>
         <div class="quick-scan" id="quick-scan"></div>
       </div>
@@ -1703,6 +1816,25 @@ function renderProductRows() {
 
   productRows.querySelectorAll('.p-input').forEach(input => {
     const idx = parseInt(input.dataset.idx);
+
+    // === Mobile: เปิด modal popup แทน เพื่อบังคับ soft keyboard ขึ้น ===
+    // ปัญหาคือเมื่อ Bluetooth QR scanner เชื่อมต่ออยู่ iOS Safari จะมองว่ามี
+    // external keyboard active → ไม่แสดง soft keyboard
+    // วิธีแก้: บน mobile เมื่อแตะ ให้เปิด modal ที่ block scanner input โดยตรง
+    if (isMobileDevice()) {
+      // ใช้ pointerdown/touchstart ดักก่อน focus เกิด
+      const openModalHandler = (e) => {
+        e.preventDefault();
+        input.blur();  // กัน focus ค้างที่ input เดิม
+        openProductInputModal(idx);
+      };
+      input.addEventListener('mousedown', openModalHandler);
+      input.addEventListener('touchstart', openModalHandler, { passive: false });
+      // กัน focus event เดิมไม่ให้ trigger autocomplete เพราะเราจะใช้ modal แทน
+      input.setAttribute('readonly', 'readonly');
+      input.style.cursor = 'pointer';
+    }
+
     input.addEventListener('focus', () => {
       activeAcRow = idx;
       acActiveIdx = -1;
@@ -1797,6 +1929,249 @@ function splitComboInRow(rowIdx, comboValue) {
   renderProductRows();
   checkSetup();
 }
+
+// ============================================================
+// Product Input Modal — สำหรับมือถือเท่านั้น
+// แก้ปัญหา iOS Safari ไม่แสดง soft keyboard เมื่อมี Bluetooth scanner
+// เชื่อมอยู่ โดยเปิด modal ใหม่ที่ block scanner input ผ่าน timing detection
+// ============================================================
+let pimCurrentRowIdx = -1;        // ม้วนที่กำลังแก้
+let pimActiveIdx = -1;             // ดัชนี item ที่ active ใน list
+let pimItems = [];                 // ผลค้นหาปัจจุบัน
+let pimLastKeyTime = 0;            // timing สำหรับตรวจ scanner
+let pimRapidKeyCount = 0;          // นับ keystroke ที่มาเร็วผิดปกติติดกัน
+
+function openProductInputModal(rowIdx) {
+  pimCurrentRowIdx = rowIdx;
+  pimActiveIdx = -1;
+  pimLastKeyTime = 0;
+  pimRapidKeyCount = 0;
+
+  const overlay = document.getElementById('pim-overlay');
+  const input = document.getElementById('pim-input');
+  const warning = document.getElementById('pim-warning');
+
+  // Pre-fill ค่าที่มีอยู่ (ถ้าเคยพิมพ์แล้ว)
+  const currentValue = (productEntries[rowIdx]?.value || '').trim();
+  input.value = currentValue;
+  warning.classList.remove('show');
+
+  overlay.classList.add('show');
+
+  // Focus input — ต้องทำใน synchronous user gesture เพื่อให้ iOS ยอมเปิด keyboard
+  // setTimeout(0) ช่วย defer หลัง browser paint modal เสร็จ
+  setTimeout(() => {
+    input.focus();
+    // Select all เพื่อให้พิมพ์ทับได้ทันที
+    if (currentValue) input.select();
+    pimRenderList(currentValue);
+  }, 50);
+}
+
+function closeProductInputModal() {
+  document.getElementById('pim-overlay').classList.remove('show');
+  pimCurrentRowIdx = -1;
+  pimActiveIdx = -1;
+  pimItems = [];
+}
+
+function pimRenderList(query) {
+  const listEl = document.getElementById('pim-list');
+  const q = (query || '').trim().toLowerCase();
+
+  if (!q) {
+    listEl.classList.remove('show');
+    listEl.innerHTML = '';
+    return;
+  }
+
+  // ค้นหาแบบเดียวกับ autocomplete หลัก — กรอง combo ออก
+  const pool = DATA.products.filter(p => !isCombo(p));
+  pimItems = pool.filter(p => p.toLowerCase().includes(q)).slice(0, 50);
+
+  let html = '';
+  if (pimItems.length === 0) {
+    html += '<div class="pim-empty">ไม่พบใน master สินค้า</div>';
+  } else {
+    pimItems.forEach((p, i) => {
+      const isActive = i === pimActiveIdx;
+      html += `<div class="pim-item ${isActive ? 'active' : ''}" data-p="${escapeHtml(p)}">${highlightMatch(p, q)}</div>`;
+    });
+  }
+
+  // เสนอ "ใช้เป็นสินค้าใหม่" หรือ "แยก combo" ถ้าไม่ตรงกับ master
+  const exactInMaster = DATA.products.includes(query.trim());
+  if (query.trim() && !exactInMaster) {
+    if (isCombo(query.trim())) {
+      const parts = splitCombo(query.trim());
+      html += `<div class="pim-new-item" data-split="1">⇲ แยกเป็น ${parts.length} รายการ: ${parts.map(p => escapeHtml(p)).join(' · ')}</div>`;
+    } else {
+      html += `<div class="pim-new-item" data-new="1">+ ใช้ "${escapeHtml(query.trim())}" เป็นสินค้าใหม่</div>`;
+    }
+  }
+
+  listEl.innerHTML = html;
+  listEl.classList.add('show');
+
+  // Bind clicks
+  listEl.querySelectorAll('.pim-item').forEach(el => {
+    el.addEventListener('click', () => {
+      pimCommit(el.dataset.p, false);
+    });
+  });
+  listEl.querySelectorAll('.pim-new-item').forEach(el => {
+    el.addEventListener('click', () => {
+      const val = document.getElementById('pim-input').value.trim();
+      if (el.dataset.split) {
+        pimCommitSplit(val);
+      } else {
+        pimCommit(val, true);
+      }
+    });
+  });
+}
+
+function pimCommit(productName, isNew) {
+  if (pimCurrentRowIdx < 0) return;
+  productEntries[pimCurrentRowIdx].value = productName;
+  productEntries[pimCurrentRowIdx].isValid = true;
+  productEntries[pimCurrentRowIdx].isNew = !!isNew;
+  closeProductInputModal();
+  renderProductRows();
+  checkSetup();
+}
+
+function pimCommitSplit(comboValue) {
+  if (pimCurrentRowIdx < 0) return;
+  const parts = splitCombo(comboValue);
+  if (parts.length <= 1) {
+    pimCommit(comboValue, true);
+    return;
+  }
+  productEntries.splice(pimCurrentRowIdx, 1, ...parts.map(name => ({
+    value: name,
+    isValid: true,
+    isNew: !DATA.products.includes(name)
+  })));
+  closeProductInputModal();
+  renderProductRows();
+  checkSetup();
+}
+
+// ตรวจ scanner: keystroke ที่มาเร็วกว่า 30ms ติดกัน 3 ครั้ง = scanner
+// คนพิมพ์เร็วสุดประมาณ 80-100ms ระหว่างตัวอักษร
+function pimDetectScanner(e) {
+  // ข้าม navigation keys
+  if (['Tab','Shift','Control','Alt','Meta','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Escape'].includes(e.key)) {
+    return false;
+  }
+
+  const now = Date.now();
+  const gap = now - pimLastKeyTime;
+  pimLastKeyTime = now;
+
+  // Key แรกหรือมาห่างเกิน 30ms → reset
+  if (gap > 30 || gap === now) {
+    pimRapidKeyCount = 0;
+    return false;
+  }
+
+  pimRapidKeyCount++;
+  return pimRapidKeyCount >= 3;
+}
+
+// ============= Modal Event Handlers =============
+(function setupPimEvents() {
+  const overlay = document.getElementById('pim-overlay');
+  const input = document.getElementById('pim-input');
+  const warning = document.getElementById('pim-warning');
+  const btnClose = document.getElementById('pim-close');
+  const btnCancel = document.getElementById('pim-cancel');
+  const btnConfirm = document.getElementById('pim-confirm');
+
+  if (!overlay || !input) return;
+
+  // ปิด modal
+  const close = () => closeProductInputModal();
+  btnClose.addEventListener('click', close);
+  btnCancel.addEventListener('click', close);
+  // คลิกพื้นหลังนอก box → ปิด
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) close();
+  });
+
+  // กด Escape → ปิด
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && overlay.classList.contains('show')) {
+      close();
+    }
+  });
+
+  // ตรวจ scanner: ถ้ายิงรัวเร็วผิดปกติ → ลบค่า + แสดง warning
+  input.addEventListener('keydown', (e) => {
+    if (pimDetectScanner(e)) {
+      e.preventDefault();
+      input.value = '';
+      warning.classList.add('show');
+      pimRenderList('');
+      // ซ่อน warning หลัง 3 วินาที
+      clearTimeout(input._warnTimer);
+      input._warnTimer = setTimeout(() => warning.classList.remove('show'), 3000);
+      return;
+    }
+    // Enter → เลือก active item หรือ commit ค่าปัจจุบัน
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const val = input.value.trim();
+      if (pimActiveIdx >= 0 && pimActiveIdx < pimItems.length) {
+        pimCommit(pimItems[pimActiveIdx], false);
+      } else if (pimItems.length > 0 && DATA.products.includes(val)) {
+        pimCommit(val, false);
+      } else if (val) {
+        if (isCombo(val)) {
+          pimCommitSplit(val);
+        } else if (DATA.products.includes(val)) {
+          pimCommit(val, false);
+        } else {
+          pimCommit(val, true);
+        }
+      }
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      pimActiveIdx = Math.min(pimActiveIdx + 1, pimItems.length - 1);
+      pimRenderList(input.value);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      pimActiveIdx = Math.max(pimActiveIdx - 1, 0);
+      pimRenderList(input.value);
+    }
+  });
+
+  input.addEventListener('input', () => {
+    pimActiveIdx = -1;
+    pimRenderList(input.value);
+  });
+
+  // ปุ่มตกลง: commit ค่าปัจจุบัน
+  btnConfirm.addEventListener('click', () => {
+    const val = input.value.trim();
+    if (!val) {
+      close();
+      return;
+    }
+    if (DATA.products.includes(val)) {
+      pimCommit(val, false);
+    } else if (isCombo(val)) {
+      pimCommitSplit(val);
+    } else {
+      pimCommit(val, true);
+    }
+  });
+})();
+
+// ============================================================
+// END Product Input Modal
+// ============================================================
 
 function showingExtraOption() {
   // มี extra row ใต้ list มั้ย — ทั้ง "ใช้เป็นสินค้าใหม่" และ "แยก combo"
