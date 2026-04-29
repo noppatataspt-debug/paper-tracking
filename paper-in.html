@@ -493,53 +493,64 @@ tr:hover td { background: var(--panel-2); }
 }
 
 /* ============================================
-   GROUPED LIST VIEW (Tab รายการ)
+   GROUPED LIST VIEW (Tab รายการ) - v2
+   3 levels: Day (dark) → Supplier (white) → Rolls (light)
    ============================================ */
+
+/* ── Level 1: Day (dark bar) ── */
 .group-day {
-  background: var(--panel); border: 1.5px solid var(--border);
-  border-radius: 10px; padding: 12px 14px;
-  margin-bottom: 8px; cursor: pointer;
-  transition: all 0.15s; user-select: none;
+  background: #1e293b; color: white;
+  border-radius: var(--border-radius-md, 8px);
+  padding: 14px 18px; margin-bottom: 10px;
+  cursor: pointer;
+  transition: background 0.15s;
+  user-select: none;
+  border: none;
 }
-.group-day:hover { background: var(--panel-2); border-color: var(--text-dim); }
+.group-day:hover { background: #334155; }
+.group-day.collapsed { background: #475569; opacity: 0.92; }
 .group-day-header {
   display: flex; align-items: center; justify-content: space-between;
   flex-wrap: wrap; gap: 8px;
 }
 .group-day-left {
-  display: flex; align-items: center; gap: 10px;
+  display: flex; align-items: center; gap: 12px;
 }
 .group-day-arrow {
-  font-size: 11px; color: var(--text-dim);
-  transition: transform 0.2s; display: inline-block; width: 12px;
+  font-size: 11px; opacity: 0.85;
+  transition: transform 0.2s;
+  display: inline-block; width: 12px;
 }
 .group-day.expanded .group-day-arrow { transform: rotate(90deg); }
 .group-day-date {
-  font-size: 15px; font-weight: 700;
+  font-size: 16px; font-weight: 700;
 }
 .group-day-tag {
-  background: var(--accent-bg); color: var(--accent);
-  font-size: 11px; padding: 2px 8px;
-  border-radius: var(--border-radius-md);
-  font-weight: 600;
+  background: rgba(255,255,255,0.18);
+  font-size: 11px; padding: 3px 10px;
+  border-radius: 999px;
+  font-weight: 500;
 }
 .group-day-stats {
-  font-size: 13px; color: var(--text-dim);
+  font-size: 13px; opacity: 0.92;
   font-family: var(--mono);
 }
 
 .group-day-children {
-  margin-left: 16px; margin-bottom: 8px;
+  margin-left: 12px; margin-bottom: 12px;
   display: none;
 }
 .group-day.expanded + .group-day-children { display: block; }
 
-/* Supplier+Invoice group */
+/* ── Level 2: Supplier+Invoice (white card with colored border) ── */
 .group-inv {
-  background: var(--panel); border: 1.5px solid var(--border);
-  border-radius: 8px; padding: 10px 14px;
-  margin-bottom: 6px; cursor: pointer;
-  transition: all 0.15s;
+  background: var(--panel);
+  border-radius: var(--border-radius-md, 8px);
+  padding: 10px 14px; margin-bottom: 6px;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+  border: none;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
 }
 .group-inv:hover { background: var(--panel-2); }
 .group-inv-header {
@@ -551,53 +562,89 @@ tr:hover td { background: var(--panel-2); }
 }
 .group-inv-arrow {
   font-size: 10px; color: var(--text-dim);
-  transition: transform 0.2s; display: inline-block; width: 10px;
+  transition: transform 0.2s;
+  display: inline-block; width: 10px;
 }
 .group-inv.expanded .group-inv-arrow { transform: rotate(90deg); }
+
 .group-inv-supplier { font-size: 14px; font-weight: 700; }
 .group-inv-no { font-size: 13px; color: var(--text-dim); font-family: var(--mono); }
 .group-inv-count {
-  background: var(--panel-2); font-size: 11px;
-  padding: 1px 8px; border-radius: var(--border-radius-md);
-  font-family: var(--mono); font-weight: 500;
+  font-size: 11px; padding: 2px 9px; border-radius: 999px;
+  font-family: var(--mono); font-weight: 600;
+  background: var(--panel-2); color: var(--text-dim);
 }
 .group-inv-stats {
   font-size: 12px; font-family: var(--mono);
   color: var(--text-dim);
 }
 
-/* Color-code by supplier (border-left) */
-.group-inv[data-supplier="SCG"] { border-left: 3px solid #185fa5; }
-.group-inv[data-supplier="MPK"] { border-left: 3px solid #BA7517; }
-.group-inv[data-supplier="UTP"] { border-left: 3px solid #1D9E75; }
-.group-inv[data-supplier="Muda"] { border-left: 3px solid #534AB7; }
-.group-inv[data-supplier="AP"] { border-left: 3px solid #D85A30; }
-.group-inv[data-supplier="TPC"] { border-left: 3px solid #993556; }
-.group-inv[data-supplier="Ching Mei"] { border-left: 3px solid #639922; }
-.group-inv[data-supplier="NTPM"] { border-left: 3px solid #888780; }
-.group-inv[data-supplier="SNP Paper"] { border-left: 3px solid #E24B4A; }
+/* Color-code by supplier — border-left + supplier name color + count badge */
+.group-inv[data-supplier="SCG"]        { border-left: 4px solid #185fa5; }
+.group-inv[data-supplier="SCG"] .group-inv-supplier { color: #185fa5; }
+.group-inv[data-supplier="SCG"] .group-inv-count    { background: #E6F1FB; color: #185fa5; }
 
+.group-inv[data-supplier="MPK"]        { border-left: 4px solid #BA7517; }
+.group-inv[data-supplier="MPK"] .group-inv-supplier { color: #BA7517; }
+.group-inv[data-supplier="MPK"] .group-inv-count    { background: #FAEEDA; color: #BA7517; }
+
+.group-inv[data-supplier="UTP"]        { border-left: 4px solid #1D9E75; }
+.group-inv[data-supplier="UTP"] .group-inv-supplier { color: #1D9E75; }
+.group-inv[data-supplier="UTP"] .group-inv-count    { background: #E1F5EE; color: #0F6E56; }
+
+.group-inv[data-supplier="Muda"]       { border-left: 4px solid #534AB7; }
+.group-inv[data-supplier="Muda"] .group-inv-supplier { color: #534AB7; }
+.group-inv[data-supplier="Muda"] .group-inv-count    { background: #EEEDFE; color: #534AB7; }
+
+.group-inv[data-supplier="AP"]         { border-left: 4px solid #D85A30; }
+.group-inv[data-supplier="AP"] .group-inv-supplier { color: #D85A30; }
+.group-inv[data-supplier="AP"] .group-inv-count    { background: #FAECE7; color: #993C1D; }
+
+.group-inv[data-supplier="TPC"]        { border-left: 4px solid #993556; }
+.group-inv[data-supplier="TPC"] .group-inv-supplier { color: #993556; }
+.group-inv[data-supplier="TPC"] .group-inv-count    { background: #FBEAF0; color: #993556; }
+
+.group-inv[data-supplier="Ching Mei"]  { border-left: 4px solid #639922; }
+.group-inv[data-supplier="Ching Mei"] .group-inv-supplier { color: #639922; }
+.group-inv[data-supplier="Ching Mei"] .group-inv-count    { background: #EAF3DE; color: #3B6D11; }
+
+.group-inv[data-supplier="NTPM"]       { border-left: 4px solid #5F5E5A; }
+.group-inv[data-supplier="NTPM"] .group-inv-supplier { color: #5F5E5A; }
+.group-inv[data-supplier="NTPM"] .group-inv-count    { background: #F1EFE8; color: #5F5E5A; }
+
+.group-inv[data-supplier="SNP Paper"]  { border-left: 4px solid #E24B4A; }
+.group-inv[data-supplier="SNP Paper"] .group-inv-supplier { color: #E24B4A; }
+.group-inv[data-supplier="SNP Paper"] .group-inv-count    { background: #FCEBEB; color: #A32D2D; }
+
+/* ── Level 3: Rolls table ── */
 .group-inv-children {
-  margin-left: 16px; margin-top: 6px; margin-bottom: 8px;
+  margin-left: 14px; margin-top: 4px; margin-bottom: 8px;
   display: none;
-  background: var(--panel-2);
-  border-radius: 8px;
-  padding: 6px 8px;
+  background: #f8fafc;
+  border-radius: var(--border-radius-md, 8px);
+  padding: 6px 10px;
 }
 .group-inv.expanded + .group-inv-children { display: block; }
 
 .group-inv-children table {
   font-size: 13px;
+  width: 100%;
 }
 .group-inv-children th {
   font-size: 10px; padding: 6px 8px;
-  background: transparent; border-bottom: 1px solid var(--border);
+  background: transparent;
+  border-bottom: 1px solid var(--border);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+  font-weight: 600;
 }
 .group-inv-children td {
-  padding: 6px 8px; border-bottom: 1px solid var(--border);
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
 }
 .group-inv-children tr:last-child td { border-bottom: none; }
-.group-inv-children tr:hover td { background: var(--panel); }
+.group-inv-children tr:hover td { background: white; }
 
 </style>
 </head>
@@ -1335,7 +1382,7 @@ const state = {
   manualRolls: [],      // for manual tab
   listData: [],         // for list tab
   listPage: 1,
-  listPerPage: 200,
+  listPerPage: 100,
 };
 
 // ============================================================
@@ -2096,7 +2143,7 @@ function renderGroupedList(rows, totalCount) {
     const dayId = `day-${dayIdx}`;
     
     html += `
-      <div class="group-day${isFirst ? ' expanded' : ''}" data-target="${dayId}">
+      <div class="group-day ${isFirst ? 'expanded' : 'collapsed'}" data-target="${dayId}">
         <div class="group-day-header">
           <div class="group-day-left">
             <span class="group-day-arrow">▶</span>
@@ -2170,8 +2217,10 @@ function renderGroupedList(rows, totalCount) {
     el.addEventListener('click', () => {
       const target = $('#' + el.dataset.target);
       if (!target) return;
-      el.classList.toggle('expanded');
-      target.style.display = el.classList.contains('expanded') ? 'block' : 'none';
+      const willExpand = !el.classList.contains('expanded');
+      el.classList.toggle('expanded', willExpand);
+      el.classList.toggle('collapsed', !willExpand);
+      target.style.display = willExpand ? 'block' : 'none';
     });
   });
   
