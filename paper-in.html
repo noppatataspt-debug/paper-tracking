@@ -696,9 +696,7 @@ tr:hover td { background: var(--panel-2); }
 
 <script type="module">
 
-// ============================================================
 // PARSERS (inlined from parsers.js)
-// ============================================================
 /* ============================================================
    Paper-In Parsers
    ============================================================
@@ -902,18 +900,23 @@ function parseMPK_CSV(text) {
     const lotIdx = row.findIndex(c => String(c || '').trim() === 'Paper_Lot');
     if (lotIdx !== -1) {
       headerIdx = i;
+      const widthIdx = row.findIndex(c => String(c || '').trim().startsWith('Width'));
+      // weight column: หา W[ei]ight ก่อน, ถ้าไม่เจอใช้ widthIdx + 1 (เพราะ MPK format ใหม่ไม่มี header)
+      let weightIdx = row.findIndex(c => /W[ie]ight/.test(String(c || '').trim()));
+      if (weightIdx === -1 && widthIdx !== -1) weightIdx = widthIdx + 1;
       headerCols = {
         invoice: row.findIndex(c => String(c || '').trim() === 'Invoice'),
         lot: lotIdx,
         type: row.findIndex(c => String(c || '').trim() === 'Type'),
-        width: row.findIndex(c => String(c || '').trim().startsWith('Width')),
-        weight: row.findIndex(c => /W[ie]ight/.test(String(c || '').trim())),
+        width: widthIdx,
+        weight: weightIdx,
       };
       break;
     }
   }
 
   if (headerIdx === -1) throw new Error('ไม่พบ header "Paper_Lot" ในไฟล์ MPK');
+  if (headerCols.weight === -1) throw new Error('ไม่พบคอลัมน์น้ำหนักในไฟล์ MPK');
 
   const rolls = [];
   for (let i = headerIdx + 1; i < rows.length; i++) {
@@ -982,10 +985,18 @@ function parseUnited_XLSX(rows) {
     if (!invoice_date && col.senddate !== -1) invoice_date = parseDate(row[col.senddate]);
     if (!po_no && col.po !== -1) po_no = String(row[col.po]).trim();
 
+    // Normalize paper_type: เพิ่ม - ระหว่างตัวอักษรกับตัวเลข (e.g. KI185 → KI-185)
+    // ยกเว้น whitelist ที่ใน DB ไม่มี - (CB350, CBS350, CPS450)
+    let pt = String(row[col.type] || '').trim();
+    const NO_DASH_WHITELIST = ['CB350', 'CBS350', 'CPS450'];
+    if (!NO_DASH_WHITELIST.includes(pt.toUpperCase()) && /^[A-Z]+\d+$/i.test(pt)) {
+      pt = pt.replace(/^([A-Z]+)(\d+)$/i, '$1-$2');
+    }
+
     rolls.push({
       paper_lot: lot,
       paper_lot_normalized: normalizeLot(lot),
-      paper_type: String(row[col.type] || '').trim(),
+      paper_type: pt,
       width_mm: parseNum(row[col.width_mm]),
       weight_kg: weight,
     });
@@ -1010,73 +1021,107 @@ function parseMuda_XLS(rows) {
 
   // ดึง metadata
   let invoice_no = null, invoice_date = null, po_no = null;
-  let product = null, width_mm = null, gsm = null;
+  let product = null;
 
   for (const row of rows) {
     if (!row) continue;
     for (let i = 0; i < row.length; i++) {
       const cell = String(row[i] || '').trim();
+      
+      // Invoice No: 'Invoice No :' followed by 'SSI', '26020559.0'
       if (cell === 'Invoice No :' && !invoice_no) {
-        for (let j = i+1; j < row.length; j++) {
-          const v = String(row[j] || '').trim();
-          if (v && v !== 'SSI') { invoice_no = 'SSI ' + v.replace(/\.0$/,''); break; }
+        const ssi = String(row[i+6] || '').trim();    // 'SSI' (col 27 → 33)
+        const num = String(row[i+7] || '').trim();    // '26020559.0' (col 27 → 34)
+        if (num) {
+          invoice_no = (ssi === 'SSI' ? 'SSI ' : '') + num.replace(/\.0$/, '');
         }
       }
-      if (cell.startsWith('Date') && !invoice_date) {
+      
+      // Date: 'Date           :' followed by date value
+      if (cell.startsWith('Date') && cell.includes(':') && !invoice_date) {
         for (let j = i+1; j < row.length; j++) {
           const v = row[j];
-          if (v) { invoice_date = parseDate(v); if (invoice_date) break; }
+          if (v) {
+            const d = parseDate(v);
+            if (d) { invoice_date = d; break; }
+          }
         }
       }
+      
+      // PO: 'As Per Purchase Order No. : PO-690047'
       if (cell.includes('Purchase Order No') && !po_no) {
         const m = cell.match(/PO-(\d+)/);
         if (m) po_no = 'PO-' + m[1];
       }
-      if (cell === 'CORE BOARD - E' || cell.includes('CORE BOARD')) product = 'CORE BOARD - E';
-      if (cell === 'Width :' || cell.startsWith('Width :')) {
-        const mm = row.slice(i).join(' ').match(/(\d+)\s*mm/);
-        if (mm) width_mm = parseInt(mm[1]);
-      }
-      if (/^\d{3}$/.test(cell) && i > 0 && String(row[i-1]||'').includes('gsm') === false) {
-        const nextCell = String(row[i+1] || '').trim();
-        if (nextCell === 'gsm') gsm = parseInt(cell);
-      }
+      
+      // Product type
+      if (cell === 'CORE BOARD - E' || cell.includes('CORE BOARD - E')) product = 'CBE';
+      else if (cell.includes('CORE BOARD - A')) product = 'CBA';
+      else if (cell.includes('CORE BOARD - S')) product = 'CBS';
     }
   }
 
-  // หา rolls - rows ที่มี serial number pattern (e.g. 42860403214G, 1055.0)
+  // หา rolls — แบ่งเป็น "blocks" ตาม width
+  // block เริ่มที่: row ที่มี 'gsm' + 'Width : ' + 'XXX mm'
+  // block จบที่: row ที่มี '= XX Rolls'
   const rolls = [];
-  const serialPattern = /^\d{10,12}[A-Z]?$/;
+  let currentWidth = null;
+  let currentGsm = null;
+  let inBlock = false;
 
-  for (const row of rows) {
-    if (!row) continue;
-    // Muda format: มี 2 ม้วน/row (2 columns of serial + kgs)
-    for (let i = 0; i < row.length - 1; i++) {
-      const cell = String(row[i] || '').trim();
-      if (!serialPattern.test(cell)) continue;
-
-      // หาค่า kgs ถัดไป (อาจอยู่ 3-5 column ถัดไป)
-      let weight = null;
-      for (let j = i+1; j < Math.min(i+8, row.length); j++) {
-        const v = parseNum(row[j]);
-        if (v && v > 500 && v < 3000) { weight = v; break; }
-      }
-
-      if (weight) {
-        // กำหนด paper_type จาก product + gsm ที่เจอ
-        let paper_type = 'CBE-450';  // default สำหรับ CORE BOARD - E 450gsm
-        if (gsm === 450 && product && product.includes('CORE BOARD - E')) paper_type = 'CBE-450';
-        else if (gsm === 350) paper_type = 'CBE-350';
-        else if (gsm === 600) paper_type = 'CBE-600';
-
-        rolls.push({
-          paper_lot: cell,
-          paper_lot_normalized: normalizeLot(cell),
-          paper_type,
-          width_mm,
-          weight_kg: weight,
-        });
-      }
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i] || [];
+    const rowText = row.map(v => String(v || '')).join('|');
+    
+    // Detect block header: มี "gsm" + "mm"
+    const gsmMatch = rowText.match(/(\d{2,4})\|gsm/);
+    const widthMatch = rowText.match(/(\d{3,5})\s*mm/);
+    if (gsmMatch && widthMatch) {
+      currentGsm = parseInt(gsmMatch[1]);
+      currentWidth = parseInt(widthMatch[1]);
+      inBlock = true;
+      continue;
+    }
+    
+    // End of block
+    if (rowText.includes('= ') && rowText.includes('Rolls')) {
+      inBlock = false;
+      continue;
+    }
+    
+    if (!inBlock || !currentWidth) continue;
+    
+    // Parse roll data: pattern คือ
+    // col 7: Serial (e.g. 42860201832G)
+    // col 13: kgs (e.g. 1035.0)
+    // col 21: Serial (ม้วนที่ 2)
+    // col 26: kgs (ม้วนที่ 2)
+    const serialPattern = /^\d{10,12}[A-Z]?$/i;
+    
+    // ม้วนแรก
+    const s1 = String(row[7] || '').trim();
+    const w1 = parseNum(row[13]);
+    if (serialPattern.test(s1) && w1) {
+      rolls.push({
+        paper_lot: s1,
+        paper_lot_normalized: normalizeLot(s1),
+        paper_type: makeMudaPaperType(product, currentGsm),
+        width_mm: currentWidth,
+        weight_kg: w1,
+      });
+    }
+    
+    // ม้วนที่ 2 (อาจไม่มี)
+    const s2 = String(row[21] || '').trim();
+    const w2 = parseNum(row[26]);
+    if (serialPattern.test(s2) && w2) {
+      rolls.push({
+        paper_lot: s2,
+        paper_lot_normalized: normalizeLot(s2),
+        paper_type: makeMudaPaperType(product, currentGsm),
+        width_mm: currentWidth,
+        weight_kg: w2,
+      });
     }
   }
 
@@ -1088,6 +1133,16 @@ function parseMuda_XLS(rows) {
     rolls,
   };
 }
+
+// Helper สำหรับสร้าง paper_type ของ Muda
+function makeMudaPaperType(product, gsm) {
+  if (!product || !gsm) return 'CBE-450'; // fallback
+  // CBE + gsm: CBE-450, CBE-350, CBE-600
+  // CBA + gsm: CBA-450, CBA-350
+  // CBS + gsm: CBS-450, CBS-350
+  return `${product}-${gsm}`;
+}
+
 
 // ============================================================
 // Detect file type & dispatch to parser
@@ -1117,9 +1172,7 @@ function detectSupplier(filename, content) {
 }
 
 
-// ============================================================
-// MAIN PAPER-IN LOGIC (inlined from paper-in.js)
-// ============================================================
+// MAIN LOGIC (inlined from paper-in.js)
 /* ============================================================
    Paper-In — Main Logic
    ============================================================
