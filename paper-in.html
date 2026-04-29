@@ -697,7 +697,7 @@ tr:hover td { background: var(--panel-2); }
 <script type="module">
 
 // ============================================================
-// PARSERS (originally in parsers.js)
+// PARSERS (inlined from parsers.js)
 // ============================================================
 /* ============================================================
    Paper-In Parsers
@@ -791,7 +791,10 @@ function parseSCG_TXT(text) {
     if (!lot || !type || isNaN(weight)) continue;
 
     // เก็บ invoice_no จาก line แรก
-    if (!invoice_no) invoice_no = dp;
+    if (!invoice_no) {
+      // ตัด 0 นำหน้าออก ถ้าเป็นตัวเลขทั้งหมด (e.g. 0535198778 → 535198778)
+      invoice_no = /^0\d+$/.test(dp) ? dp.replace(/^0+/, '') : dp;
+    }
     if (!invoice_date) invoice_date = parseDate(date);
     if (!po_no) po_no = po;
 
@@ -1092,11 +1095,11 @@ function parseMuda_XLS(rows) {
 function detectSupplier(filename, content) {
   const n = filename.toLowerCase();
   
-  // SCG - TXT ที่ชื่อขึ้นต้นด้วย 05351977xx
-  if (n.endsWith('.txt') && /05\d{8}/.test(n)) return 'SCG_TXT';
+  // SCG - TXT ที่ชื่อเป็นเลข 10 หลัก (เช่น 0535197728, 0416835736)
+  if (n.endsWith('.txt') && /^\d{10}\.txt$/.test(n)) return 'SCG_TXT';
   
-  // SCG COA - XLSX ที่มี "COA" ในชื่อและเริ่มด้วย 05351977xx
-  if (n.includes('coa') && /05\d{8}/.test(n)) return 'SCG_COA';
+  // SCG COA - XLSX ที่มี "COA" ในชื่อและเริ่มด้วยเลข 10 หลัก
+  if (n.includes('coa') && /\d{10}/.test(n)) return 'SCG_COA';
   
   // MPK - CSV PACKING_LIST  
   if (n.includes('packing') && n.endsWith('.csv')) return 'MPK_CSV';
@@ -1115,7 +1118,7 @@ function detectSupplier(filename, content) {
 
 
 // ============================================================
-// MAIN PAPER-IN LOGIC (originally in paper-in.js)
+// MAIN PAPER-IN LOGIC (inlined from paper-in.js)
 // ============================================================
 /* ============================================================
    Paper-In — Main Logic
@@ -1318,9 +1321,10 @@ async function handleFiles(fileList) {
       
       // ถ้าเป็น SCG COA → เก็บไว้ merge ทีหลัง
       if (supplier === 'SCG_COA') {
-        // Match โดย invoice_no (จากชื่อไฟล์)
-        const m = file.name.match(/05\d{8}/);
-        const invKey = m ? m[0] : file.name;
+        // Match โดย invoice_no (จากชื่อไฟล์) — ตัด 0 นำหน้าเหมือน parser
+        const m = file.name.match(/\d{10}/);
+        const rawNo = m ? m[0] : file.name;
+        const invKey = /^0\d+$/.test(rawNo) ? rawNo.replace(/^0+/, '') : rawNo;
         scgCoaByInv[invKey] = { filename: file.name, coa: result };
         continue;
       }
