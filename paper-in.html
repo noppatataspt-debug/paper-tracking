@@ -1019,7 +1019,7 @@ function parseUnited_XLSX(rows) {
 function parseMuda_XLS(rows) {
   if (!rows || rows.length < 10) throw new Error('ไฟล์ Muda ไม่สมบูรณ์');
 
-  // ดึง metadata
+  // ===== Metadata =====
   let invoice_no = null, invoice_date = null, po_no = null;
   let product = null;
 
@@ -1028,7 +1028,7 @@ function parseMuda_XLS(rows) {
     for (let i = 0; i < row.length; i++) {
       const cell = String(row[i] || '').trim();
       
-      // Invoice No: หา 'Invoice No :' แล้ว scan cells ถัดไปหา SSI + เลข
+      // Invoice No: 'Invoice No :' → scan ขวามือหา 'SSI' + เลข
       if (cell === 'Invoice No :' && !invoice_no) {
         let ssi = '', num = '';
         for (let j = i+1; j < row.length; j++) {
@@ -1039,14 +1039,14 @@ function parseMuda_XLS(rows) {
         if (num) invoice_no = ssi + num;
       }
       
-      // Date
+      // Date — รองรับทั้ง string และ Excel serial number
       if (cell.startsWith('Date') && cell.includes(':') && !invoice_date) {
         for (let j = i+1; j < row.length; j++) {
           const v = row[j];
-          if (v) {
-            const d = parseDate(v);
-            if (d) { invoice_date = d; break; }
-          }
+          if (v === null || v === undefined || v === '') continue;
+          // Try parseDate (handles serial number)
+          const d = parseDate(v);
+          if (d) { invoice_date = d; break; }
         }
       }
       
@@ -1056,18 +1056,18 @@ function parseMuda_XLS(rows) {
         if (m2) po_no = 'PO-' + m2[1];
       }
       
-      // Product type — รองรับหลายแบบ
-      const cellUpper = cell.toUpperCase();
-      if (cellUpper.includes('CORE BOARD - E')) product = 'CBE';
-      else if (cellUpper.includes('CORE BOARD - A')) product = 'CBA';
-      else if (cellUpper.includes('CORE BOARD - S')) product = 'CBS';
+      // Product type
+      const cu = cell.toUpperCase();
+      if (cu.includes('CORE BOARD - E')) product = 'CBE';
+      else if (cu.includes('CORE BOARD - A')) product = 'CBA';
+      else if (cu.includes('CORE BOARD - S')) product = 'CBS';
     }
   }
 
-  // หา rolls — strategy ใหม่: ไม่ใช้ index ตายตัว
-  // 1) loop ทุก row หา cell ที่ match serial pattern
-  // 2) หา weight ใกล้ๆ (อยู่หลัง serial ในระยะ 1-7 columns)
-  // 3) หา width ปัจจุบันจาก context (block header)
+  // ===== Rolls =====
+  // Strategy: scan ทุก row โดยไม่อิง column index
+  // - Detect block header: row ที่มี cell ='gsm' AND cell ที่ลงท้ายด้วย ' mm'
+  // - Roll row: cell ที่ match serial pattern → หาค่า weight 1-7 cells ถัดไป
   
   const rolls = [];
   let currentWidth = null;
@@ -1077,28 +1077,47 @@ function parseMuda_XLS(rows) {
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i] || [];
-    const rowText = row.map(v => String(v || '')).join(' | ');
     
-    // Detect block header: มี "gsm" + "mm"
-    // ตัวอย่าง: row[6]='450', row[8]='gsm', row[25]='Width : ', row[26]='1440 mm'
-    const gsmMatch = rowText.match(/(\d{2,4})\s*\|\s*gsm/) || rowText.match(/\b(\d{2,4})\s*gsm\b/i);
-    const widthMatch = rowText.match(/(\d{3,5})\s*mm/i);
-    if (gsmMatch && widthMatch) {
-      currentGsm = parseInt(gsmMatch[1]);
-      currentWidth = parseInt(widthMatch[1]);
+    // ลอง detect block header: row นี้มี 'gsm' (ตัวเดี่ยวๆ) AND มี 'XXXX mm'
+    let hasGsm = false, gsmValue = null;
+    let widthValue = null;
+    
+    for (let j = 0; j < row.length; j++) {
+      const c = String(row[j] || '').trim();
+      
+      // 'gsm' standalone — gsm value น่าจะอยู่ใน cell ก่อนหน้า (j-1, j-2, j-3)
+      if (c === 'gsm') {
+        hasGsm = true;
+        for (let k = j-1; k >= Math.max(0, j-3); k--) {
+          const prev = String(row[k] || '').trim();
+          const n = parseInt(prev);
+          if (!isNaN(n) && n >= 100 && n <= 900) { gsmValue = n; break; }
+        }
+      }
+      
+      // 'XXX mm' or 'XXXX mm'
+      const mmMatch = c.match(/^(\d{3,5})\s*mm$/i);
+      if (mmMatch) widthValue = parseInt(mmMatch[1]);
+    }
+    
+    if (hasGsm && widthValue) {
+      currentGsm = gsmValue || currentGsm;
+      currentWidth = widthValue;
       continue;
     }
     
-    // ข้าม row ที่เป็น "= XX Rolls" หรืออื่นๆ
+    // ข้าม row ที่จบ block
+    const rowText = row.map(v => String(v || '')).join(' ');
     if (rowText.includes('Rolls') && rowText.includes('=')) continue;
+    
     if (!currentWidth) continue;
     
-    // Scan ทั้ง row หา serial — แต่ละม้วนหาน้ำหนักใกล้ๆ
+    // หา serial+weight pairs ใน row นี้
     for (let j = 0; j < row.length; j++) {
       const cell = String(row[j] || '').trim();
       if (!serialPattern.test(cell)) continue;
       
-      // หาค่าน้ำหนักภายใน 1-7 cells ถัดไป
+      // หาน้ำหนักภายใน 1-7 cells ถัดไป (ตัวเลขอยู่ในช่วง 100-5000)
       let weight = null;
       for (let k = j+1; k < Math.min(j+8, row.length); k++) {
         const v = parseNum(row[k]);
@@ -1125,6 +1144,7 @@ function parseMuda_XLS(rows) {
     rolls,
   };
 }
+
 
 // Helper สำหรับสร้าง paper_type ของ Muda
 function makeMudaPaperType(product, gsm) {
