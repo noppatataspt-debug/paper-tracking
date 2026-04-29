@@ -1162,11 +1162,13 @@ function detectSupplier(filename, content) {
   // United - XLSX ชื่อ ASPT หรือ UTP
   if (n.startsWith('aspt') || n.startsWith('utp') || n.includes('united')) return 'United_XLSX';
   
-  // Muda - XLS ชื่อ Asia_Tube + PL
-  if (n.includes('asia_tube') && n.includes('pl_')) return 'Muda_XLS';
+  // Muda - XLS — normalize ทั้ง space และ underscore แล้วเทียบ
+  // (ชื่อจริง: 'Asia Tube_PL Inv#SSI ...' หรือ 'Asia_Tube_PL_Inv_SSI_...')
+  const nNorm = n.replace(/[\s_]+/g, '_');
+  if (nNorm.includes('asia_tube') && nNorm.includes('_pl_')) return 'Muda_XLS';
   
-  // Muda COA
-  if (n.includes('asia_tube') && n.includes('coa')) return 'Muda_COA';
+  // Muda COA — รับทั้ง .pdf และ .xlsx
+  if (nNorm.includes('asia_tube') && nNorm.includes('coa')) return 'Muda_COA';
   
   return null;
 }
