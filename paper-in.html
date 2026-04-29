@@ -1016,7 +1016,7 @@ function parseUnited_XLSX(rows) {
 // ไฟล์ซับซ้อน - มี header หลายบรรทัด, data กระจายในหลาย column
 // ใช้ strategy: หา row ที่มี serial + kgs pattern
 // ============================================================
-function parseMuda_XLS(rows) {
+function parseMuda_XLS(rows, filename) {
   if (!rows || rows.length < 10) throw new Error('ไฟล์ Muda ไม่สมบูรณ์');
 
   // ===== Metadata =====
@@ -1125,10 +1125,16 @@ function parseMuda_XLS(rows) {
       }
       
       if (weight) {
+        // priority: ชื่อไฟล์ > product+gsm > fallback
+        const ptFromFilename = getMudaPaperTypeFromFilename(filename);
+        const ptFromBlock = makeMudaPaperType(product, currentGsm);
+        let pt = ptFromFilename || ptFromBlock || 'CBE-450';
+        pt = normalizeMudaPaperType(pt);
+        
         rolls.push({
           paper_lot: cell,
           paper_lot_normalized: normalizeLot(cell),
-          paper_type: makeMudaPaperType(product, currentGsm),
+          paper_type: pt,
           width_mm: currentWidth,
           weight_kg: weight,
         });
@@ -1153,6 +1159,28 @@ function makeMudaPaperType(product, gsm) {
 }
 
 
+
+// Helper สำหรับสร้าง paper_type ของ Muda
+// ดึงจากชื่อไฟล์เป็นหลัก (เช่น "(CBE-450 gsm)", "(M700-490 gsm)", "(CBS-350 gsm)")
+function getMudaPaperTypeFromFilename(filename) {
+  if (!filename) return null;
+  // หา pattern เช่น "CBE-450 gsm", "M700-490 gsm", "CBS-350 gsm"
+  // ระวัง: ในชื่อไฟล์อาจมี space ถูกแทนด้วย _ ได้
+  const norm = filename.replace(/_/g, ' ');
+  const m = norm.match(/\(?\s*([A-Z]+\d*-?\d+)\s*gsm/i);
+  if (m) return m[1].toUpperCase();
+  return null;
+}
+
+// Normalize ตาม whitelist ของ DB (ที่ไม่มี -)
+function normalizeMudaPaperType(pt) {
+  if (!pt) return null;
+  const NO_DASH_WHITELIST = ['CB350', 'CBS350', 'CPS450'];
+  // ถ้า strip - แล้วอยู่ใน whitelist → ใช้แบบไม่มี -
+  const noDash = pt.replace(/-/g, '');
+  if (NO_DASH_WHITELIST.includes(noDash)) return noDash;
+  return pt;
+}
 
 // ============================================================
 // Detect file type & dispatch to parser
@@ -1482,7 +1510,7 @@ async function parseFile(file, supplier) {
     const wb = XLSX.read(buf, { type: 'array' });
     const ws = wb.Sheets[wb.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-    const data = parseMuda_XLS(rows);
+    const data = parseMuda_XLS(rows, file.name);  // pass filename for paper_type detection
     return { supplier: 'Muda', data, status: 'ok' };
   }
   
