@@ -1,0 +1,1942 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>รับเข้ากระดาษ — Paper-In</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   Paper-In — Styles
+   Consistent with index.html & dashboard.html
+   Accent: Teal (เพื่อแยกจาก Orange ของ scan และ Blue ของ dashboard)
+   ============================================================ */
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #f6f7f9;
+  --panel: #ffffff;
+  --panel-2: #eef1f6;
+  --border: #c8cfda;
+  --text: #0f172a;
+  --text-dim: #475569;
+  --accent: #0e7490;
+  --accent-bg: #cffafe;
+  --accent-hover: #0c5c73;
+  --success: #047857;
+  --success-bg: #d1fae5;
+  --danger: #b91c1c;
+  --danger-bg: #fee2e2;
+  --warning: #b45309;
+  --warning-bg: #fef3c7;
+  --info: #1d4ed8;
+  --info-bg: #dbeafe;
+  --mono: 'JetBrains Mono', monospace;
+}
+
+body {
+  font-family: 'IBM Plex Sans Thai', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  padding: 24px 16px;
+  line-height: 1.55;
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+}
+
+.container { max-width: 1100px; margin: 0 auto; }
+
+/* ============================================
+   HEADER
+   ============================================ */
+.header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 24px; gap: 16px; flex-wrap: wrap;
+}
+.header h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
+.header h1 span { color: var(--accent); }
+.header .subtitle {
+  color: var(--text-dim); font-size: 14px; margin-top: 4px;
+}
+.nav-links { display: flex; gap: 8px; }
+.nav-link {
+  padding: 8px 14px; border-radius: 8px;
+  background: var(--panel); border: 1.5px solid var(--border);
+  font-size: 14px; font-weight: 500; color: var(--text-dim);
+  text-decoration: none; transition: all 0.15s;
+}
+.nav-link:hover { background: var(--panel-2); color: var(--text); }
+
+/* ============================================
+   TABS
+   ============================================ */
+.tabs {
+  display: flex; gap: 2px; margin-bottom: 20px;
+  border-bottom: 2px solid var(--border);
+}
+.tab {
+  padding: 12px 20px; font-size: 15px; font-weight: 600;
+  background: transparent; border: none; cursor: pointer;
+  color: var(--text-dim); position: relative;
+  font-family: inherit; transition: color 0.15s;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--accent); }
+.tab.active::after {
+  content: ''; position: absolute; bottom: -2px; left: 0; right: 0;
+  height: 3px; background: var(--accent); border-radius: 2px 2px 0 0;
+}
+.tab-icon { font-size: 16px; }
+.tab-badge {
+  display: inline-block; margin-left: 4px; padding: 2px 8px;
+  background: var(--panel-2); border-radius: 999px;
+  font-size: 12px; font-weight: 600; font-family: var(--mono);
+}
+.tab.active .tab-badge { background: var(--accent-bg); color: var(--accent); }
+
+.tab-content { display: none; }
+.tab-content.active { display: block; animation: fadeIn 0.2s ease; }
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================
+   PANELS
+   ============================================ */
+.panel {
+  background: var(--panel); border: 1.5px solid var(--border);
+  border-radius: 12px; padding: 20px; margin-bottom: 16px;
+}
+.panel-title {
+  font-size: 13px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.05em; color: var(--text-dim); margin-bottom: 14px;
+  display: flex; align-items: center; gap: 8px;
+}
+.panel-title-icon {
+  width: 24px; height: 24px; display: inline-flex;
+  align-items: center; justify-content: center;
+  background: var(--accent-bg); color: var(--accent);
+  border-radius: 6px; font-size: 13px;
+}
+
+/* ============================================
+   FORMS
+   ============================================ */
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+.form-group { display: flex; flex-direction: column; gap: 6px; }
+.form-group label {
+  font-size: 13px; font-weight: 600; color: var(--text-dim);
+}
+.form-group label .required { color: var(--danger); }
+.form-group input,
+.form-group select,
+.form-group textarea {
+  padding: 10px 12px; font-size: 15px;
+  font-family: inherit;
+  background: var(--panel); border: 1.5px solid var(--border);
+  border-radius: 8px; color: var(--text);
+  transition: all 0.15s;
+}
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  outline: none; border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+.form-group .error-msg { color: var(--danger); font-size: 12px; display: none; }
+.form-group.error input,
+.form-group.error select { border-color: var(--danger); }
+.form-group.error .error-msg { display: block; }
+input.mono { font-family: var(--mono); }
+
+/* ============================================
+   UPLOAD ZONE (Tab 1)
+   ============================================ */
+.supplier-badges {
+  display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px;
+}
+.supp-badge {
+  padding: 4px 12px; font-size: 12px; font-weight: 600;
+  border-radius: 999px; font-family: var(--mono);
+  border: 1.5px solid transparent;
+}
+.supp-ok {
+  background: var(--success-bg); color: var(--success);
+  border-color: var(--success);
+}
+.supp-pending {
+  background: var(--panel-2); color: var(--text-dim);
+  border-color: var(--border);
+}
+
+.upload-zone {
+  border: 2.5px dashed var(--border); border-radius: 12px;
+  padding: 40px 20px; text-align: center;
+  background: var(--panel-2); cursor: pointer;
+  transition: all 0.2s;
+}
+.upload-zone:hover {
+  border-color: var(--accent); background: var(--accent-bg);
+}
+.upload-zone.dragover {
+  border-color: var(--accent); background: var(--accent-bg);
+  transform: scale(1.01);
+}
+.upload-icon { font-size: 40px; margin-bottom: 8px; }
+.upload-title { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+.upload-hint { font-size: 13px; color: var(--text-dim); }
+
+/* Parsed invoice cards */
+.inv-card {
+  background: var(--panel); border: 1.5px solid var(--border);
+  border-radius: 10px; padding: 14px; margin-top: 12px;
+}
+.inv-card.ok { border-color: var(--success); background: linear-gradient(to right, var(--success-bg) 4px, var(--panel) 4px); }
+.inv-card.err { border-color: var(--danger); background: linear-gradient(to right, var(--danger-bg) 4px, var(--panel) 4px); }
+.inv-card.warn { border-color: var(--warning); background: linear-gradient(to right, var(--warning-bg) 4px, var(--panel) 4px); }
+
+.inv-card-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 10px; flex-wrap: wrap; gap: 8px;
+}
+.inv-card-title {
+  font-weight: 700; font-size: 15px;
+  display: flex; align-items: center; gap: 8px;
+}
+.inv-card-title .filename {
+  font-family: var(--mono); font-size: 12px;
+  color: var(--text-dim); font-weight: 500;
+}
+.inv-status {
+  padding: 3px 10px; font-size: 11px; font-weight: 700;
+  border-radius: 999px; font-family: var(--mono);
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.inv-status.ok { background: var(--success-bg); color: var(--success); }
+.inv-status.err { background: var(--danger-bg); color: var(--danger); }
+.inv-status.warn { background: var(--warning-bg); color: var(--warning); }
+
+.inv-meta {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px; font-size: 13px; margin-bottom: 10px;
+}
+.inv-meta-item .label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+.inv-meta-item .value { font-weight: 600; font-family: var(--mono); font-size: 14px; }
+
+.inv-rolls-summary {
+  padding: 10px 12px; background: var(--panel-2);
+  border-radius: 8px; margin-bottom: 10px;
+  font-size: 13px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+}
+.inv-rolls-summary strong { font-family: var(--mono); }
+
+.inv-rolls-table {
+  max-height: 240px; overflow-y: auto;
+  border: 1px solid var(--border); border-radius: 8px;
+  margin-bottom: 10px;
+}
+.inv-rolls-table table {
+  width: 100%; font-size: 13px; border-collapse: collapse;
+}
+.inv-rolls-table th {
+  position: sticky; top: 0; background: var(--panel-2);
+  padding: 6px 10px; text-align: left; font-weight: 700;
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--text-dim); border-bottom: 1px solid var(--border);
+}
+.inv-rolls-table td {
+  padding: 6px 10px; border-bottom: 1px solid var(--border);
+}
+.inv-rolls-table tr:last-child td { border-bottom: none; }
+.inv-rolls-table .mono { font-family: var(--mono); font-size: 12px; }
+
+.inv-card-actions {
+  display: flex; gap: 8px; justify-content: flex-end;
+  padding-top: 10px; border-top: 1px solid var(--border);
+  margin-top: 4px;
+}
+
+.help-panel {
+  background: var(--info-bg); border: 1.5px solid var(--info);
+  border-radius: 10px; padding: 14px 18px;
+  font-size: 13px;
+}
+.help-panel .help-title {
+  font-weight: 700; color: var(--info); margin-bottom: 8px;
+}
+.help-panel ul { padding-left: 20px; color: var(--text); }
+.help-panel li { margin-bottom: 4px; }
+
+/* ============================================
+   MANUAL - ROLL LIST (Tab 2)
+   ============================================ */
+.rolls-count-inline { color: var(--accent); font-weight: 600; font-family: var(--mono); }
+
+.roll-item {
+  background: var(--panel-2); border: 1.5px solid var(--border);
+  border-radius: 10px; padding: 14px; margin-bottom: 10px;
+  position: relative;
+}
+.roll-item-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 10px;
+}
+.roll-number {
+  font-size: 13px; font-weight: 700; color: var(--accent);
+  font-family: var(--mono);
+}
+.roll-item .form-grid { gap: 10px; }
+.roll-item .form-group label { font-size: 12px; }
+.roll-item .form-group input,
+.roll-item .form-group select {
+  padding: 8px 10px; font-size: 14px;
+}
+
+/* ============================================
+   BUTTONS
+   ============================================ */
+.btn {
+  padding: 10px 18px; font-size: 15px; font-weight: 600;
+  background: var(--panel); border: 1.5px solid var(--border);
+  border-radius: 8px; cursor: pointer; transition: all 0.15s;
+  font-family: inherit; color: var(--text);
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.btn:hover:not(:disabled) {
+  background: var(--panel-2); transform: translateY(-1px);
+}
+.btn:active:not(:disabled) { transform: translateY(0); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-primary {
+  background: var(--accent); color: white; border-color: var(--accent);
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover); border-color: var(--accent-hover);
+}
+.btn-danger {
+  background: var(--panel); color: var(--danger); border-color: var(--danger);
+}
+.btn-danger:hover:not(:disabled) {
+  background: var(--danger-bg);
+}
+.btn-success {
+  background: var(--success); color: white; border-color: var(--success);
+}
+.btn-success:hover:not(:disabled) {
+  background: #036149; border-color: #036149;
+}
+.btn-sm { padding: 6px 12px; font-size: 13px; }
+.btn-icon {
+  padding: 6px; width: 32px; height: 32px; justify-content: center;
+}
+
+/* ============================================
+   SUMMARY FOOTER
+   ============================================ */
+.summary {
+  background: var(--accent-bg); border: 1.5px solid var(--accent);
+  padding: 14px 18px; border-radius: 10px; margin-bottom: 16px;
+  display: flex; justify-content: space-between; align-items: center;
+  flex-wrap: wrap; gap: 12px;
+}
+.summary-stats { display: flex; gap: 24px; flex-wrap: wrap; }
+.summary-stat .label {
+  font-size: 11px; color: var(--accent); font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.summary-stat .value {
+  font-size: 22px; font-weight: 700; font-family: var(--mono);
+  color: var(--accent);
+}
+.actions-footer-inline { display: flex; gap: 10px; flex-wrap: wrap; }
+
+/* ============================================
+   LIST TABLE (Tab 3)
+   ============================================ */
+.list-toolbar {
+  display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+}
+.search-input {
+  flex: 1; min-width: 200px; padding: 10px 14px; font-size: 15px;
+  background: var(--panel); border: 1.5px solid var(--border);
+  border-radius: 8px; font-family: inherit;
+}
+.search-input:focus {
+  outline: none; border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+.filter-select {
+  padding: 10px 12px; font-size: 14px;
+  background: var(--panel); border: 1.5px solid var(--border);
+  border-radius: 8px; font-family: inherit; cursor: pointer;
+}
+
+.table-wrap {
+  background: var(--panel); border: 1.5px solid var(--border);
+  border-radius: 12px; overflow: hidden; overflow-x: auto;
+}
+table {
+  width: 100%; border-collapse: collapse; font-size: 14px;
+}
+thead { background: var(--panel-2); }
+th {
+  padding: 12px 14px; text-align: left; font-weight: 700;
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--text-dim); border-bottom: 1.5px solid var(--border);
+  white-space: nowrap;
+}
+td {
+  padding: 12px 14px; border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: var(--panel-2); }
+.td-mono { font-family: var(--mono); font-size: 13px; }
+.td-right { text-align: right; white-space: nowrap; }
+
+.status-badge {
+  display: inline-block; padding: 3px 10px; border-radius: 999px;
+  font-size: 11px; font-weight: 700; font-family: var(--mono);
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.status-in_stock { background: var(--success-bg); color: var(--success); }
+.status-used { background: var(--panel-2); color: var(--text-dim); }
+.status-partial { background: var(--warning-bg); color: var(--warning); }
+.status-damaged { background: var(--danger-bg); color: var(--danger); }
+.status-returned { background: var(--info-bg); color: var(--info); }
+
+.pagination {
+  display: flex; gap: 6px; justify-content: center;
+  padding: 16px; flex-wrap: wrap;
+}
+.pagination button {
+  padding: 6px 12px; background: var(--panel);
+  border: 1.5px solid var(--border); border-radius: 6px;
+  font-size: 13px; cursor: pointer; font-family: inherit;
+}
+.pagination button:hover:not(:disabled) { background: var(--panel-2); }
+.pagination button:disabled { opacity: 0.4; cursor: not-allowed; }
+.pagination .current {
+  background: var(--accent); color: white; border-color: var(--accent);
+}
+
+/* ============================================
+   TOAST / OVERLAY
+   ============================================ */
+.toast {
+  position: fixed; top: 24px; left: 50%; transform: translateX(-50%);
+  padding: 12px 22px; border-radius: 10px;
+  font-weight: 600; font-size: 14px;
+  z-index: 9999; display: none;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.15);
+}
+.toast.show { display: block; animation: slideDown 0.3s ease; }
+.toast.success { background: var(--success); color: white; }
+.toast.error { background: var(--danger); color: white; }
+.toast.warning { background: var(--warning); color: white; }
+.toast.info { background: var(--info); color: white; }
+@keyframes slideDown {
+  from { opacity: 0; transform: translate(-50%, -20px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+.loading-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+  display: none; align-items: center; justify-content: center;
+  z-index: 9998; flex-direction: column; gap: 12px;
+}
+.loading-overlay.show { display: flex; }
+.loading-overlay .spinner {
+  width: 40px; height: 40px;
+  border: 3px solid rgba(255,255,255,0.25);
+  border-top-color: white;
+  border-radius: 50%; animation: spin 0.8s linear infinite;
+}
+.loading-overlay .loading-text {
+  color: white; font-size: 15px; font-weight: 500;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.conn-status {
+  position: fixed; bottom: 16px; right: 16px;
+  padding: 6px 12px; border-radius: 999px;
+  font-size: 12px; font-weight: 600;
+  display: flex; align-items: center; gap: 6px;
+  background: var(--panel); border: 1.5px solid var(--border);
+  z-index: 100;
+}
+.conn-status .dot {
+  width: 8px; height: 8px; border-radius: 50%;
+}
+.conn-status.online .dot { background: var(--success); }
+.conn-status.offline .dot { background: var(--danger); }
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+@media (max-width: 640px) {
+  body { padding: 16px 12px; }
+  .header h1 { font-size: 24px; }
+  .tab { padding: 10px 12px; font-size: 14px; }
+  .summary { flex-direction: column; align-items: flex-start; }
+  th, td { padding: 8px 10px; font-size: 13px; }
+}
+
+</style>
+</head>
+<body>
+<div class="toast" id="toast"></div>
+
+<div class="conn-status online" id="conn-status">
+  <span class="dot"></span>
+  <span id="conn-text">เชื่อมต่อ DB</span>
+</div>
+
+<div class="loading-overlay" id="loading-overlay">
+  <div class="spinner"></div>
+  <div class="loading-text" id="loading-text">กำลังโหลด...</div>
+</div>
+
+<div class="container">
+  <header class="header">
+    <div>
+      <h1>รับเข้า<span>กระดาษ</span></h1>
+      <p class="subtitle">Upload ไฟล์จาก Supplier หรือกรอกมือ</p>
+    </div>
+    <div class="nav-links">
+      <a href="index.html" class="nav-link">📝 บันทึก</a>
+      <a href="dashboard.html" class="nav-link">📊 Dashboard</a>
+    </div>
+  </header>
+
+  <!-- Tabs -->
+  <nav class="tabs">
+    <button class="tab active" data-tab="upload">
+      <span class="tab-icon">📤</span> Upload ไฟล์
+    </button>
+    <button class="tab" data-tab="manual">
+      <span class="tab-icon">✏️</span> กรอกมือ
+    </button>
+    <button class="tab" data-tab="list">
+      <span class="tab-icon">📋</span> รายการ
+      <span class="tab-badge" id="list-count">—</span>
+    </button>
+  </nav>
+
+  <!-- ============================================
+       TAB 1: UPLOAD FILE
+       ============================================ -->
+  <section class="tab-content active" id="tab-upload">
+    <div class="panel">
+      <div class="panel-title">
+        <span class="panel-title-icon">🤖</span>
+        <span>Auto-Import จาก Supplier</span>
+      </div>
+
+      <div class="supplier-badges">
+        <span class="supp-badge supp-ok">SCG ✓</span>
+        <span class="supp-badge supp-ok">MPK ✓</span>
+        <span class="supp-badge supp-ok">United ✓</span>
+        <span class="supp-badge supp-ok">Muda ✓</span>
+        <span class="supp-badge supp-pending">AP</span>
+        <span class="supp-badge supp-pending">TPC</span>
+        <span class="supp-badge supp-pending">Ching Mei</span>
+        <span class="supp-badge supp-pending">NTPM</span>
+        <span class="supp-badge supp-pending">SNP</span>
+      </div>
+
+      <div class="upload-zone" id="upload-zone">
+        <div class="upload-icon">📁</div>
+        <div class="upload-title">ลากไฟล์มาวาง หรือคลิกเลือก</div>
+        <div class="upload-hint">รองรับ: .txt, .csv, .xlsx, .xls (ได้หลายไฟล์พร้อมกัน)</div>
+        <input type="file" id="file-input" multiple accept=".txt,.csv,.xlsx,.xls" hidden>
+      </div>
+
+      <div id="parsed-invoices"></div>
+    </div>
+
+    <div class="help-panel">
+      <div class="help-title">💡 วิธีใช้</div>
+      <ul>
+        <li><strong>SCG:</strong> Upload ไฟล์ .txt (ชื่อ 0535xxxxxx.txt) — พร้อมไฟล์ COA .xlsx ถ้ามี</li>
+        <li><strong>MPK:</strong> Upload ไฟล์ Packing List .csv</li>
+        <li><strong>United:</strong> Upload ไฟล์ .xlsx (ASPT-xxxx.xlsx)</li>
+        <li><strong>Muda:</strong> Upload ไฟล์ .xls (Asia_Tube_PL_xxxx.xls)</li>
+        <li><strong>Supplier อื่น:</strong> ใช้ Tab "กรอกมือ" ก่อน</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ============================================
+       TAB 2: MANUAL
+       ============================================ -->
+  <section class="tab-content" id="tab-manual">
+    <div class="panel">
+      <div class="panel-title">
+        <span class="panel-title-icon">📋</span>
+        <span>ข้อมูล Invoice</span>
+      </div>
+
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Supplier <span class="required">*</span></label>
+          <select id="m-supplier"></select>
+        </div>
+        <div class="form-group">
+          <label>เลขที่ Invoice <span class="required">*</span></label>
+          <input type="text" id="m-invoice-no" placeholder="e.g. 69/0327">
+        </div>
+        <div class="form-group">
+          <label>PO No.</label>
+          <input type="text" id="m-po-no" placeholder="e.g. Po-690295">
+        </div>
+        <div class="form-group">
+          <label>วันที่บน Invoice</label>
+          <input type="date" id="m-invoice-date">
+        </div>
+        <div class="form-group">
+          <label>วันที่รับเข้า <span class="required">*</span></label>
+          <input type="date" id="m-receive-date">
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">
+        <span class="panel-title-icon">📦</span>
+        <span>ม้วนในใบนี้ <span class="rolls-count-inline">(<span id="m-rolls-count">0</span> ม้วน)</span></span>
+      </div>
+      <div id="m-rolls-list"></div>
+      <button class="btn" id="m-add-roll">+ เพิ่มม้วน</button>
+    </div>
+
+    <div class="panel">
+      <div class="form-group">
+        <label>หมายเหตุ</label>
+        <textarea id="m-notes" rows="2" placeholder="บันทึกเพิ่มเติม..."></textarea>
+      </div>
+    </div>
+
+    <div class="summary">
+      <div class="summary-stats">
+        <div class="summary-stat">
+          <div class="label">จำนวนม้วน</div>
+          <div class="value" id="m-total-rolls">0</div>
+        </div>
+        <div class="summary-stat">
+          <div class="label">น้ำหนักรวม</div>
+          <div class="value"><span id="m-total-weight">0</span> kg</div>
+        </div>
+      </div>
+      <div class="actions-footer-inline">
+        <button class="btn" id="m-clear">ล้างทั้งหมด</button>
+        <button class="btn btn-primary" id="m-save">💾 บันทึก</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================
+       TAB 3: LIST
+       ============================================ -->
+  <section class="tab-content" id="tab-list">
+    <div class="panel">
+      <div class="list-toolbar">
+        <input type="text" class="search-input" id="l-search" placeholder="🔍 ค้นหา lot / invoice / supplier...">
+        <select class="filter-select" id="l-filter-supplier">
+          <option value="">ทุก Supplier</option>
+        </select>
+        <select class="filter-select" id="l-filter-status">
+          <option value="">ทุก Status</option>
+          <option value="in_stock">in_stock</option>
+          <option value="used">used</option>
+          <option value="partial">partial</option>
+          <option value="damaged">damaged</option>
+        </select>
+        <button class="btn btn-sm" id="l-refresh">🔄 Refresh</button>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table id="l-table">
+        <thead>
+          <tr>
+            <th>วันที่รับ</th>
+            <th>Invoice</th>
+            <th>Supplier</th>
+            <th>Paper Lot</th>
+            <th>ประเภท</th>
+            <th class="td-right">กว้าง</th>
+            <th class="td-right">น้ำหนัก</th>
+            <th class="td-right">คงเหลือ</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="l-tbody">
+          <tr><td colspan="9" style="text-align:center; padding:40px; color:var(--text-dim)">กำลังโหลด...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="pagination" id="l-pagination"></div>
+  </section>
+</div>
+
+<!-- Libraries -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+<script type="module">
+
+// ============================================================
+// PARSERS (originally in parsers.js)
+// ============================================================
+/* ============================================================
+   Paper-In Parsers
+   ============================================================
+   Parser สำหรับแต่ละ Supplier:
+   - SCG    : TXT format (fixed-width) + XLSX COA
+   - MPK    : CSV Packing List
+   - United : XLSX (ยูไนเต็ดฯ)
+   - Muda   : XLS Packing List + PDF COA (ไฟล์ซับซ้อน)
+   
+   ทุก parser return format เดียวกัน:
+   {
+     supplier: 'SCG',
+     invoice_no: '0535197728',
+     invoice_date: '2026-04-23',
+     po_no: 'Po-690295',
+     rolls: [
+       { paper_lot, paper_lot_normalized, paper_type, 
+         width_mm, weight_kg, coa: {...} }
+     ]
+   }
+   ============================================================ */
+
+// Utility: normalize lot (ตัด - ออก และเป็น uppercase)
+function normalizeLot(lot) {
+  return String(lot || '').replace(/-/g, '').toUpperCase().trim();
+}
+
+// Utility: parse date จากหลายรูปแบบ
+function parseDate(str) {
+  if (!str) return null;
+  const s = String(str).trim();
+  
+  // DD/MM/YYYY
+  let m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+  
+  // YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  
+  // Excel serial number (e.g. 46094)
+  if (/^\d{5}$/.test(s)) {
+    const epoch = new Date(Date.UTC(1899, 11, 30));
+    const d = new Date(epoch.getTime() + parseInt(s) * 86400000);
+    return d.toISOString().slice(0, 10);
+  }
+  
+  return null;
+}
+
+// Utility: parse number (ตัด , ออก)
+function parseNum(v) {
+  if (v === null || v === undefined || v === '') return null;
+  const n = parseFloat(String(v).replace(/,/g, ''));
+  return isNaN(n) ? null : n;
+}
+
+// ============================================================
+// SCG TXT Parser
+// ============================================================
+// format fixed-width 108 chars:
+// [0:10]   paper_lot        (776A19031G)
+// [10:16]  paper_type       (CPS450)
+// [16:19]  width_cm         (161)
+// [19:24]  weight_kg        (01261 = 1261 kg, มี leading 0)
+// [24:30]  unknown
+// [30:40]  dp_number/invoice(0535197728)
+// [40:50]  invoice_date     (23/04/2026)
+// [50:51]  flag
+// [51:60]  po_no            (Po-690295)
+// (ที่เหลือเป็น metadata เพิ่มเติม)
+// ============================================================
+function parseSCG_TXT(text) {
+  const lines = text.split(/\r?\n/).filter(l => l.trim().length >= 100);
+  if (!lines.length) throw new Error('ไม่พบข้อมูลใน SCG TXT');
+
+  const rolls = [];
+  let invoice_no = null;
+  let invoice_date = null;
+  let po_no = null;
+
+  for (const line of lines) {
+    const lot = line.slice(0, 10).trim();
+    const type = line.slice(10, 16).trim();
+    const width = parseInt(line.slice(16, 19));
+    const weight = parseInt(line.slice(19, 24));
+    const dp = line.slice(30, 40).trim();
+    const date = line.slice(40, 50).trim();
+    const po = line.slice(51, 60).trim();
+
+    if (!lot || !type || isNaN(weight)) continue;
+
+    // เก็บ invoice_no จาก line แรก
+    if (!invoice_no) invoice_no = dp;
+    if (!invoice_date) invoice_date = parseDate(date);
+    if (!po_no) po_no = po;
+
+    rolls.push({
+      paper_lot: lot,
+      paper_lot_normalized: normalizeLot(lot),
+      paper_type: type,
+      width_mm: width * 10,  // cm → mm
+      weight_kg: weight,
+    });
+  }
+
+  return {
+    supplier: 'SCG',
+    invoice_no,
+    invoice_date,
+    po_no,
+    rolls,
+  };
+}
+
+// ============================================================
+// SCG COA XLSX Parser
+// ใช้เสริมกับ SCG TXT - เพิ่มข้อมูลคุณภาพให้แต่ละม้วน
+// ============================================================
+function parseSCG_COA(rows) {
+  // rows = array ของ array (ผล SheetJS)
+  // หา header row (มีคำว่า "Batch Number")
+  let headerIdx = -1;
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i] || [];
+    if (row.some(c => String(c || '').includes('Batch Number'))) {
+      headerIdx = i;
+      break;
+    }
+  }
+  if (headerIdx === -1) return [];
+
+  const coaList = [];
+  for (let i = headerIdx + 2; i < rows.length; i++) {
+    const row = rows[i] || [];
+    const lot = String(row[0] || '').trim();
+    if (!lot || lot.startsWith('AVG')) continue;
+
+    coaList.push({
+      paper_lot: lot,
+      paper_lot_normalized: normalizeLot(lot),
+      coa: {
+        production_date: parseDate(row[1]),
+        width_cm: parseNum(row[2]),
+        basis_weight: parseNum(row[3]),
+        burst: parseNum(row[4]),
+        plybond: parseNum(row[5]),
+        cobb_top: parseNum(row[6]),
+        cobb_bottom: parseNum(row[7]),
+        caliper: parseNum(row[8]),
+        moisture: parseNum(row[9]),
+      }
+    });
+  }
+  return coaList;
+}
+
+// ============================================================
+// MPK CSV Parser
+// Packing List format:
+// row 13: Date
+// row 14: Packing List Number
+// row 15: PO + Invoice Number
+// row 17: headers (Invoice, Paper_Lot, Type, Width (cm.), Wight (kg.))
+// row 18+: data rows
+// ============================================================
+function parseMPK_CSV(text) {
+  // parse CSV lines
+  const lines = text.split(/\r?\n/);
+  const rows = lines.map(line => {
+    // simple CSV parse (handle quoted fields)
+    const result = [];
+    let cur = '', inQuote = false;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (c === '"') { inQuote = !inQuote; }
+      else if (c === ',' && !inQuote) { result.push(cur); cur = ''; }
+      else cur += c;
+    }
+    result.push(cur);
+    return result;
+  });
+
+  // extract metadata
+  let invoice_date = null, po_no = null, invoice_no = null;
+  for (const row of rows) {
+    for (let i = 0; i < row.length; i++) {
+      const cell = String(row[i] || '').trim();
+      if (cell === 'Date' && row[i+2]) invoice_date = parseDate(row[i+2]);
+      if (cell === 'Referred to P.O. or  L/C Number' && row[i+2]) po_no = String(row[i+2]).trim();
+      if (cell === 'As of Invoice Number' && row[i+2]) invoice_no = String(row[i+2]).trim();
+    }
+  }
+
+  // หา header row ที่มี "Paper_Lot"
+  let headerIdx = -1, headerCols = null;
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const lotIdx = row.findIndex(c => String(c || '').trim() === 'Paper_Lot');
+    if (lotIdx !== -1) {
+      headerIdx = i;
+      headerCols = {
+        invoice: row.findIndex(c => String(c || '').trim() === 'Invoice'),
+        lot: lotIdx,
+        type: row.findIndex(c => String(c || '').trim() === 'Type'),
+        width: row.findIndex(c => String(c || '').trim().startsWith('Width')),
+        weight: row.findIndex(c => /W[ie]ight/.test(String(c || '').trim())),
+      };
+      break;
+    }
+  }
+
+  if (headerIdx === -1) throw new Error('ไม่พบ header "Paper_Lot" ในไฟล์ MPK');
+
+  const rolls = [];
+  for (let i = headerIdx + 1; i < rows.length; i++) {
+    const row = rows[i];
+    const lot = String(row[headerCols.lot] || '').trim();
+    if (!lot || lot === 'Total' || lot.startsWith('Remarks')) continue;
+    if (!/^[A-Z0-9]+$/i.test(lot)) continue;  // skip non-lot rows
+
+    const weight = parseNum(row[headerCols.weight]);
+    if (!weight) continue;
+
+    rolls.push({
+      paper_lot: lot,
+      paper_lot_normalized: normalizeLot(lot),
+      paper_type: String(row[headerCols.type] || '').trim(),
+      width_mm: parseNum(row[headerCols.width]) * 10,  // cm → mm
+      weight_kg: weight,
+    });
+  }
+
+  return {
+    supplier: 'MPK',
+    invoice_no,
+    invoice_date,
+    po_no,
+    rolls,
+  };
+}
+
+// ============================================================
+// United XLSX Parser
+// Columns: senddate, sendno, maker, car_no, type, width (inch),
+//          width (mm), diameter, productdate, refrollno, kgs, po
+// ============================================================
+function parseUnited_XLSX(rows) {
+  if (!rows || rows.length < 2) throw new Error('ไฟล์ United ไม่มีข้อมูล');
+
+  // หา header row
+  const headers = rows[0].map(c => String(c || '').trim().toLowerCase());
+  const col = {
+    senddate: headers.indexOf('senddate'),
+    sendno: headers.indexOf('sendno'),
+    type: headers.indexOf('type'),
+    width_mm: headers.findIndex(c => c === 'width (mm)' || c === 'width(mm)'),
+    refrollno: headers.indexOf('refrollno'),
+    kgs: headers.indexOf('kgs'),
+    po: headers.indexOf('po'),
+  };
+
+  if (col.refrollno === -1 || col.kgs === -1) {
+    throw new Error('ไม่พบ column refrollno หรือ kgs ในไฟล์ United');
+  }
+
+  const rolls = [];
+  let invoice_no = null, invoice_date = null, po_no = null;
+
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row || !row[col.refrollno]) continue;
+
+    const lot = String(row[col.refrollno]).trim();
+    const weight = parseNum(row[col.kgs]);
+    if (!lot || !weight) continue;
+
+    if (!invoice_no && col.sendno !== -1) invoice_no = String(row[col.sendno]).trim();
+    if (!invoice_date && col.senddate !== -1) invoice_date = parseDate(row[col.senddate]);
+    if (!po_no && col.po !== -1) po_no = String(row[col.po]).trim();
+
+    rolls.push({
+      paper_lot: lot,
+      paper_lot_normalized: normalizeLot(lot),
+      paper_type: String(row[col.type] || '').trim(),
+      width_mm: parseNum(row[col.width_mm]),
+      weight_kg: weight,
+    });
+  }
+
+  return {
+    supplier: 'UTP',
+    invoice_no,
+    invoice_date,
+    po_no,
+    rolls,
+  };
+}
+
+// ============================================================
+// Muda XLS Parser (Packing List)
+// ไฟล์ซับซ้อน - มี header หลายบรรทัด, data กระจายในหลาย column
+// ใช้ strategy: หา row ที่มี serial + kgs pattern
+// ============================================================
+function parseMuda_XLS(rows) {
+  if (!rows || rows.length < 10) throw new Error('ไฟล์ Muda ไม่สมบูรณ์');
+
+  // ดึง metadata
+  let invoice_no = null, invoice_date = null, po_no = null;
+  let product = null, width_mm = null, gsm = null;
+
+  for (const row of rows) {
+    if (!row) continue;
+    for (let i = 0; i < row.length; i++) {
+      const cell = String(row[i] || '').trim();
+      if (cell === 'Invoice No :' && !invoice_no) {
+        for (let j = i+1; j < row.length; j++) {
+          const v = String(row[j] || '').trim();
+          if (v && v !== 'SSI') { invoice_no = 'SSI ' + v.replace(/\.0$/,''); break; }
+        }
+      }
+      if (cell.startsWith('Date') && !invoice_date) {
+        for (let j = i+1; j < row.length; j++) {
+          const v = row[j];
+          if (v) { invoice_date = parseDate(v); if (invoice_date) break; }
+        }
+      }
+      if (cell.includes('Purchase Order No') && !po_no) {
+        const m = cell.match(/PO-(\d+)/);
+        if (m) po_no = 'PO-' + m[1];
+      }
+      if (cell === 'CORE BOARD - E' || cell.includes('CORE BOARD')) product = 'CORE BOARD - E';
+      if (cell === 'Width :' || cell.startsWith('Width :')) {
+        const mm = row.slice(i).join(' ').match(/(\d+)\s*mm/);
+        if (mm) width_mm = parseInt(mm[1]);
+      }
+      if (/^\d{3}$/.test(cell) && i > 0 && String(row[i-1]||'').includes('gsm') === false) {
+        const nextCell = String(row[i+1] || '').trim();
+        if (nextCell === 'gsm') gsm = parseInt(cell);
+      }
+    }
+  }
+
+  // หา rolls - rows ที่มี serial number pattern (e.g. 42860403214G, 1055.0)
+  const rolls = [];
+  const serialPattern = /^\d{10,12}[A-Z]?$/;
+
+  for (const row of rows) {
+    if (!row) continue;
+    // Muda format: มี 2 ม้วน/row (2 columns of serial + kgs)
+    for (let i = 0; i < row.length - 1; i++) {
+      const cell = String(row[i] || '').trim();
+      if (!serialPattern.test(cell)) continue;
+
+      // หาค่า kgs ถัดไป (อาจอยู่ 3-5 column ถัดไป)
+      let weight = null;
+      for (let j = i+1; j < Math.min(i+8, row.length); j++) {
+        const v = parseNum(row[j]);
+        if (v && v > 500 && v < 3000) { weight = v; break; }
+      }
+
+      if (weight) {
+        // กำหนด paper_type จาก product + gsm ที่เจอ
+        let paper_type = 'CBE-450';  // default สำหรับ CORE BOARD - E 450gsm
+        if (gsm === 450 && product && product.includes('CORE BOARD - E')) paper_type = 'CBE-450';
+        else if (gsm === 350) paper_type = 'CBE-350';
+        else if (gsm === 600) paper_type = 'CBE-600';
+
+        rolls.push({
+          paper_lot: cell,
+          paper_lot_normalized: normalizeLot(cell),
+          paper_type,
+          width_mm,
+          weight_kg: weight,
+        });
+      }
+    }
+  }
+
+  return {
+    supplier: 'Muda',
+    invoice_no,
+    invoice_date,
+    po_no,
+    rolls,
+  };
+}
+
+// ============================================================
+// Detect file type & dispatch to parser
+// ============================================================
+function detectSupplier(filename, content) {
+  const n = filename.toLowerCase();
+  
+  // SCG - TXT ที่ชื่อขึ้นต้นด้วย 05351977xx
+  if (n.endsWith('.txt') && /05\d{8}/.test(n)) return 'SCG_TXT';
+  
+  // SCG COA - XLSX ที่มี "COA" ในชื่อและเริ่มด้วย 05351977xx
+  if (n.includes('coa') && /05\d{8}/.test(n)) return 'SCG_COA';
+  
+  // MPK - CSV PACKING_LIST  
+  if (n.includes('packing') && n.endsWith('.csv')) return 'MPK_CSV';
+  
+  // United - XLSX ชื่อ ASPT หรือ UTP
+  if (n.startsWith('aspt') || n.startsWith('utp') || n.includes('united')) return 'United_XLSX';
+  
+  // Muda - XLS ชื่อ Asia_Tube + PL
+  if (n.includes('asia_tube') && n.includes('pl_')) return 'Muda_XLS';
+  
+  // Muda COA
+  if (n.includes('asia_tube') && n.includes('coa')) return 'Muda_COA';
+  
+  return null;
+}
+
+
+// ============================================================
+// MAIN PAPER-IN LOGIC (originally in paper-in.js)
+// ============================================================
+/* ============================================================
+   Paper-In — Main Logic
+   ============================================================
+   Features:
+   - Tab switching
+   - Upload & auto-parse (SCG, MPK, United, Muda)
+   - Manual form entry
+   - List view with search/filter
+   - Save to Supabase
+   ============================================================ */
+
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+// (parsers inlined below)
+
+// ============================================================
+// Config (ใช้ key เดียวกับระบบเดิม)
+// ============================================================
+const SUPABASE_URL = 'https://lfrwghrlxaordpxrqyij.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxmcndnaHJseGFvcmRweHJxeWlqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MzQ5MjgsImV4cCI6MjA5MjQxMDkyOH0.M13hI5TUqEL8iVmGM3pWcjbyULSx_n7VPgI2TcHnNZA';
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ============================================================
+// State
+// ============================================================
+const state = {
+  suppliers: [],
+  paperTypes: [],
+  parsedInvoices: [],   // for upload tab
+  manualRolls: [],      // for manual tab
+  listData: [],         // for list tab
+  listPage: 1,
+  listPerPage: 50,
+};
+
+// ============================================================
+// Utils
+// ============================================================
+function $(sel) { return document.querySelector(sel); }
+function $$(sel) { return Array.from(document.querySelectorAll(sel)); }
+
+function escapeHtml(s) {
+  if (s === null || s === undefined) return '';
+  return String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function showToast(msg, type = 'success') {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + type;
+  setTimeout(() => t.className = 'toast', 3500);
+}
+
+function showLoading(text = 'กำลังโหลด...') {
+  $('#loading-text').textContent = text;
+  $('#loading-overlay').classList.add('show');
+}
+function hideLoading() {
+  $('#loading-overlay').classList.remove('show');
+}
+
+function formatNumber(n) {
+  if (n === null || n === undefined) return '—';
+  return Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 });
+}
+
+function today() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+// Read file as text
+function readAsText(file) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(fr.result);
+    fr.onerror = reject;
+    fr.readAsText(file, 'UTF-8');
+  });
+}
+
+// Read file as ArrayBuffer (for xlsx)
+function readAsArrayBuffer(file) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(fr.result);
+    fr.onerror = reject;
+    fr.readAsArrayBuffer(file);
+  });
+}
+
+// ============================================================
+// Master Data Loading
+// ============================================================
+async function loadMasterData() {
+  try {
+    const [sp, pt] = await Promise.all([
+      supabase.from('suppliers').select('*').eq('is_active', true).order('name'),
+      supabase.from('paper_types').select('*').eq('is_active', true).order('paper_type'),
+    ]);
+    
+    state.suppliers = sp.data || [];
+    state.paperTypes = pt.data || [];
+
+    // Populate dropdowns
+    const supplierSel = $('#m-supplier');
+    supplierSel.innerHTML = '<option value="">-- เลือก Supplier --</option>' +
+      state.suppliers.map(s => `<option value="${escapeHtml(s.code)}">${escapeHtml(s.name)}</option>`).join('');
+
+    const filterSupp = $('#l-filter-supplier');
+    filterSupp.innerHTML = '<option value="">ทุก Supplier</option>' +
+      state.suppliers.map(s => `<option value="${escapeHtml(s.code)}">${escapeHtml(s.name)}</option>`).join('');
+
+    setConnStatus(true);
+  } catch (e) {
+    console.error(e);
+    showToast('โหลดข้อมูลไม่ได้: ' + e.message, 'error');
+    setConnStatus(false);
+  }
+}
+
+function setConnStatus(online) {
+  const el = $('#conn-status');
+  const txt = $('#conn-text');
+  if (online) {
+    el.className = 'conn-status online';
+    txt.textContent = 'เชื่อมต่อ DB';
+  } else {
+    el.className = 'conn-status offline';
+    txt.textContent = 'ออฟไลน์';
+  }
+}
+
+// ============================================================
+// Tabs
+// ============================================================
+function setupTabs() {
+  $$('.tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      $$('.tab').forEach(b => b.classList.remove('active'));
+      $$('.tab-content').forEach(c => c.classList.remove('active'));
+      btn.classList.add('active');
+      const tabName = btn.dataset.tab;
+      $('#tab-' + tabName).classList.add('active');
+      
+      if (tabName === 'list') loadList();
+    });
+  });
+}
+
+// ============================================================
+// TAB 1: UPLOAD
+// ============================================================
+function setupUpload() {
+  const zone = $('#upload-zone');
+  const input = $('#file-input');
+  
+  zone.addEventListener('click', () => input.click());
+  
+  zone.addEventListener('dragover', e => {
+    e.preventDefault();
+    zone.classList.add('dragover');
+  });
+  zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('dragover');
+    handleFiles(e.dataTransfer.files);
+  });
+  
+  input.addEventListener('change', e => handleFiles(e.target.files));
+}
+
+async function handleFiles(fileList) {
+  const files = Array.from(fileList);
+  if (!files.length) return;
+  
+  showLoading(`กำลังแกะไฟล์ ${files.length} ไฟล์...`);
+  
+  // Group SCG COA with matching TXT (same invoice number)
+  const scgTxtByInv = {};  // invoice_no → parsed result
+  const scgCoaByInv = {};  // invoice_no → coa list
+  
+  for (const file of files) {
+    try {
+      const supplier = detectSupplier(file.name, '');
+      const result = await parseFile(file, supplier);
+      
+      if (!result) {
+        addInvoiceCard({
+          filename: file.name,
+          supplier: 'Unknown',
+          error: 'ไม่รู้จัก format ของไฟล์นี้',
+          status: 'err',
+        });
+        continue;
+      }
+      
+      // ถ้าเป็น SCG COA → เก็บไว้ merge ทีหลัง
+      if (supplier === 'SCG_COA') {
+        // Match โดย invoice_no (จากชื่อไฟล์)
+        const m = file.name.match(/05\d{8}/);
+        const invKey = m ? m[0] : file.name;
+        scgCoaByInv[invKey] = { filename: file.name, coa: result };
+        continue;
+      }
+      
+      // ถ้าเป็น SCG TXT → เก็บไว้ merge กับ COA
+      if (supplier === 'SCG_TXT') {
+        result.filename = file.name;
+        scgTxtByInv[result.data.invoice_no] = result;
+        continue;
+      }
+      
+      // ไม่ใช่ SCG → เพิ่มเข้า list ปกติ
+      result.filename = file.name;
+      state.parsedInvoices.push(result);
+      addInvoiceCard(result);
+    } catch (e) {
+      console.error(e);
+      addInvoiceCard({
+        filename: file.name,
+        supplier: 'Error',
+        error: e.message,
+        status: 'err',
+      });
+    }
+  }
+  
+  // Merge SCG TXT + COA
+  for (const invNo of Object.keys(scgTxtByInv)) {
+    const txt = scgTxtByInv[invNo];
+    const coa = scgCoaByInv[invNo];
+    if (coa) {
+      // แนบ COA ให้แต่ละม้วน
+      const coaMap = {};
+      coa.coa.forEach(c => coaMap[c.paper_lot_normalized] = c.coa);
+      txt.data.rolls.forEach(r => {
+        if (coaMap[r.paper_lot_normalized]) r.coa = coaMap[r.paper_lot_normalized];
+      });
+      txt.hasCoa = true;
+    }
+    state.parsedInvoices.push(txt);
+    addInvoiceCard(txt);
+  }
+  // SCG COA อย่างเดียว (ไม่มี TXT matching) → เตือน
+  for (const invNo of Object.keys(scgCoaByInv)) {
+    if (!scgTxtByInv[invNo]) {
+      addInvoiceCard({
+        filename: scgCoaByInv[invNo].filename,
+        supplier: 'SCG COA',
+        warning: `ไฟล์ COA (${invNo}) ไม่พบ TXT คู่กัน — กรุณา upload ไฟล์ .txt ด้วย`,
+        status: 'warn',
+      });
+    }
+  }
+  
+  hideLoading();
+}
+
+async function parseFile(file, supplier) {
+  if (supplier === 'SCG_TXT') {
+    const text = await readAsText(file);
+    const data = parseSCG_TXT(text);
+    return { supplier: 'SCG', data, status: 'ok' };
+  }
+  
+  if (supplier === 'SCG_COA') {
+    const buf = await readAsArrayBuffer(file);
+    const wb = XLSX.read(buf, { type: 'array' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+    return parseSCG_COA(rows);  // return array directly (merged later)
+  }
+  
+  if (supplier === 'MPK_CSV') {
+    const text = await readAsText(file);
+    const data = parseMPK_CSV(text);
+    return { supplier: 'MPK', data, status: 'ok' };
+  }
+  
+  if (supplier === 'United_XLSX') {
+    const buf = await readAsArrayBuffer(file);
+    const wb = XLSX.read(buf, { type: 'array' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+    const data = parseUnited_XLSX(rows);
+    return { supplier: 'United', data, status: 'ok' };
+  }
+  
+  if (supplier === 'Muda_XLS') {
+    const buf = await readAsArrayBuffer(file);
+    const wb = XLSX.read(buf, { type: 'array' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+    const data = parseMuda_XLS(rows);
+    return { supplier: 'Muda', data, status: 'ok' };
+  }
+  
+  return null;
+}
+
+function addInvoiceCard(result) {
+  const container = $('#parsed-invoices');
+  
+  // Error card
+  if (result.error) {
+    const div = document.createElement('div');
+    div.className = 'inv-card err';
+    div.innerHTML = `
+      <div class="inv-card-header">
+        <div class="inv-card-title">
+          <span>❌ ${escapeHtml(result.supplier)}</span>
+          <span class="filename">${escapeHtml(result.filename)}</span>
+        </div>
+        <span class="inv-status err">Error</span>
+      </div>
+      <div style="color:var(--danger); font-size:14px;">${escapeHtml(result.error)}</div>
+    `;
+    container.appendChild(div);
+    return;
+  }
+  
+  // Warning card
+  if (result.warning) {
+    const div = document.createElement('div');
+    div.className = 'inv-card warn';
+    div.innerHTML = `
+      <div class="inv-card-header">
+        <div class="inv-card-title">
+          <span>⚠️ ${escapeHtml(result.supplier)}</span>
+          <span class="filename">${escapeHtml(result.filename)}</span>
+        </div>
+        <span class="inv-status warn">Warning</span>
+      </div>
+      <div style="color:var(--warning); font-size:14px;">${escapeHtml(result.warning)}</div>
+    `;
+    container.appendChild(div);
+    return;
+  }
+  
+  // Success card
+  const d = result.data;
+  const totalWeight = d.rolls.reduce((s, r) => s + (r.weight_kg || 0), 0);
+  const uniqueTypes = [...new Set(d.rolls.map(r => r.paper_type))];
+  
+  const idx = state.parsedInvoices.length - 1;
+  
+  const div = document.createElement('div');
+  div.className = 'inv-card ok';
+  div.dataset.idx = idx;
+  div.innerHTML = `
+    <div class="inv-card-header">
+      <div class="inv-card-title">
+        <span>✅ ${escapeHtml(result.supplier)}${result.hasCoa ? ' + COA' : ''}</span>
+        <span class="filename">${escapeHtml(result.filename)}</span>
+      </div>
+      <span class="inv-status ok">${d.rolls.length} ม้วน</span>
+    </div>
+    <div class="inv-meta">
+      <div class="inv-meta-item">
+        <div class="label">Invoice</div>
+        <div class="value">${escapeHtml(d.invoice_no || '—')}</div>
+      </div>
+      <div class="inv-meta-item">
+        <div class="label">วันที่</div>
+        <div class="value">${escapeHtml(d.invoice_date || '—')}</div>
+      </div>
+      <div class="inv-meta-item">
+        <div class="label">PO</div>
+        <div class="value">${escapeHtml(d.po_no || '—')}</div>
+      </div>
+      <div class="inv-meta-item">
+        <div class="label">น้ำหนักรวม</div>
+        <div class="value">${formatNumber(totalWeight)} kg</div>
+      </div>
+    </div>
+    <div class="inv-rolls-summary">
+      <div>📦 <strong>${d.rolls.length}</strong> ม้วน · <strong>${uniqueTypes.length}</strong> ประเภท (${escapeHtml(uniqueTypes.join(', '))})</div>
+    </div>
+    <div class="inv-rolls-table">
+      <table>
+        <thead>
+          <tr>
+            <th>Lot</th>
+            <th>ประเภท</th>
+            <th>กว้าง (mm)</th>
+            <th>น้ำหนัก (kg)</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${d.rolls.map(r => `
+            <tr>
+              <td class="mono">${escapeHtml(r.paper_lot)}</td>
+              <td class="mono">${escapeHtml(r.paper_type)}</td>
+              <td class="mono">${r.width_mm || '—'}</td>
+              <td class="mono">${formatNumber(r.weight_kg)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+    <div class="inv-card-actions">
+      <label style="font-size:13px; margin-right:auto; display:flex; align-items:center; gap:6px;">
+        วันที่รับเข้า:
+        <input type="date" class="receive-date" value="${today()}" style="padding:4px 8px; font-size:13px;">
+      </label>
+      <button class="btn btn-sm btn-danger remove-btn">🗑️ ลบ</button>
+      <button class="btn btn-sm btn-primary save-btn">💾 บันทึก</button>
+    </div>
+  `;
+  
+  container.appendChild(div);
+  
+  // Attach handlers
+  div.querySelector('.save-btn').addEventListener('click', () => {
+    const receiveDate = div.querySelector('.receive-date').value;
+    saveInvoice(idx, receiveDate, result.filename);
+  });
+  div.querySelector('.remove-btn').addEventListener('click', () => {
+    div.remove();
+    state.parsedInvoices[idx] = null;
+  });
+}
+
+// ============================================================
+// SAVE Invoice to Database
+// ============================================================
+async function saveInvoice(idx, receiveDate, sourceFile) {
+  const result = state.parsedInvoices[idx];
+  if (!result) { showToast('ไม่พบข้อมูล', 'error'); return; }
+  
+  const d = result.data;
+  if (!d.rolls.length) { showToast('ไม่มีม้วนให้บันทึก', 'error'); return; }
+  if (!receiveDate) { showToast('กรุณาเลือกวันที่รับเข้า', 'error'); return; }
+  
+  showLoading('กำลังบันทึก...');
+  
+  try {
+    // เตรียมข้อมูล rolls สำหรับ bulk insert
+    const rollsToInsert = d.rolls.map(r => ({
+      paper_lot: r.paper_lot,
+      paper_lot_normalized: r.paper_lot_normalized,
+      paper_type: r.paper_type,
+      invoice_no: d.invoice_no,
+      supplier: result.supplier,
+      invoice_date: d.invoice_date || null,
+      receive_date: receiveDate,
+      width_mm: r.width_mm || null,
+      weight_kg: r.weight_kg,
+      po_no: d.po_no || null,
+      source_file: sourceFile,
+      status: 'in_stock',
+      remaining_weight_kg: r.weight_kg,
+    }));
+    
+    // ตรวจ lot ซ้ำ
+    const lots = rollsToInsert.map(r => r.paper_lot_normalized);
+    const { data: existing } = await supabase
+      .from('paper_invoices')
+      .select('paper_lot_normalized')
+      .in('paper_lot_normalized', lots);
+    
+    const existingSet = new Set((existing || []).map(e => e.paper_lot_normalized));
+    const duplicates = rollsToInsert.filter(r => existingSet.has(r.paper_lot_normalized));
+    
+    if (duplicates.length) {
+      hideLoading();
+      const dupList = duplicates.slice(0, 5).map(r => r.paper_lot).join(', ');
+      const more = duplicates.length > 5 ? ` (และอีก ${duplicates.length - 5} ม้วน)` : '';
+      if (!confirm(`พบ lot ซ้ำ ${duplicates.length} ม้วน:\n${dupList}${more}\n\nข้าม ${duplicates.length} ม้วนนี้และบันทึก ${rollsToInsert.length - duplicates.length} ม้วนที่เหลือ?`)) {
+        return;
+      }
+      showLoading('กำลังบันทึก...');
+    }
+    
+    const newRolls = rollsToInsert.filter(r => !existingSet.has(r.paper_lot_normalized));
+    if (!newRolls.length) {
+      hideLoading();
+      showToast('ไม่มีม้วนใหม่ให้บันทึก (ซ้ำทั้งหมด)', 'warning');
+      return;
+    }
+    
+    // Insert into paper_invoices
+    const { data: inserted, error: insErr } = await supabase
+      .from('paper_invoices')
+      .insert(newRolls)
+      .select('id, paper_lot_normalized');
+    
+    if (insErr) throw insErr;
+    
+    // ถ้ามี COA → บันทึกใน quality_tests
+    if (result.hasCoa || d.rolls.some(r => r.coa)) {
+      const invoiceIdByLot = {};
+      (inserted || []).forEach(i => invoiceIdByLot[i.paper_lot_normalized] = i.id);
+      
+      const qaRecords = [];
+      d.rolls.forEach(r => {
+        if (r.coa && invoiceIdByLot[r.paper_lot_normalized]) {
+          qaRecords.push({
+            scope: 'roll',
+            paper_invoice_id: invoiceIdByLot[r.paper_lot_normalized],
+            invoice_no: d.invoice_no,
+            supplier: result.supplier,
+            production_date: r.coa.production_date || null,
+            basis_weight: r.coa.basis_weight || null,
+            burst: r.coa.burst || null,
+            plybond: r.coa.plybond || null,
+            cobb_top: r.coa.cobb_top || null,
+            cobb_bottom: r.coa.cobb_bottom || null,
+            caliper: r.coa.caliper || null,
+            moisture: r.coa.moisture || null,
+            raw_data: r.coa,
+          });
+        }
+      });
+      
+      if (qaRecords.length) {
+        const { error: qaErr } = await supabase.from('quality_tests').insert(qaRecords);
+        if (qaErr) console.warn('QA save error (non-fatal):', qaErr);
+      }
+    }
+    
+    hideLoading();
+    showToast(`✅ บันทึก ${newRolls.length} ม้วนสำเร็จ`, 'success');
+    
+    // Remove card
+    const card = document.querySelector(`.inv-card[data-idx="${idx}"]`);
+    if (card) card.remove();
+    state.parsedInvoices[idx] = null;
+    
+  } catch (e) {
+    hideLoading();
+    console.error(e);
+    showToast('บันทึกไม่ได้: ' + (e.message || e), 'error');
+  }
+}
+
+// ============================================================
+// TAB 2: MANUAL
+// ============================================================
+function setupManual() {
+  $('#m-receive-date').value = today();
+  $('#m-add-roll').addEventListener('click', addManualRoll);
+  $('#m-clear').addEventListener('click', clearManual);
+  $('#m-save').addEventListener('click', saveManual);
+  
+  // เพิ่มม้วนแรกเมื่อเริ่ม
+  addManualRoll();
+}
+
+function addManualRoll() {
+  const rollIdx = state.manualRolls.length;
+  state.manualRolls.push({});
+  
+  const div = document.createElement('div');
+  div.className = 'roll-item';
+  div.dataset.idx = rollIdx;
+  
+  const typeOptions = '<option value="">-- เลือก --</option>' +
+    state.paperTypes.map(pt => `<option value="${escapeHtml(pt.paper_type)}">${escapeHtml(pt.paper_type)}</option>`).join('');
+  
+  div.innerHTML = `
+    <div class="roll-item-header">
+      <span class="roll-number">ม้วน #${rollIdx + 1}</span>
+      <button class="btn btn-icon btn-danger m-roll-del" title="ลบม้วนนี้">🗑️</button>
+    </div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Paper Lot <span class="required">*</span></label>
+        <input type="text" class="mono m-lot" placeholder="e.g. 9L4574">
+      </div>
+      <div class="form-group">
+        <label>ประเภท <span class="required">*</span></label>
+        <select class="m-type">${typeOptions}</select>
+      </div>
+      <div class="form-group">
+        <label>กว้าง (mm)</label>
+        <input type="number" class="m-width" placeholder="1860">
+      </div>
+      <div class="form-group">
+        <label>น้ำหนัก (kg) <span class="required">*</span></label>
+        <input type="number" class="m-weight" placeholder="1269" step="0.01">
+      </div>
+    </div>
+  `;
+  
+  $('#m-rolls-list').appendChild(div);
+  
+  div.querySelector('.m-roll-del').addEventListener('click', () => {
+    div.remove();
+    state.manualRolls[rollIdx] = null;
+    updateManualSummary();
+  });
+  
+  div.querySelectorAll('input, select').forEach(el => {
+    el.addEventListener('input', updateManualSummary);
+  });
+  
+  updateManualSummary();
+}
+
+function updateManualSummary() {
+  const items = $$('.roll-item');
+  let count = 0, totalWeight = 0;
+  items.forEach(it => {
+    const w = parseFloat(it.querySelector('.m-weight').value);
+    if (!isNaN(w)) { count++; totalWeight += w; }
+    else count++; // count rolls even without weight
+  });
+  $('#m-rolls-count').textContent = items.length;
+  $('#m-total-rolls').textContent = items.length;
+  $('#m-total-weight').textContent = formatNumber(totalWeight);
+}
+
+function clearManual() {
+  if (!confirm('ล้างข้อมูลทั้งหมด?')) return;
+  state.manualRolls = [];
+  $('#m-rolls-list').innerHTML = '';
+  $('#m-supplier').value = '';
+  $('#m-invoice-no').value = '';
+  $('#m-po-no').value = '';
+  $('#m-invoice-date').value = '';
+  $('#m-receive-date').value = today();
+  $('#m-notes').value = '';
+  addManualRoll();
+}
+
+async function saveManual() {
+  const supplier = $('#m-supplier').value.trim();
+  const invoiceNo = $('#m-invoice-no').value.trim();
+  const invoiceDate = $('#m-invoice-date').value || null;
+  const receiveDate = $('#m-receive-date').value;
+  const poNo = $('#m-po-no').value.trim() || null;
+  const notes = $('#m-notes').value.trim() || null;
+  
+  if (!supplier) { showToast('กรุณาเลือก Supplier', 'error'); return; }
+  if (!invoiceNo) { showToast('กรุณาใส่เลข Invoice', 'error'); return; }
+  if (!receiveDate) { showToast('กรุณาเลือกวันที่รับเข้า', 'error'); return; }
+  
+  // เก็บข้อมูลม้วน
+  const items = $$('.roll-item');
+  if (!items.length) { showToast('ไม่มีม้วนให้บันทึก', 'error'); return; }
+  
+  const rolls = [];
+  for (const it of items) {
+    const lot = it.querySelector('.m-lot').value.trim();
+    const type = it.querySelector('.m-type').value.trim();
+    const width = parseFloat(it.querySelector('.m-width').value) || null;
+    const weight = parseFloat(it.querySelector('.m-weight').value);
+    
+    if (!lot || !type || isNaN(weight)) {
+      showToast('กรุณากรอกข้อมูลทุกม้วนให้ครบ (lot, ประเภท, น้ำหนัก)', 'error');
+      return;
+    }
+    
+    rolls.push({
+      paper_lot: lot,
+      paper_lot_normalized: normalizeLot(lot),
+      paper_type: type,
+      invoice_no: invoiceNo,
+      supplier,
+      invoice_date: invoiceDate,
+      receive_date: receiveDate,
+      width_mm: width,
+      weight_kg: weight,
+      po_no: poNo,
+      notes,
+      source_file: 'manual',
+      status: 'in_stock',
+      remaining_weight_kg: weight,
+    });
+  }
+  
+  showLoading('กำลังบันทึก...');
+  
+  try {
+    // ตรวจ lot ซ้ำ
+    const lots = rolls.map(r => r.paper_lot_normalized);
+    const { data: existing } = await supabase
+      .from('paper_invoices')
+      .select('paper_lot_normalized')
+      .in('paper_lot_normalized', lots);
+    
+    if (existing && existing.length) {
+      hideLoading();
+      const dups = existing.map(e => e.paper_lot_normalized).join(', ');
+      showToast(`❌ พบ lot ซ้ำ ${existing.length} ม้วน: ${dups}`, 'error');
+      return;
+    }
+    
+    const { error } = await supabase.from('paper_invoices').insert(rolls);
+    if (error) throw error;
+    
+    hideLoading();
+    showToast(`✅ บันทึก ${rolls.length} ม้วนสำเร็จ`, 'success');
+    clearManual();
+  } catch (e) {
+    hideLoading();
+    console.error(e);
+    showToast('บันทึกไม่ได้: ' + (e.message || e), 'error');
+  }
+}
+
+// ============================================================
+// TAB 3: LIST
+// ============================================================
+async function loadList() {
+  const tbody = $('#l-tbody');
+  tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:40px; color:var(--text-dim)">กำลังโหลด...</td></tr>';
+  
+  try {
+    const search = $('#l-search').value.trim();
+    const filterSupp = $('#l-filter-supplier').value;
+    const filterStatus = $('#l-filter-status').value;
+    
+    let q = supabase.from('paper_invoices')
+      .select('*', { count: 'exact' })
+      .order('receive_date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .range((state.listPage - 1) * state.listPerPage, state.listPage * state.listPerPage - 1);
+    
+    if (filterSupp) q = q.eq('supplier', filterSupp);
+    if (filterStatus) q = q.eq('status', filterStatus);
+    if (search) {
+      q = q.or(`paper_lot.ilike.%${search}%,paper_lot_normalized.ilike.%${search.replace(/-/g,'').toUpperCase()}%,invoice_no.ilike.%${search}%,supplier.ilike.%${search}%`);
+    }
+    
+    const { data, count, error } = await q;
+    if (error) throw error;
+    
+    state.listData = data || [];
+    $('#list-count').textContent = count ? count.toLocaleString() : '0';
+    renderListTable(data || [], count || 0);
+  } catch (e) {
+    console.error(e);
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--danger); padding:20px">โหลดไม่ได้: ${escapeHtml(e.message)}</td></tr>`;
+  }
+}
+
+function renderListTable(rows, totalCount) {
+  const tbody = $('#l-tbody');
+  
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:40px; color:var(--text-dim)">ไม่พบข้อมูล</td></tr>';
+    $('#l-pagination').innerHTML = '';
+    return;
+  }
+  
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td>${escapeHtml(r.receive_date || '—')}</td>
+      <td class="td-mono">${escapeHtml(r.invoice_no || '—')}</td>
+      <td>${escapeHtml(r.supplier || '—')}</td>
+      <td class="td-mono">${escapeHtml(r.paper_lot)}</td>
+      <td class="td-mono">${escapeHtml(r.paper_type || '—')}</td>
+      <td class="td-mono td-right">${r.width_mm || '—'}</td>
+      <td class="td-mono td-right">${formatNumber(r.weight_kg)}</td>
+      <td class="td-mono td-right">${formatNumber(r.remaining_weight_kg)}</td>
+      <td><span class="status-badge status-${r.status || 'in_stock'}">${escapeHtml(r.status || 'in_stock')}</span></td>
+    </tr>
+  `).join('');
+  
+  // Pagination
+  const totalPages = Math.ceil(totalCount / state.listPerPage);
+  if (totalPages > 1) {
+    let pagHTML = `<button ${state.listPage === 1 ? 'disabled' : ''} data-page="prev">← ก่อน</button>`;
+    pagHTML += `<span style="padding: 6px 12px;">หน้า <strong>${state.listPage}</strong> / ${totalPages} (รวม ${totalCount.toLocaleString()} รายการ)</span>`;
+    pagHTML += `<button ${state.listPage >= totalPages ? 'disabled' : ''} data-page="next">ถัดไป →</button>`;
+    $('#l-pagination').innerHTML = pagHTML;
+    
+    $$('#l-pagination button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (btn.dataset.page === 'prev' && state.listPage > 1) state.listPage--;
+        if (btn.dataset.page === 'next' && state.listPage < totalPages) state.listPage++;
+        loadList();
+      });
+    });
+  } else {
+    $('#l-pagination').innerHTML = `<span style="color:var(--text-dim); padding: 6px;">รวม ${totalCount.toLocaleString()} รายการ</span>`;
+  }
+}
+
+function setupListFilters() {
+  let searchTimer;
+  $('#l-search').addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      state.listPage = 1;
+      loadList();
+    }, 400);
+  });
+  $('#l-filter-supplier').addEventListener('change', () => {
+    state.listPage = 1;
+    loadList();
+  });
+  $('#l-filter-status').addEventListener('change', () => {
+    state.listPage = 1;
+    loadList();
+  });
+  $('#l-refresh').addEventListener('click', loadList);
+}
+
+// ============================================================
+// Init
+// ============================================================
+async function init() {
+  setupTabs();
+  setupUpload();
+  setupListFilters();
+  
+  await loadMasterData();
+  
+  setupManual();  // call after master data loaded (need paperTypes)
+}
+
+window.addEventListener('DOMContentLoaded', init);
+
+
+</script>
+</body>
+</html>
