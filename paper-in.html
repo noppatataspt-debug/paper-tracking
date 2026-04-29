@@ -492,6 +492,113 @@ tr:hover td { background: var(--panel-2); }
   th, td { padding: 8px 10px; font-size: 13px; }
 }
 
+/* ============================================
+   GROUPED LIST VIEW (Tab รายการ)
+   ============================================ */
+.group-day {
+  background: var(--panel); border: 1.5px solid var(--border);
+  border-radius: 10px; padding: 12px 14px;
+  margin-bottom: 8px; cursor: pointer;
+  transition: all 0.15s; user-select: none;
+}
+.group-day:hover { background: var(--panel-2); border-color: var(--text-dim); }
+.group-day-header {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 8px;
+}
+.group-day-left {
+  display: flex; align-items: center; gap: 10px;
+}
+.group-day-arrow {
+  font-size: 11px; color: var(--text-dim);
+  transition: transform 0.2s; display: inline-block; width: 12px;
+}
+.group-day.expanded .group-day-arrow { transform: rotate(90deg); }
+.group-day-date {
+  font-size: 15px; font-weight: 700;
+}
+.group-day-tag {
+  background: var(--accent-bg); color: var(--accent);
+  font-size: 11px; padding: 2px 8px;
+  border-radius: var(--border-radius-md);
+  font-weight: 600;
+}
+.group-day-stats {
+  font-size: 13px; color: var(--text-dim);
+  font-family: var(--mono);
+}
+
+.group-day-children {
+  margin-left: 16px; margin-bottom: 8px;
+  display: none;
+}
+.group-day.expanded + .group-day-children { display: block; }
+
+/* Supplier+Invoice group */
+.group-inv {
+  background: var(--panel); border: 1.5px solid var(--border);
+  border-radius: 8px; padding: 10px 14px;
+  margin-bottom: 6px; cursor: pointer;
+  transition: all 0.15s;
+}
+.group-inv:hover { background: var(--panel-2); }
+.group-inv-header {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 8px;
+}
+.group-inv-left {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.group-inv-arrow {
+  font-size: 10px; color: var(--text-dim);
+  transition: transform 0.2s; display: inline-block; width: 10px;
+}
+.group-inv.expanded .group-inv-arrow { transform: rotate(90deg); }
+.group-inv-supplier { font-size: 14px; font-weight: 700; }
+.group-inv-no { font-size: 13px; color: var(--text-dim); font-family: var(--mono); }
+.group-inv-count {
+  background: var(--panel-2); font-size: 11px;
+  padding: 1px 8px; border-radius: var(--border-radius-md);
+  font-family: var(--mono); font-weight: 500;
+}
+.group-inv-stats {
+  font-size: 12px; font-family: var(--mono);
+  color: var(--text-dim);
+}
+
+/* Color-code by supplier (border-left) */
+.group-inv[data-supplier="SCG"] { border-left: 3px solid #185fa5; }
+.group-inv[data-supplier="MPK"] { border-left: 3px solid #BA7517; }
+.group-inv[data-supplier="UTP"] { border-left: 3px solid #1D9E75; }
+.group-inv[data-supplier="Muda"] { border-left: 3px solid #534AB7; }
+.group-inv[data-supplier="AP"] { border-left: 3px solid #D85A30; }
+.group-inv[data-supplier="TPC"] { border-left: 3px solid #993556; }
+.group-inv[data-supplier="Ching Mei"] { border-left: 3px solid #639922; }
+.group-inv[data-supplier="NTPM"] { border-left: 3px solid #888780; }
+.group-inv[data-supplier="SNP Paper"] { border-left: 3px solid #E24B4A; }
+
+.group-inv-children {
+  margin-left: 16px; margin-top: 6px; margin-bottom: 8px;
+  display: none;
+  background: var(--panel-2);
+  border-radius: 8px;
+  padding: 6px 8px;
+}
+.group-inv.expanded + .group-inv-children { display: block; }
+
+.group-inv-children table {
+  font-size: 13px;
+}
+.group-inv-children th {
+  font-size: 10px; padding: 6px 8px;
+  background: transparent; border-bottom: 1px solid var(--border);
+}
+.group-inv-children td {
+  padding: 6px 8px; border-bottom: 1px solid var(--border);
+}
+.group-inv-children tr:last-child td { border-bottom: none; }
+.group-inv-children tr:hover td { background: var(--panel); }
+
 </style>
 </head>
 <body>
@@ -666,25 +773,8 @@ tr:hover td { background: var(--panel-2); }
       </div>
     </div>
 
-    <div class="table-wrap">
-      <table id="l-table">
-        <thead>
-          <tr>
-            <th>วันที่รับ</th>
-            <th>Invoice</th>
-            <th>Supplier</th>
-            <th>Paper Lot</th>
-            <th>ประเภท</th>
-            <th class="td-right">กว้าง</th>
-            <th class="td-right">น้ำหนัก</th>
-            <th class="td-right">คงเหลือ</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody id="l-tbody">
-          <tr><td colspan="9" style="text-align:center; padding:40px; color:var(--text-dim)">กำลังโหลด...</td></tr>
-        </tbody>
-      </table>
+    <div id="l-grouped-list">
+      <div style="text-align:center; padding:40px; color:var(--text-dim)">กำลังโหลด...</div>
     </div>
 
     <div class="pagination" id="l-pagination"></div>
@@ -1245,7 +1335,7 @@ const state = {
   manualRolls: [],      // for manual tab
   listData: [],         // for list tab
   listPage: 1,
-  listPerPage: 50,
+  listPerPage: 200,
 };
 
 // ============================================================
@@ -1920,21 +2010,24 @@ async function saveManual() {
 }
 
 // ============================================================
-// TAB 3: LIST
+// TAB 3: LIST (Grouped by Date → Supplier+Invoice → Rolls)
 // ============================================================
 async function loadList() {
-  const tbody = $('#l-tbody');
-  tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:40px; color:var(--text-dim)">กำลังโหลด...</td></tr>';
+  const container = $('#l-grouped-list');
+  container.innerHTML = '<div style="text-align:center; padding:40px; color:var(--text-dim)">กำลังโหลด...</div>';
   
   try {
     const search = $('#l-search').value.trim();
     const filterSupp = $('#l-filter-supplier').value;
     const filterStatus = $('#l-filter-status').value;
     
+    // โหลดข้อมูลแบบ paginated by "วันที่รับ" — ดึง 100 ม้วนล่าสุดต่อหน้า
     let q = supabase.from('paper_invoices')
       .select('*', { count: 'exact' })
-      .order('receive_date', { ascending: false })
-      .order('created_at', { ascending: false })
+      .order('receive_date', { ascending: false, nullsFirst: false })
+      .order('supplier', { ascending: true })
+      .order('invoice_no', { ascending: true })
+      .order('paper_lot', { ascending: true })
       .range((state.listPage - 1) * state.listPerPage, state.listPage * state.listPerPage - 1);
     
     if (filterSupp) q = q.eq('supplier', filterSupp);
@@ -1948,35 +2041,149 @@ async function loadList() {
     
     state.listData = data || [];
     $('#list-count').textContent = count ? count.toLocaleString() : '0';
-    renderListTable(data || [], count || 0);
+    renderGroupedList(data || [], count || 0);
   } catch (e) {
     console.error(e);
-    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--danger); padding:20px">โหลดไม่ได้: ${escapeHtml(e.message)}</td></tr>`;
+    container.innerHTML = `<div style="text-align:center; color:var(--danger); padding:20px">โหลดไม่ได้: ${escapeHtml(e.message)}</div>`;
   }
 }
 
-function renderListTable(rows, totalCount) {
-  const tbody = $('#l-tbody');
+// Group rows by date → supplier+invoice → rolls
+function groupRows(rows) {
+  // Map: { date: { supplierInvoice: [rolls...] } }
+  const dayMap = new Map();
+  
+  for (const r of rows) {
+    const date = r.receive_date || '(ไม่ระบุ)';
+    const invKey = `${r.supplier}|${r.invoice_no || '(ไม่ระบุ)'}`;
+    
+    if (!dayMap.has(date)) dayMap.set(date, new Map());
+    const supMap = dayMap.get(date);
+    
+    if (!supMap.has(invKey)) supMap.set(invKey, []);
+    supMap.get(invKey).push(r);
+  }
+  
+  return dayMap;
+}
+
+function renderGroupedList(rows, totalCount) {
+  const container = $('#l-grouped-list');
   
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:40px; color:var(--text-dim)">ไม่พบข้อมูล</td></tr>';
+    container.innerHTML = '<div style="text-align:center; padding:40px; color:var(--text-dim)">ไม่พบข้อมูล</div>';
     $('#l-pagination').innerHTML = '';
     return;
   }
   
-  tbody.innerHTML = rows.map(r => `
-    <tr>
-      <td>${escapeHtml(r.receive_date || '—')}</td>
-      <td class="td-mono">${escapeHtml(r.invoice_no || '—')}</td>
-      <td>${escapeHtml(r.supplier || '—')}</td>
-      <td class="td-mono">${escapeHtml(r.paper_lot)}</td>
-      <td class="td-mono">${escapeHtml(r.paper_type || '—')}</td>
-      <td class="td-mono td-right">${r.width_mm || '—'}</td>
-      <td class="td-mono td-right">${formatNumber(r.weight_kg)}</td>
-      <td class="td-mono td-right">${formatNumber(r.remaining_weight_kg)}</td>
-      <td><span class="status-badge status-${r.status || 'in_stock'}">${escapeHtml(r.status || 'in_stock')}</span></td>
-    </tr>
-  `).join('');
+  const dayMap = groupRows(rows);
+  let html = '';
+  let dayIdx = 0;
+  
+  for (const [date, supMap] of dayMap.entries()) {
+    // Sum stats สำหรับวันนี้
+    let dayRolls = 0, dayWeight = 0;
+    const supplierSet = new Set();
+    for (const [_, arr] of supMap.entries()) {
+      dayRolls += arr.length;
+      arr.forEach(r => {
+        dayWeight += parseFloat(r.weight_kg || 0);
+        supplierSet.add(r.supplier);
+      });
+    }
+    
+    const isFirst = dayIdx === 0;  // วันแรก auto-expand
+    const dayId = `day-${dayIdx}`;
+    
+    html += `
+      <div class="group-day${isFirst ? ' expanded' : ''}" data-target="${dayId}">
+        <div class="group-day-header">
+          <div class="group-day-left">
+            <span class="group-day-arrow">▶</span>
+            <span class="group-day-date">${escapeHtml(date)}</span>
+            <span class="group-day-tag">${supplierSet.size} supplier${supplierSet.size > 1 ? 's' : ''}</span>
+          </div>
+          <div class="group-day-stats">${dayRolls} ม้วน · ${formatNumber(dayWeight)} kg</div>
+        </div>
+      </div>
+      <div class="group-day-children" id="${dayId}" style="display:${isFirst ? 'block' : 'none'}">
+    `;
+    
+    let invIdx = 0;
+    for (const [invKey, arr] of supMap.entries()) {
+      const [supplier, invoice_no] = invKey.split('|');
+      const sumWeight = arr.reduce((s, r) => s + parseFloat(r.weight_kg || 0), 0);
+      const sumRemaining = arr.reduce((s, r) => s + parseFloat(r.remaining_weight_kg || 0), 0);
+      const isFirstInv = isFirst && invIdx === 0;  // first inv ของวันแรก auto-expand
+      const invId = `inv-${dayIdx}-${invIdx}`;
+      
+      html += `
+        <div class="group-inv${isFirstInv ? ' expanded' : ''}" data-supplier="${escapeHtml(supplier)}" data-target="${invId}">
+          <div class="group-inv-header">
+            <div class="group-inv-left">
+              <span class="group-inv-arrow">▶</span>
+              <span class="group-inv-supplier">${escapeHtml(supplier)}</span>
+              <span class="group-inv-no">${escapeHtml(invoice_no)}</span>
+              <span class="group-inv-count">${arr.length} ม้วน</span>
+            </div>
+            <div class="group-inv-stats">${formatNumber(sumWeight)} kg · คงเหลือ ${formatNumber(sumRemaining)} kg</div>
+          </div>
+        </div>
+        <div class="group-inv-children" id="${invId}" style="display:${isFirstInv ? 'block' : 'none'}">
+          <table style="width:100%;">
+            <thead>
+              <tr>
+                <th style="text-align:left;">Lot</th>
+                <th style="text-align:left;">ประเภท</th>
+                <th class="td-right">กว้าง</th>
+                <th class="td-right">น้ำหนัก</th>
+                <th class="td-right">คงเหลือ</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${arr.map(r => `
+                <tr>
+                  <td class="td-mono">${escapeHtml(r.paper_lot)}</td>
+                  <td class="td-mono">${escapeHtml(r.paper_type || '—')}</td>
+                  <td class="td-mono td-right">${r.width_mm || '—'}</td>
+                  <td class="td-mono td-right">${formatNumber(r.weight_kg)}</td>
+                  <td class="td-mono td-right">${formatNumber(r.remaining_weight_kg)}</td>
+                  <td><span class="status-badge status-${r.status || 'in_stock'}">${escapeHtml(r.status || 'in_stock')}</span></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+      invIdx++;
+    }
+    
+    html += '</div>';  // close group-day-children
+    dayIdx++;
+  }
+  
+  container.innerHTML = html;
+  
+  // Attach click handlers
+  $$('.group-day').forEach(el => {
+    el.addEventListener('click', () => {
+      const target = $('#' + el.dataset.target);
+      if (!target) return;
+      el.classList.toggle('expanded');
+      target.style.display = el.classList.contains('expanded') ? 'block' : 'none';
+    });
+  });
+  
+  $$('.group-inv').forEach(el => {
+    el.addEventListener('click', e => {
+      e.stopPropagation();  // ไม่ trigger group-day
+      const target = $('#' + el.dataset.target);
+      if (!target) return;
+      el.classList.toggle('expanded');
+      target.style.display = el.classList.contains('expanded') ? 'block' : 'none';
+    });
+  });
   
   // Pagination
   const totalPages = Math.ceil(totalCount / state.listPerPage);
