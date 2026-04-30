@@ -210,29 +210,29 @@ body {
 /* ===== Price Comparison ===== */
 .price-compare-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(540px, 1fr));
+  gap: 16px;
 }
 .compare-card {
   background: white;
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 14px;
+  padding: 16px 18px;
 }
 .compare-card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 10px;
-  padding-bottom: 10px;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
   border-bottom: 1px solid var(--border);
 }
 .compare-card-title {
-  font-weight: 700; font-size: 15px;
+  font-weight: 700; font-size: 18px;
   font-family: var(--mono);
 }
 .compare-card-category {
-  font-size: 11px; padding: 2px 8px;
+  font-size: 13px; padding: 4px 10px;
   border-radius: 4px;
   font-weight: 700; letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -244,23 +244,23 @@ body {
 .compare-row {
   display: grid;
   grid-template-columns: 1fr auto auto auto;
-  gap: 10px;
-  padding: 8px 0;
+  gap: 14px;
+  padding: 10px 0;
   align-items: center;
-  font-size: 13px;
+  font-size: 16px;
   border-bottom: 1px dashed var(--border);
 }
 .compare-row:last-child { border-bottom: none; }
-.compare-row.cheapest { background: #ecfdf5; padding: 8px; border-radius: 6px; border-bottom: none; margin: 2px 0; }
-.compare-supplier-name { font-weight: 700; font-family: 'IBM Plex Sans Thai', sans-serif; }
-.compare-price { font-family: var(--mono); font-weight: 600; text-align: right; min-width: 60px; }
-.compare-rolls { font-family: var(--mono); color: var(--text-dim); font-size: 12px; text-align: right; min-width: 50px; }
+.compare-row.cheapest { background: #ecfdf5; padding: 10px; border-radius: 6px; border-bottom: none; margin: 2px 0; }
+.compare-supplier-name { font-weight: 700; font-family: 'IBM Plex Sans Thai', sans-serif; font-size: 17px; }
+.compare-price { font-family: var(--mono); font-weight: 700; text-align: right; min-width: 75px; font-size: 17px; }
+.compare-rolls { font-family: var(--mono); color: var(--text-dim); font-size: 14px; text-align: right; min-width: 70px; }
 .compare-diff {
   font-family: var(--mono);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 700;
   text-align: right;
-  min-width: 100px;
+  min-width: 120px;
 }
 .compare-diff.cheapest-tag { color: var(--success); }
 .compare-diff.diff-low { color: var(--success); }
@@ -276,7 +276,7 @@ body {
 }
 
 .pivot-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; }
-.pivot-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 1100px; }
+.pivot-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 1500px; }
 .pivot-table th, .pivot-table td {
   padding: 8px 10px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border);
 }
@@ -600,6 +600,18 @@ function fmtNum(n) {
   return Number(n).toLocaleString('en-US', { maximumFractionDigits: 0 });
 }
 
+// Pivot: น้ำหนัก kg ทศนิยม 2 ตำแหน่ง (ใช้ในตาราง Pivot)
+function fmtKgFull(n) {
+  if (n === null || n === undefined || isNaN(n)) return '—';
+  return Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// Pivot: บาท เต็มจำนวน + ทศนิยม 2 ตำแหน่ง
+function fmtMoneyExact(n) {
+  if (n === null || n === undefined || isNaN(n)) return '—';
+  return '฿' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 function fmtMoney(n) {
   if (n === null || n === undefined || isNaN(n)) return '—';
   if (n >= 1000000) return '฿' + (n / 1000000).toFixed(2) + 'M';
@@ -617,6 +629,16 @@ function fmtCell(n, isMoney = false) {
     return '<span class="pivot-zero">0</span>';
   }
   return isMoney ? fmtMoney(n) : fmtNum(n);
+}
+
+// Pivot cell: ใช้ทศนิยม 2 ตำแหน่ง สำหรับ kg และ บาท
+function fmtPivotCell(n, kind = 'num') {
+  if (n === null || n === undefined || n === 0 || isNaN(n)) {
+    return '<span class="pivot-zero">0</span>';
+  }
+  if (kind === 'kg') return fmtKgFull(n);
+  if (kind === 'money') return fmtMoneyExact(n);
+  return fmtNum(n);
 }
 
 function isManager() { return currentUser && currentUser.role === 'manager'; }
@@ -966,8 +988,8 @@ async function loadDetailPivot() {
       }
       
       function renderCells(t) {
-        let s = `<td class="right">${fmtCell(t.rolls)}</td><td class="right">${fmtCell(t.kg)}</td>`;
-        if (showMoney) s += `<td class="right">${fmtCell(t.value, true)}</td>`;
+        let s = `<td class="right">${fmtPivotCell(t.rolls, 'num')}</td><td class="right">${fmtPivotCell(t.kg, 'kg')}</td>`;
+        if (showMoney) s += `<td class="right">${fmtPivotCell(t.value, 'money')}</td>`;
         return s;
       }
       
