@@ -1230,18 +1230,13 @@ async function loadTrend() {
       .from('paper_outflows').select('weight_kg, outflow_date')
       .gte('outflow_date', start).lte('outflow_date', end).eq('voided', false));
     
-    // คำนวณ baseline = stock คงเหลือ ณ ก่อนเดือนแรก
-    // baseline = (รับเข้าทั้งหมดก่อน start) − (จ่ายออกทั้งหมดก่อน start)
-    const baselineIns = await fetchAllRows(() => supabase
-      .from('paper_invoices').select('weight_kg')
-      .lt('receive_date', start));
-    const baselineOuts = await fetchAllRows(() => supabase
-      .from('paper_outflows').select('weight_kg')
-      .lt('outflow_date', start).eq('voided', false));
-    
-    const baselineInKg = (baselineIns || []).reduce((s, r) => s + parseFloat(r.weight_kg || 0), 0);
-    const baselineOutKg = (baselineOuts || []).reduce((s, r) => s + parseFloat(r.weight_kg || 0), 0);
-    const baseline = baselineInKg - baselineOutKg;
+    // ใช้ Net stock จริงปัจจุบัน เป็นจุดเริ่ม (เป๊ะที่จุดล่าสุด)
+    // กราฟจะใช้สูตร: stock_end_of_M = stock_end_of_(M+1) − in_(M+1) + out_(M+1)
+    // (ย้อนคำนวณจากสต๊อกจริงล่าสุด)
+    const stockNow = await fetchAllRows(() => supabase
+      .from('paper_invoices').select('remaining_weight_kg')
+      .eq('status', 'in_stock'));
+    const currentStock = (stockNow || []).reduce((s, r) => s + parseFloat(r.remaining_weight_kg || 0), 0);
     
     const monthMap = new Map();
     for (const m of months) monthMap.set(m, { in: 0, out: 0 });
@@ -1277,11 +1272,14 @@ async function loadTrend() {
       }
     });
     
-    const cumNet = [];
-    let running = baseline;  // เริ่มจาก stock จริงก่อน 12 เดือน (ไม่ใช่ 0)
-    for (const m of months) {
-      running += monthMap.get(m).in - monthMap.get(m).out;
-      cumNet.push(Math.round(running));
+    // Reverse: เริ่มจาก current stock (เดือนล่าสุด) → ย้อนกลับไป
+    // stock_end_of_M = stock_end_of_(M+1) − in_(M+1) + out_(M+1)
+    const cumNet = new Array(months.length);
+    let running = currentStock;
+    for (let i = months.length - 1; i >= 0; i--) {
+      cumNet[i] = Math.round(running);  // stock end of month[i]
+      const m = months[i];
+      running = running - monthMap.get(m).in + monthMap.get(m).out;
     }
     
     if (cumulativeChart) cumulativeChart.destroy();
