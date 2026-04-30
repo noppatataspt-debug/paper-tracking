@@ -100,6 +100,65 @@ body {
 
 .lot-input-wrap { display: flex; gap: 8px; }
 .lot-input-wrap .form-input { flex: 1; }
+
+/* ===== SCG 4-Box Pattern ===== */
+.scg-box-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: white;
+  padding: 8px;
+  border: 1.5px solid var(--info);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+}
+.scg-input {
+  font-family: var(--mono);
+  font-size: 17px;
+  font-weight: 700;
+  text-align: center;
+  border: 1.5px solid #93c5fd;
+  border-radius: 6px;
+  padding: 8px 4px;
+  text-transform: uppercase;
+  background: white;
+  color: var(--text);
+  min-width: 0;
+}
+.scg-input:focus {
+  outline: none;
+  border-color: var(--info);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+  background: var(--info-light);
+}
+.scg-input.s1 { width: 50px; }
+.scg-input.s2 { width: 36px; }
+.scg-input.s3 { width: 64px; }
+.scg-input.s4 { width: 44px; }
+.scg-dash {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--info);
+  user-select: none;
+}
+.scg-a-prefix {
+  font-family: var(--mono);
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--info);
+  user-select: none;
+  margin-right: -2px;
+}
+.scg-hint {
+  font-size: 11px;
+  color: var(--text-dim);
+  text-align: center;
+  margin-top: 4px;
+}
+.scg-mode-active .form-input.lot { display: none !important; }
+.scg-mode-active .scan-btn { display: flex; align-items: center; }
 .scan-btn {
   background: var(--info); color: white; border: none;
   border-radius: 8px; padding: 0 18px;
@@ -595,11 +654,30 @@ body {
 
       <div class="form-group">
         <label class="form-label required">เลข Paper Lot</label>
-        <div class="lot-input-wrap">
+        
+        <!-- SCG 4-box mode (hidden by default) -->
+        <div id="scgBoxWrap" style="display:none;">
+          <div class="scg-box-wrap">
+            <input type="text" id="scgS1" class="scg-input s1" maxlength="2" placeholder="A0">
+            <span class="scg-dash">−</span>
+            <input type="text" id="scgS2" class="scg-input s2" maxlength="1" placeholder="5">
+            <span class="scg-dash">−</span>
+            <span class="scg-a-prefix">A</span>
+            <input type="text" id="scgS3" class="scg-input s3" maxlength="4" placeholder="8383">
+            <span class="scg-dash">−</span>
+            <input type="text" id="scgS4" class="scg-input s4" maxlength="2" placeholder="1I">
+            <button class="scan-btn" id="btnScanScg" style="margin-left:8px;">📷</button>
+          </div>
+          <div class="scg-hint">(A อยู่หน้าช่องที่ 3 อัตโนมัติ · พิมพ์ครบเด้งช่องถัดไป)</div>
+        </div>
+        
+        <!-- Default lot input (สำหรับ supplier อื่น) -->
+        <div class="lot-input-wrap" id="defaultLotWrap">
           <input type="text" id="lotInput" class="form-input lot" 
                  placeholder="พิมพ์หรือ scan QR..." autocomplete="off">
           <button class="scan-btn" id="btnScan">📷 Scan</button>
         </div>
+        
         <div id="lotValidation" style="font-size:12px;margin-top:4px;display:none;font-weight:600;"></div>
       </div>
 
@@ -919,9 +997,136 @@ supplierSelect.addEventListener('change', () => {
   } else {
     supplierHint.style.display = 'none';
   }
+  
+  // ถ้าเลือก SCG → แสดง 4-box, ซ่อน input ปกติ
+  toggleScgMode(sup === 'SCG');
+  
   showLotValidation();
   updateSubmitState();
 });
+
+// ====== SCG 4-Box Mode ======
+const scgBoxWrap = document.getElementById('scgBoxWrap');
+const defaultLotWrap = document.getElementById('defaultLotWrap');
+const scgS1 = document.getElementById('scgS1');
+const scgS2 = document.getElementById('scgS2');
+const scgS3 = document.getElementById('scgS3');
+const scgS4 = document.getElementById('scgS4');
+const scgInputs = [scgS1, scgS2, scgS3, scgS4];
+const SCG_MAX_LENGTHS = [2, 1, 4, 2];
+
+function toggleScgMode(scgOn) {
+  if (scgOn) {
+    scgBoxWrap.style.display = 'block';
+    defaultLotWrap.style.display = 'none';
+    
+    // ถ้าใน lotInput มีค่าอยู่ → split เข้า 4 boxes
+    const existing = lotInput.value.trim().toUpperCase();
+    if (existing && existing.includes('-')) {
+      splitScgLot(existing);
+    } else {
+      clearScgInputs();
+    }
+    
+    setTimeout(() => scgS1.focus(), 50);
+  } else {
+    scgBoxWrap.style.display = 'none';
+    defaultLotWrap.style.display = 'flex';
+    clearScgInputs();
+  }
+}
+
+function clearScgInputs() {
+  scgInputs.forEach(i => i.value = '');
+}
+
+function splitScgLot(lot) {
+  // "77-5-A8383-1I" → s1=77, s2=5, s3=8383, s4=1I
+  const parts = lot.split('-');
+  if (parts.length === 4) {
+    scgS1.value = parts[0] || '';
+    scgS2.value = parts[1] || '';
+    // ตัด "A" หน้าออก
+    scgS3.value = (parts[2] || '').replace(/^A/, '');
+    scgS4.value = parts[3] || '';
+  }
+}
+
+function buildScgLot() {
+  const s1 = scgS1.value.trim().toUpperCase();
+  const s2 = scgS2.value.trim().toUpperCase();
+  let s3 = scgS3.value.trim().toUpperCase();
+  const s4 = scgS4.value.trim().toUpperCase();
+  
+  if (!s1 && !s2 && !s3 && !s4) return '';
+  
+  // Auto-prefix A ถ้ายังไม่มี
+  if (s3 && !s3.startsWith('A')) s3 = 'A' + s3;
+  
+  return `${s1}-${s2}-${s3}-${s4}`;
+}
+
+// Auto-tab: เมื่อพิมพ์ครบ → ย้ายไปช่องถัดไป
+scgInputs.forEach((input, idx) => {
+  input.addEventListener('input', e => {
+    e.target.value = e.target.value.toUpperCase();
+    
+    // sync ไปยัง lotInput (สำหรับ submit + lookup)
+    const fullLot = buildScgLot();
+    lotInput.value = fullLot;
+    
+    // เคลียร์ lookup result เมื่อแก้ใหม่
+    if (currentLot && normalize(fullLot) !== currentLot) {
+      clearLookup();
+    }
+    
+    showLotValidation();
+    updateSubmitState();
+    
+    // Auto-tab เมื่อพิมพ์ครบ maxLength
+    if (e.target.value.length >= SCG_MAX_LENGTHS[idx] && idx < 3) {
+      scgInputs[idx + 1].focus();
+      scgInputs[idx + 1].select();
+    }
+  });
+  
+  // Auto-delete: เมื่อกด Backspace ในช่องว่าง → กลับไปช่องก่อนหน้า
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Backspace' && e.target.value === '' && idx > 0) {
+      e.preventDefault();
+      const prev = scgInputs[idx - 1];
+      prev.focus();
+      // วางเคอร์เซอร์ไว้ที่ท้าย
+      const len = prev.value.length;
+      prev.setSelectionRange(len, len);
+    }
+    
+    // Enter → submit
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const fullLot = buildScgLot();
+      if (fullLot && normalize(fullLot).length >= 5) {
+        doLookup(normalize(fullLot));
+      }
+    }
+    
+    // Arrow Left/Right ระหว่างช่อง
+    if (e.key === 'ArrowLeft' && e.target.selectionStart === 0 && idx > 0) {
+      e.preventDefault();
+      const prev = scgInputs[idx - 1];
+      prev.focus();
+      prev.setSelectionRange(prev.value.length, prev.value.length);
+    }
+    if (e.key === 'ArrowRight' && e.target.selectionStart === e.target.value.length && idx < 3) {
+      e.preventDefault();
+      scgInputs[idx + 1].focus();
+      scgInputs[idx + 1].setSelectionRange(0, 0);
+    }
+  });
+});
+
+// SCG scan button
+document.getElementById('btnScanScg').addEventListener('click', startScanner);
 
 function showLotValidation() {
   const lot = document.getElementById('lotInput').value.trim().toUpperCase();
@@ -1161,9 +1366,16 @@ document.getElementById('btnSubmit').addEventListener('click', async () => {
     
     // Reset form (ไม่ต้อง reset supplier dropdown - พนักงานน่าจะตัดยี่ห้อเดิมต่อ)
     document.getElementById('lotInput').value = '';
+    clearScgInputs();  // เคลียร์ SCG boxes ด้วย
     lotValidation.style.display = 'none';
     clearLookup();
-    document.getElementById('lotInput').focus();
+    
+    // Focus กลับช่องแรกตาม mode
+    if (supplierSelect.value === 'SCG') {
+      scgS1.focus();
+    } else {
+      document.getElementById('lotInput').focus();
+    }
     
     loadTabBadge();
     
@@ -1448,7 +1660,16 @@ function scanLoop(video) {
           }
         }
         
-        document.getElementById('lotInput').value = lot.toUpperCase();
+        const lotUpper = lot.toUpperCase();
+        document.getElementById('lotInput').value = lotUpper;
+        
+        // ถ้า lot มี dash → น่าจะเป็น SCG → auto-select supplier + split เข้า 4-box
+        if (lotUpper.includes('-') && SCG_PATTERN.test(lotUpper)) {
+          supplierSelect.value = 'SCG';
+          supplierSelect.dispatchEvent(new Event('change'));
+          splitScgLot(lotUpper);
+        }
+        
         doLookup(normalize(lot));
         stopScanner();
         showToast('✓ Scan สำเร็จ: ' + lot, 'success');
