@@ -415,6 +415,170 @@ tr:hover td { background: var(--panel-2); }
 .status-damaged { background: var(--danger-bg); color: var(--danger); }
 .status-returned { background: var(--info-bg); color: var(--info); }
 
+/* ===== Admin Mode ===== */
+.admin-bar {
+  display: flex; align-items: center; gap: 10px;
+  background: linear-gradient(90deg, #fef3c7, #fde68a);
+  padding: 10px 14px; border-radius: 10px;
+  margin: 0 0 12px; border: 1px solid #d97706;
+  font-size: 13px; font-weight: 600; color: #78350f;
+}
+.admin-bar .admin-info { flex: 1; }
+.admin-bar button {
+  background: white; border: 1px solid #d97706;
+  color: #d97706; padding: 5px 12px;
+  border-radius: 6px; font-size: 12px; font-weight: 700;
+  cursor: pointer;
+}
+.admin-bar button:hover { background: #d97706; color: white; }
+.btn-admin-login {
+  padding: 8px 14px; background: #1f2937; color: white;
+  border: none; border-radius: 7px; font-size: 13px;
+  font-weight: 600; cursor: pointer;
+  font-family: inherit;
+}
+.btn-admin-login:hover { background: #111827; }
+
+/* Action buttons in row */
+.row-actions {
+  display: flex; gap: 4px; justify-content: flex-end;
+}
+.row-btn {
+  background: none; border: 1px solid var(--border);
+  padding: 3px 8px; border-radius: 5px;
+  font-size: 12px; cursor: pointer; font-weight: 600;
+  font-family: inherit;
+}
+.row-btn-edit { color: var(--info); border-color: rgba(37, 99, 235, 0.3); }
+.row-btn-edit:hover { background: var(--info-bg); }
+.row-btn-delete { color: var(--danger); border-color: rgba(220, 38, 38, 0.3); }
+.row-btn-delete:hover { background: var(--danger-bg); }
+.row-btn-price { color: #ca8a04; border-color: rgba(202, 138, 4, 0.3); }
+.row-btn-price:hover { background: #fef3c7; }
+
+/* Inline price */
+.price-cell {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: #ca8a04;
+}
+.price-cell.no-price { color: var(--text-dim); font-weight: 400; }
+
+/* Bulk price button per invoice */
+.btn-bulk-price {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: #fef3c7; color: #92400e;
+  border: 1px solid #fbbf24;
+  padding: 4px 10px; border-radius: 6px;
+  font-size: 12px; font-weight: 700;
+  cursor: pointer; margin-left: 8px;
+  font-family: inherit;
+}
+.btn-bulk-price:hover { background: #fbbf24; color: white; }
+
+/* Edit/Price Modal */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+  display: none; align-items: center; justify-content: center;
+  z-index: 1000; padding: 16px;
+}
+.modal-overlay.show { display: flex; }
+.modal-box {
+  background: white;
+  border-radius: 14px;
+  padding: 22px;
+  max-width: 480px;
+  width: 100%;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+}
+.modal-box h3 { margin: 0 0 12px; font-size: 18px; }
+.modal-box p { margin: 0 0 14px; color: var(--text-dim); font-size: 14px; }
+.modal-box label {
+  display: block; font-size: 13px; font-weight: 600;
+  color: var(--text-dim); margin: 10px 0 4px;
+}
+.modal-box input, .modal-box select {
+  width: 100%; padding: 10px 12px;
+  border: 1.5px solid var(--border-strong, #d1d5db); border-radius: 8px;
+  font-size: 15px; font-family: inherit; background: white;
+  box-sizing: border-box;
+}
+.modal-box input:focus, .modal-box select:focus {
+  outline: none; border-color: var(--accent);
+}
+.modal-actions {
+  display: flex; gap: 8px; margin-top: 18px;
+}
+.modal-actions button {
+  flex: 1; padding: 11px;
+  border-radius: 8px; font-weight: 700; font-size: 14px;
+  cursor: pointer; border: 1.5px solid;
+  font-family: inherit;
+}
+.btn-mod-cancel {
+  background: white; border-color: var(--border);
+  color: var(--text);
+}
+.btn-mod-cancel:hover { background: var(--panel-2); }
+.btn-mod-confirm {
+  background: var(--accent, #2563eb); border-color: var(--accent, #2563eb);
+  color: white;
+}
+.btn-mod-confirm:hover { background: var(--accent-dark, #1e40af); }
+.btn-mod-danger {
+  background: var(--danger); border-color: var(--danger);
+  color: white;
+}
+.btn-mod-warn {
+  background: #d97706; border-color: #d97706;
+  color: white;
+}
+
+.lot-display {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--text);
+  background: var(--panel-2);
+  padding: 6px 10px;
+  border-radius: 6px;
+  display: inline-block;
+  margin: 4px 0;
+}
+.invoice-summary-info {
+  background: var(--panel-2);
+  padding: 10px 12px;
+  border-radius: 8px;
+  margin: 8px 0;
+  font-size: 13px;
+}
+.invoice-summary-info > div { margin: 2px 0; }
+.invoice-summary-info b { font-family: var(--mono); }
+
+/* Bulk price - rolls table */
+.rolls-price-table {
+  max-height: 300px;
+  overflow-y: auto;
+  margin: 8px 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.rolls-price-table table { width: 100%; font-size: 13px; }
+.rolls-price-table th, .rolls-price-table td {
+  padding: 6px 8px; border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+.rolls-price-table th {
+  background: var(--panel-2); position: sticky; top: 0;
+  font-weight: 700;
+}
+.rolls-price-table .roll-price-input {
+  width: 80px; padding: 4px 6px;
+  font-family: var(--mono); font-size: 13px;
+  border: 1px solid var(--border-strong, #d1d5db);
+  border-radius: 4px; text-align: right;
+}
+
 .pagination {
   display: flex; gap: 6px; justify-content: center;
   padding: 16px; flex-wrap: wrap;
@@ -669,6 +833,7 @@ tr:hover td { background: var(--panel-2); }
     </div>
     <div class="nav-links">
       <a href="index.html" class="nav-link">📝 บันทึก</a>
+      <a href="paper-out.html" class="nav-link">📤 Paper-Out</a>
       <a href="dashboard.html" class="nav-link">📊 Dashboard</a>
     </div>
   </header>
@@ -803,6 +968,8 @@ tr:hover td { background: var(--panel-2); }
        TAB 3: LIST
        ============================================ -->
   <section class="tab-content" id="tab-list">
+    <div id="adminBar" style="display:none;"></div>
+    
     <div class="panel">
       <div class="list-toolbar">
         <input type="text" class="search-input" id="l-search" placeholder="🔍 ค้นหา lot / invoice / supplier...">
@@ -817,6 +984,7 @@ tr:hover td { background: var(--panel-2); }
           <option value="damaged">damaged</option>
         </select>
         <button class="btn btn-sm" id="l-refresh">🔄 Refresh</button>
+        <button class="btn-admin-login" id="btnAdminLogin">🔐 Admin</button>
       </div>
     </div>
 
@@ -826,6 +994,154 @@ tr:hover td { background: var(--panel-2); }
 
     <div class="pagination" id="l-pagination"></div>
   </section>
+</div>
+
+<!-- ===== Modal: Admin Login ===== -->
+<div class="modal-overlay" id="modalAdminLogin">
+  <div class="modal-box">
+    <div style="font-size:36px;text-align:center;margin-bottom:8px;">🔐</div>
+    <h3 style="text-align:center;">เข้าสู่ระบบผู้จัดการ</h3>
+    <p style="text-align:center;">กรอก username และ password เพื่อแก้ไข/ลบ/ใส่ราคา</p>
+    <label>Username</label>
+    <input type="text" id="loginUsername" autocomplete="username">
+    <label>Password</label>
+    <input type="password" id="loginPassword" autocomplete="current-password">
+    <div id="loginError" style="display:none;color:var(--danger);font-size:13px;text-align:center;margin-top:8px;font-weight:600;"></div>
+    <div class="modal-actions">
+      <button class="btn-mod-cancel" onclick="window.closeAdminLogin()">ยกเลิก</button>
+      <button class="btn-mod-confirm" id="btnDoLogin" style="background:#1f2937;border-color:#1f2937;">เข้าสู่ระบบ</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Modal: Edit Roll ===== -->
+<div class="modal-overlay" id="modalEditRoll">
+  <div class="modal-box">
+    <h3>✏️ แก้ไขข้อมูลม้วน</h3>
+    
+    <label>Paper Lot</label>
+    <input type="text" id="editLot" style="font-family:var(--mono);font-weight:700;">
+    <div style="font-size:11px;color:var(--text-dim);margin-top:2px;">
+      ⚠️ เปลี่ยน lot จะกระทบ paper_outflows ที่อ้างถึง
+    </div>
+    
+    <label>Supplier</label>
+    <select id="editSupplier"></select>
+    
+    <label>Invoice No</label>
+    <input type="text" id="editInvoiceNo">
+    
+    <label>ประเภทกระดาษ</label>
+    <input type="text" id="editPaperType">
+    
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div>
+        <label>หน้ากว้าง (mm)</label>
+        <input type="number" id="editWidth" step="0.01">
+      </div>
+      <div>
+        <label>น้ำหนัก (kg)</label>
+        <input type="number" id="editWeight" step="0.01">
+      </div>
+    </div>
+    
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div>
+        <label>วันที่ Invoice</label>
+        <input type="date" id="editInvoiceDate">
+      </div>
+      <div>
+        <label>วันที่รับเข้า</label>
+        <input type="date" id="editReceiveDate">
+      </div>
+    </div>
+    
+    <label>ราคา/kg</label>
+    <input type="number" id="editPricePerKg" step="0.0001" placeholder="ปล่อยว่าง = ไม่มีราคา">
+    
+    <label>หมายเหตุ</label>
+    <input type="text" id="editNotes">
+    
+    <div id="editError" style="display:none;color:var(--danger);font-size:13px;text-align:center;margin-top:8px;font-weight:600;"></div>
+    
+    <div class="modal-actions">
+      <button class="btn-mod-cancel" onclick="window.closeEditModal()">ยกเลิก</button>
+      <button class="btn-mod-confirm" id="btnSaveEdit">💾 บันทึก</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Modal: Delete Confirm ===== -->
+<div class="modal-overlay" id="modalDeleteRoll">
+  <div class="modal-box">
+    <div style="font-size:36px;text-align:center;margin-bottom:8px;">🗑️</div>
+    <h3 style="text-align:center;">ยืนยันลบถาวร</h3>
+    <p style="text-align:center;">คุณต้องการลบม้วน:</p>
+    <p style="text-align:center;"><span class="lot-display" id="deleteLotDisplay"></span></p>
+    <p style="text-align:center;color:var(--danger);font-weight:700;">⚠️ การลบนี้กู้คืนไม่ได้</p>
+    <p style="font-size:13px;text-align:center;">พิมพ์ <b>DELETE</b> เพื่อยืนยัน:</p>
+    <input type="text" id="deleteConfirmInput" style="text-align:center;font-weight:700;letter-spacing:2px;text-transform:uppercase;font-family:var(--mono);">
+    <div class="modal-actions">
+      <button class="btn-mod-cancel" onclick="window.closeDeleteModal()">ยกเลิก</button>
+      <button class="btn-mod-danger" id="btnDoDelete" disabled>🗑️ ลบถาวร</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Modal: Single Roll Price ===== -->
+<div class="modal-overlay" id="modalSinglePrice">
+  <div class="modal-box">
+    <div style="font-size:36px;text-align:center;margin-bottom:8px;">💰</div>
+    <h3 style="text-align:center;">ใส่ราคา (ม้วนเดียว)</h3>
+    <div class="invoice-summary-info" id="singlePriceInfo"></div>
+    <label>ราคา/kg (บาท)</label>
+    <input type="number" id="singlePriceInput" step="0.0001" placeholder="เช่น 12.5">
+    <div id="singlePriceError" style="display:none;color:var(--danger);font-size:13px;text-align:center;margin-top:8px;font-weight:600;"></div>
+    <div class="modal-actions">
+      <button class="btn-mod-cancel" onclick="window.closeSinglePrice()">ยกเลิก</button>
+      <button class="btn-mod-confirm" id="btnSaveSinglePrice" style="background:#ca8a04;border-color:#ca8a04;">💾 บันทึก</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Modal: Bulk Price (Per Invoice) ===== -->
+<div class="modal-overlay" id="modalBulkPrice">
+  <div class="modal-box" style="max-width:600px;">
+    <div style="font-size:36px;text-align:center;margin-bottom:8px;">💰</div>
+    <h3 style="text-align:center;">ใส่ราคาทั้ง Invoice</h3>
+    <div class="invoice-summary-info" id="bulkPriceInfo"></div>
+    
+    <label>เลือกโหมด</label>
+    <select id="bulkPriceMode">
+      <option value="same">📦 ราคาเดียวกันทั้ง Invoice (Muda/UTP/MPK ฯลฯ)</option>
+      <option value="individual">🎯 แยกราคาแต่ละม้วน (SCG)</option>
+    </select>
+    
+    <!-- Mode 1: Same price -->
+    <div id="bulkSamePrice">
+      <label>ราคา/kg (บาท)</label>
+      <input type="number" id="bulkSamePriceInput" step="0.0001" placeholder="เช่น 13.5">
+      <div style="font-size:12px;color:var(--text-dim);margin-top:4px;">
+        💡 ราคานี้จะใช้กับทุกม้วนใน invoice (จะเขียนทับราคาเดิมถ้ามี)
+      </div>
+    </div>
+    
+    <!-- Mode 2: Individual prices -->
+    <div id="bulkIndividualPrice" style="display:none;">
+      <label>ใส่ราคาแต่ละม้วน (kg)</label>
+      <div class="rolls-price-table" id="bulkRollsTable"></div>
+      <div style="font-size:12px;color:var(--text-dim);margin-top:4px;">
+        💡 ปล่อยว่างไว้ = ไม่แก้ราคาม้วนนั้น
+      </div>
+    </div>
+    
+    <div id="bulkPriceError" style="display:none;color:var(--danger);font-size:13px;text-align:center;margin-top:8px;font-weight:600;"></div>
+    
+    <div class="modal-actions">
+      <button class="btn-mod-cancel" onclick="window.closeBulkPrice()">ยกเลิก</button>
+      <button class="btn-mod-confirm" id="btnSaveBulkPrice" style="background:#ca8a04;border-color:#ca8a04;">💾 บันทึกราคา</button>
+    </div>
+  </div>
 </div>
 
 <!-- Libraries -->
@@ -1416,6 +1732,18 @@ function hideLoading() {
 function formatNumber(n) {
   if (n === null || n === undefined) return '—';
   return Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 });
+}
+
+function formatPrice(n) {
+  if (n === null || n === undefined || n === '') return '—';
+  return Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+}
+
+// ====== Admin state (shared with paper-out via sessionStorage) ======
+let currentAdmin = null;
+const savedAdmin = sessionStorage.getItem('paper_admin');
+if (savedAdmin) {
+  try { currentAdmin = JSON.parse(savedAdmin); } catch(e) {}
 }
 
 function today() {
@@ -2172,6 +2500,7 @@ function renderGroupedList(rows, totalCount) {
               <span class="group-inv-supplier">${escapeHtml(supplier)}</span>
               <span class="group-inv-no">${escapeHtml(invoice_no)}</span>
               <span class="group-inv-count">${arr.length} ม้วน</span>
+              ${currentAdmin ? `<button class="btn-bulk-price" onclick="event.stopPropagation();window.openBulkPrice('${escapeHtml(supplier)}','${escapeHtml(invoice_no)}','${date}')">💰 ใส่ราคา</button>` : ''}
             </div>
             <div class="group-inv-stats">${formatNumber(sumWeight)} kg · คงเหลือ ${formatNumber(sumRemaining)} kg</div>
           </div>
@@ -2185,7 +2514,9 @@ function renderGroupedList(rows, totalCount) {
                 <th class="td-right">กว้าง</th>
                 <th class="td-right">น้ำหนัก</th>
                 <th class="td-right">คงเหลือ</th>
+                <th class="td-right">ราคา/kg</th>
                 <th>Status</th>
+                ${currentAdmin ? '<th style="text-align:right;">Actions</th>' : ''}
               </tr>
             </thead>
             <tbody>
@@ -2196,7 +2527,17 @@ function renderGroupedList(rows, totalCount) {
                   <td class="td-mono td-right">${r.width_mm || '—'}</td>
                   <td class="td-mono td-right">${formatNumber(r.weight_kg)}</td>
                   <td class="td-mono td-right">${formatNumber(r.remaining_weight_kg)}</td>
+                  <td class="td-right price-cell ${r.price_per_kg ? '' : 'no-price'}">${r.price_per_kg ? formatPrice(r.price_per_kg) : '—'}</td>
                   <td><span class="status-badge status-${r.status || 'in_stock'}">${escapeHtml(r.status || 'in_stock')}</span></td>
+                  ${currentAdmin ? `
+                    <td>
+                      <div class="row-actions">
+                        <button class="row-btn row-btn-price" onclick="window.openSinglePrice('${r.id}')" title="ใส่ราคา">💰</button>
+                        <button class="row-btn row-btn-edit" onclick="window.openEditRoll('${r.id}')" title="แก้ไข">✏️</button>
+                        <button class="row-btn row-btn-delete" onclick="window.openDeleteRoll('${r.id}','${escapeHtml(r.paper_lot)}')" title="ลบ">🗑️</button>
+                      </div>
+                    </td>
+                  ` : ''}
                 </tr>
               `).join('')}
             </tbody>
@@ -2287,7 +2628,535 @@ async function init() {
   setupManual();  // call after master data loaded (need paperTypes)
 }
 
+// ============================================
+// ====== ADMIN MODE + EDIT/DELETE/PRICE ======
+// ============================================
+
+function renderAdminBar() {
+  const bar = $('#adminBar');
+  if (!bar) return;
+  if (currentAdmin) {
+    bar.style.display = 'flex';
+    bar.className = 'admin-bar';
+    bar.innerHTML = `
+      <span style="font-size:18px;">🔐</span>
+      <div class="admin-info">
+        เข้าสู่ระบบในฐานะ <b>${escapeHtml(currentAdmin.full_name || currentAdmin.username)}</b>
+        <div style="font-size:11px;opacity:0.8;">โหมดผู้จัดการ — แก้ไข/ลบ/ใส่ราคา ได้</div>
+      </div>
+      <button onclick="window.adminLogout()">ออกจากระบบ</button>
+    `;
+    const loginBtn = $('#btnAdminLogin');
+    if (loginBtn) loginBtn.textContent = '🔓 Admin';
+  } else {
+    bar.style.display = 'none';
+    const loginBtn = $('#btnAdminLogin');
+    if (loginBtn) loginBtn.textContent = '🔐 Admin';
+  }
+}
+
+function setupAdminLogin() {
+  const btn = $('#btnAdminLogin');
+  if (!btn) return;
+  
+  btn.addEventListener('click', () => {
+    if (currentAdmin) {
+      if (confirm(`ออกจากระบบ ${currentAdmin.full_name || currentAdmin.username}?`)) {
+        window.adminLogout();
+      }
+    } else {
+      $('#loginUsername').value = '';
+      $('#loginPassword').value = '';
+      $('#loginError').style.display = 'none';
+      $('#modalAdminLogin').classList.add('show');
+      setTimeout(() => $('#loginUsername').focus(), 100);
+    }
+  });
+  
+  $('#btnDoLogin').addEventListener('click', doLogin);
+  $('#loginPassword').addEventListener('keydown', e => {
+    if (e.key === 'Enter') doLogin();
+  });
+}
+
+window.closeAdminLogin = function() {
+  $('#modalAdminLogin').classList.remove('show');
+};
+
+window.adminLogout = function() {
+  currentAdmin = null;
+  sessionStorage.removeItem('paper_admin');
+  renderAdminBar();
+  loadList();  // reload เพื่อซ่อนปุ่ม edit/delete
+};
+
+async function doLogin() {
+  const username = $('#loginUsername').value.trim();
+  const password = $('#loginPassword').value;
+  const errorDiv = $('#loginError');
+  const btn = $('#btnDoLogin');
+  
+  if (!username || !password) {
+    errorDiv.textContent = 'กรุณากรอก username และ password';
+    errorDiv.style.display = 'block';
+    return;
+  }
+  
+  btn.disabled = true;
+  btn.textContent = 'กำลังตรวจสอบ...';
+  errorDiv.style.display = 'none';
+  
+  try {
+    const { data, error } = await supabase
+      .rpc('verify_admin_login', { p_username: username, p_password: password });
+    
+    if (error) throw error;
+    
+    if (data && data.length > 0) {
+      currentAdmin = {
+        id: data[0].out_id,
+        username: data[0].out_username,
+        full_name: data[0].out_full_name
+      };
+      sessionStorage.setItem('paper_admin', JSON.stringify(currentAdmin));
+      $('#modalAdminLogin').classList.remove('show');
+      renderAdminBar();
+      loadList();
+    } else {
+      errorDiv.textContent = '❌ Username หรือ Password ไม่ถูกต้อง';
+      errorDiv.style.display = 'block';
+    }
+  } catch (err) {
+    errorDiv.textContent = '❌ ' + err.message;
+    errorDiv.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'เข้าสู่ระบบ';
+  }
+}
+
+// ====== EDIT ROLL ======
+let editingRollId = null;
+
+window.openEditRoll = async function(id) {
+  if (!currentAdmin) return alert('ต้อง login ก่อน');
+  
+  const row = state.listData.find(r => r.id === id);
+  if (!row) return alert('ไม่พบข้อมูล');
+  
+  editingRollId = id;
+  
+  $('#editLot').value = row.paper_lot || '';
+  
+  // populate supplier dropdown
+  const supSel = $('#editSupplier');
+  supSel.innerHTML = state.suppliers.map(s => 
+    `<option value="${escapeHtml(s.code)}" ${s.code === row.supplier ? 'selected' : ''}>${escapeHtml(s.name)}</option>`
+  ).join('');
+  
+  $('#editInvoiceNo').value = row.invoice_no || '';
+  $('#editPaperType').value = row.paper_type || '';
+  $('#editWidth').value = row.width_mm || '';
+  $('#editWeight').value = row.weight_kg || '';
+  $('#editInvoiceDate').value = row.invoice_date || '';
+  $('#editReceiveDate').value = row.receive_date || '';
+  $('#editPricePerKg').value = row.price_per_kg || '';
+  $('#editNotes').value = row.notes || '';
+  
+  $('#editError').style.display = 'none';
+  $('#modalEditRoll').classList.add('show');
+};
+
+window.closeEditModal = function() {
+  $('#modalEditRoll').classList.remove('show');
+  editingRollId = null;
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+  const saveBtn = $('#btnSaveEdit');
+  if (saveBtn) saveBtn.addEventListener('click', saveEditRoll);
+});
+
+async function saveEditRoll() {
+  if (!editingRollId) return;
+  
+  const btn = $('#btnSaveEdit');
+  const errorDiv = $('#editError');
+  
+  const lot = $('#editLot').value.trim();
+  const supplier = $('#editSupplier').value;
+  
+  if (!lot || !supplier) {
+    errorDiv.textContent = 'กรุณากรอก lot และเลือก supplier';
+    errorDiv.style.display = 'block';
+    return;
+  }
+  
+  btn.disabled = true;
+  btn.textContent = 'กำลังบันทึก...';
+  errorDiv.style.display = 'none';
+  
+  const weight = parseFloat($('#editWeight').value) || 0;
+  const pricePerKg = parseFloat($('#editPricePerKg').value) || null;
+  
+  const payload = {
+    paper_lot: lot,
+    paper_lot_normalized: lot.toUpperCase().replace(/-/g, ''),
+    supplier: supplier,
+    invoice_no: $('#editInvoiceNo').value.trim() || null,
+    paper_type: $('#editPaperType').value.trim() || null,
+    width_mm: parseFloat($('#editWidth').value) || null,
+    weight_kg: weight,
+    invoice_date: $('#editInvoiceDate').value || null,
+    receive_date: $('#editReceiveDate').value || null,
+    price_per_kg: pricePerKg,
+    price_per_roll: pricePerKg && weight ? Number((pricePerKg * weight).toFixed(2)) : null,
+    notes: $('#editNotes').value.trim() || null,
+    updated_at: new Date().toISOString()
+  };
+  
+  try {
+    const { error } = await supabase
+      .from('paper_invoices')
+      .update(payload)
+      .eq('id', editingRollId);
+    
+    if (error) throw error;
+    
+    window.closeEditModal();
+    loadList();
+  } catch (err) {
+    errorDiv.textContent = '❌ ' + err.message;
+    errorDiv.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '💾 บันทึก';
+  }
+}
+
+// ====== DELETE ROLL ======
+let deletingRollId = null;
+
+window.openDeleteRoll = function(id, lot) {
+  if (!currentAdmin) return alert('ต้อง login ก่อน');
+  
+  deletingRollId = id;
+  $('#deleteLotDisplay').textContent = lot;
+  $('#deleteConfirmInput').value = '';
+  $('#btnDoDelete').disabled = true;
+  $('#modalDeleteRoll').classList.add('show');
+  setTimeout(() => $('#deleteConfirmInput').focus(), 100);
+};
+
+window.closeDeleteModal = function() {
+  $('#modalDeleteRoll').classList.remove('show');
+  deletingRollId = null;
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+  const input = $('#deleteConfirmInput');
+  if (input) {
+    input.addEventListener('input', e => {
+      e.target.value = e.target.value.toUpperCase();
+      $('#btnDoDelete').disabled = e.target.value.trim() !== 'DELETE';
+    });
+  }
+  
+  const delBtn = $('#btnDoDelete');
+  if (delBtn) delBtn.addEventListener('click', doDeleteRoll);
+});
+
+async function doDeleteRoll() {
+  if (!deletingRollId) return;
+  
+  const btn = $('#btnDoDelete');
+  btn.disabled = true;
+  btn.textContent = 'กำลังลบ...';
+  
+  try {
+    const { error } = await supabase
+      .from('paper_invoices')
+      .delete()
+      .eq('id', deletingRollId);
+    
+    if (error) throw error;
+    
+    window.closeDeleteModal();
+    loadList();
+  } catch (err) {
+    alert('❌ ' + err.message);
+    btn.disabled = false;
+    btn.textContent = '🗑️ ลบถาวร';
+  }
+}
+
+// ====== SINGLE ROLL PRICE ======
+let singlePriceId = null;
+
+window.openSinglePrice = function(id) {
+  if (!currentAdmin) return alert('ต้อง login ก่อน');
+  
+  const row = state.listData.find(r => r.id === id);
+  if (!row) return;
+  
+  singlePriceId = id;
+  $('#singlePriceInfo').innerHTML = `
+    <div>Lot: <b>${escapeHtml(row.paper_lot)}</b></div>
+    <div>Supplier: <b>${escapeHtml(row.supplier)}</b> · ${escapeHtml(row.paper_type || '-')}</div>
+    <div>น้ำหนัก: <b>${formatNumber(row.weight_kg)} kg</b></div>
+    ${row.price_per_kg ? `<div style="color:#ca8a04;">ราคาเดิม: <b>${formatPrice(row.price_per_kg)} บาท/kg</b></div>` : ''}
+  `;
+  $('#singlePriceInput').value = row.price_per_kg || '';
+  $('#singlePriceError').style.display = 'none';
+  $('#modalSinglePrice').classList.add('show');
+  setTimeout(() => $('#singlePriceInput').focus(), 100);
+};
+
+window.closeSinglePrice = function() {
+  $('#modalSinglePrice').classList.remove('show');
+  singlePriceId = null;
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+  const btn = $('#btnSaveSinglePrice');
+  if (btn) btn.addEventListener('click', saveSinglePrice);
+});
+
+async function saveSinglePrice() {
+  if (!singlePriceId) return;
+  
+  const btn = $('#btnSaveSinglePrice');
+  const errorDiv = $('#singlePriceError');
+  const priceStr = $('#singlePriceInput').value.trim();
+  
+  if (!priceStr) {
+    errorDiv.textContent = 'กรุณากรอกราคา';
+    errorDiv.style.display = 'block';
+    return;
+  }
+  
+  const price = parseFloat(priceStr);
+  if (isNaN(price) || price < 0) {
+    errorDiv.textContent = 'ราคาไม่ถูกต้อง';
+    errorDiv.style.display = 'block';
+    return;
+  }
+  
+  btn.disabled = true;
+  btn.textContent = 'กำลังบันทึก...';
+  errorDiv.style.display = 'none';
+  
+  const row = state.listData.find(r => r.id === singlePriceId);
+  const weight = row ? parseFloat(row.weight_kg) : 0;
+  
+  try {
+    const { error } = await supabase
+      .from('paper_invoices')
+      .update({
+        price_per_kg: price,
+        price_per_roll: weight ? Number((price * weight).toFixed(2)) : null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', singlePriceId);
+    
+    if (error) throw error;
+    
+    window.closeSinglePrice();
+    loadList();
+  } catch (err) {
+    errorDiv.textContent = '❌ ' + err.message;
+    errorDiv.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '💾 บันทึก';
+  }
+}
+
+// ====== BULK PRICE (Per Invoice) ======
+let bulkPriceContext = null;  // {supplier, invoice_no, date, rolls}
+
+window.openBulkPrice = async function(supplier, invoice_no, date) {
+  if (!currentAdmin) return alert('ต้อง login ก่อน');
+  
+  // ดึงม้วนทั้งหมดใน invoice นี้
+  const rolls = state.listData.filter(r => 
+    r.supplier === supplier && 
+    (r.invoice_no || '(ไม่ระบุ)') === invoice_no &&
+    (r.receive_date || '(ไม่ระบุ)') === date
+  );
+  
+  if (!rolls.length) {
+    alert('ไม่พบม้วนใน invoice นี้');
+    return;
+  }
+  
+  bulkPriceContext = { supplier, invoice_no, date, rolls };
+  
+  const totalWeight = rolls.reduce((s, r) => s + parseFloat(r.weight_kg || 0), 0);
+  const withPrice = rolls.filter(r => r.price_per_kg).length;
+  
+  $('#bulkPriceInfo').innerHTML = `
+    <div>Supplier: <b>${escapeHtml(supplier)}</b></div>
+    <div>Invoice: <b>${escapeHtml(invoice_no)}</b> · วันที่ <b>${escapeHtml(date)}</b></div>
+    <div>จำนวน: <b>${rolls.length} ม้วน</b> · น้ำหนัก <b>${formatNumber(totalWeight)} kg</b></div>
+    ${withPrice > 0 ? `<div style="color:#ca8a04;">มีราคาแล้ว: <b>${withPrice}/${rolls.length} ม้วน</b></div>` : ''}
+  `;
+  
+  // Default mode by supplier
+  const defaultMode = (supplier === 'SCG') ? 'individual' : 'same';
+  $('#bulkPriceMode').value = defaultMode;
+  toggleBulkPriceMode(defaultMode);
+  
+  // Build rolls table
+  $('#bulkRollsTable').innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>Lot</th>
+          <th>ประเภท</th>
+          <th class="td-right">น้ำหนัก</th>
+          <th class="td-right">ราคา/kg</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rolls.map(r => `
+          <tr>
+            <td class="td-mono">${escapeHtml(r.paper_lot)}</td>
+            <td class="td-mono">${escapeHtml(r.paper_type || '—')}</td>
+            <td class="td-right td-mono">${formatNumber(r.weight_kg)}</td>
+            <td class="td-right">
+              <input type="number" class="roll-price-input" step="0.0001" 
+                     data-roll-id="${r.id}" data-roll-weight="${r.weight_kg}"
+                     value="${r.price_per_kg || ''}" placeholder="ราคา">
+            </td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+  
+  $('#bulkSamePriceInput').value = '';
+  $('#bulkPriceError').style.display = 'none';
+  $('#modalBulkPrice').classList.add('show');
+};
+
+window.closeBulkPrice = function() {
+  $('#modalBulkPrice').classList.remove('show');
+  bulkPriceContext = null;
+};
+
+function toggleBulkPriceMode(mode) {
+  if (mode === 'same') {
+    $('#bulkSamePrice').style.display = 'block';
+    $('#bulkIndividualPrice').style.display = 'none';
+  } else {
+    $('#bulkSamePrice').style.display = 'none';
+    $('#bulkIndividualPrice').style.display = 'block';
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const modeSel = $('#bulkPriceMode');
+  if (modeSel) modeSel.addEventListener('change', e => toggleBulkPriceMode(e.target.value));
+  
+  const saveBtn = $('#btnSaveBulkPrice');
+  if (saveBtn) saveBtn.addEventListener('click', saveBulkPrice);
+});
+
+async function saveBulkPrice() {
+  if (!bulkPriceContext) return;
+  
+  const btn = $('#btnSaveBulkPrice');
+  const errorDiv = $('#bulkPriceError');
+  const mode = $('#bulkPriceMode').value;
+  
+  errorDiv.style.display = 'none';
+  
+  let updates = [];  // [{id, price, weight}]
+  
+  if (mode === 'same') {
+    const priceStr = $('#bulkSamePriceInput').value.trim();
+    if (!priceStr) {
+      errorDiv.textContent = 'กรุณากรอกราคา';
+      errorDiv.style.display = 'block';
+      return;
+    }
+    const price = parseFloat(priceStr);
+    if (isNaN(price) || price < 0) {
+      errorDiv.textContent = 'ราคาไม่ถูกต้อง';
+      errorDiv.style.display = 'block';
+      return;
+    }
+    updates = bulkPriceContext.rolls.map(r => ({
+      id: r.id,
+      price: price,
+      weight: parseFloat(r.weight_kg) || 0
+    }));
+  } else {
+    // individual mode
+    const inputs = $$('.roll-price-input');
+    inputs.forEach(input => {
+      const val = input.value.trim();
+      if (!val) return;  // skip empty
+      const price = parseFloat(val);
+      if (isNaN(price) || price < 0) return;
+      updates.push({
+        id: input.dataset.rollId,
+        price: price,
+        weight: parseFloat(input.dataset.rollWeight) || 0
+      });
+    });
+    
+    if (!updates.length) {
+      errorDiv.textContent = 'ไม่มีราคาที่จะบันทึก (กรอกอย่างน้อย 1 ม้วน)';
+      errorDiv.style.display = 'block';
+      return;
+    }
+  }
+  
+  btn.disabled = true;
+  btn.textContent = `กำลังบันทึก ${updates.length} ม้วน...`;
+  
+  try {
+    // Batch update
+    const promises = updates.map(u => 
+      supabase
+        .from('paper_invoices')
+        .update({
+          price_per_kg: u.price,
+          price_per_roll: u.weight ? Number((u.price * u.weight).toFixed(2)) : null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', u.id)
+    );
+    
+    const results = await Promise.all(promises);
+    const errors = results.filter(r => r.error).map(r => r.error.message);
+    
+    if (errors.length) {
+      throw new Error(`${errors.length}/${updates.length} ม้วนล้มเหลว: ${errors[0]}`);
+    }
+    
+    window.closeBulkPrice();
+    loadList();
+  } catch (err) {
+    errorDiv.textContent = '❌ ' + err.message;
+    errorDiv.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '💾 บันทึกราคา';
+  }
+}
+
+// ====== Init Admin Features ======
+function initAdminFeatures() {
+  setupAdminLogin();
+  renderAdminBar();
+}
+
+
 window.addEventListener('DOMContentLoaded', init);
+window.addEventListener('DOMContentLoaded', initAdminFeatures);
 
 
 </script>
