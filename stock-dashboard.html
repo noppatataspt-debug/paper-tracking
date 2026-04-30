@@ -1518,11 +1518,13 @@ async function loadPriceCompare() {
       return;
     }
     
-    // Sort: by category (Liner > Grey-Board > Core-Board), then by groupKey
-    const catOrder = { 'Liner': 1, 'Grey-Board': 2, 'Core-Board': 3 };
+    // Sort: ตามเลข Group (Group1, Group2, ..., Group10) ใช้ natural sort
     validGroups.sort((a, b) => {
-      const co = (catOrder[a.category] || 99) - (catOrder[b.category] || 99);
-      if (co !== 0) return co;
+      // ดึงเลข group จาก groupKey เช่น "Group3-Medium" → 3
+      const numA = parseInt((a.groupKey.match(/Group(\d+)/) || [])[1] || '999');
+      const numB = parseInt((b.groupKey.match(/Group(\d+)/) || [])[1] || '999');
+      if (numA !== numB) return numA - numB;
+      // ถ้าไม่มี group number ให้เรียงตาม alphabetical
       return a.groupKey.localeCompare(b.groupKey, 'en');
     });
     
