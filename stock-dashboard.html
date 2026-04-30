@@ -307,6 +307,16 @@ body {
 
 .pivot-zero { color: var(--text-muted); font-style: italic; }
 
+.pivot-row-grand {
+  background: #1e293b !important;
+  color: white !important;
+  font-weight: 700;
+  border-top: 2px solid #0f172a;
+}
+.pivot-row-grand td { color: white !important; padding: 12px 10px; font-size: 14px; }
+.pivot-row-grand td:first-child { font-family: 'IBM Plex Sans Thai', sans-serif !important; }
+.pivot-row-grand .pivot-zero { color: #94a3b8 !important; }
+
 .aging-buckets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
 .aging-bucket { padding: 16px; border-radius: 10px; text-align: center; }
 .aging-0-30 { background: #dcfce7; color: #14532d; }
@@ -1048,6 +1058,39 @@ async function loadDetailPivot() {
       }
       supIdx++;
     }
+    
+    // Grand total — รวมทุก supplier
+    const grandTotal = {
+      prev: { rolls: 0, kg: 0, value: 0 }, in: { rolls: 0, kg: 0, value: 0 },
+      out: { rolls: 0, kg: 0, value: 0 }, bal: { rolls: 0, kg: 0, value: 0 }
+    };
+    for (const [_, tMap] of supArr) {
+      for (const [__, wMap] of tMap) {
+        for (const [___, c] of wMap) {
+          ['prev','in','out','bal'].forEach(k => {
+            grandTotal[k].rolls += c[k].rolls;
+            grandTotal[k].kg += c[k].kg;
+            grandTotal[k].value += c[k].value;
+          });
+        }
+      }
+    }
+    
+    function renderGrandCells(t) {
+      let s = `<td class="right">${fmtPivotCell(t.rolls, 'num')}</td><td class="right">${fmtPivotCell(t.kg, 'kg')}</td>`;
+      if (showMoney) s += `<td class="right">${fmtPivotCell(t.value, 'money')}</td>`;
+      return s;
+    }
+    
+    html += `
+      <tr class="pivot-row-grand">
+        <td class="left">📊 รวมทั้งหมด</td>
+        ${renderGrandCells(grandTotal.prev)}
+        ${renderGrandCells(grandTotal.in)}
+        ${renderGrandCells(grandTotal.out)}
+        ${renderGrandCells(grandTotal.bal)}
+      </tr>
+    `;
     
     html += '</tbody></table></div>';
     wrap.innerHTML = html;
