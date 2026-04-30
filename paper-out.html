@@ -110,20 +110,23 @@ body {
 .scan-btn:active { transform: scale(0.97); }
 
 /* ===== Machine selector ===== */
-.machine-grid {
+.machine-side-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.machine-slitter-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
   gap: 6px;
 }
-.machine-grid .machine-special {
-  grid-column: span 2;
-}
 .machine-btn {
-  padding: 10px 8px;
+  padding: 12px 8px;
   border: 2px solid var(--border-strong);
   border-radius: 8px;
   background: white;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.15s;
@@ -135,12 +138,25 @@ body {
   background: var(--primary-light);
   color: var(--primary-dark);
 }
-.machine-btn .machine-num { font-size: 18px; display: block; margin-bottom: 2px; }
+.machine-btn.machine-side {
+  padding: 14px 10px;
+  font-size: 15px;
+}
+.machine-btn .machine-num {
+  font-size: 22px;
+  display: block;
+  margin-bottom: 2px;
+  font-weight: 800;
+}
 .machine-btn .machine-label { font-size: 10px; color: var(--text-dim); font-weight: 500; }
 .machine-btn.active .machine-label { color: var(--primary-dark); }
-@media (max-width: 500px) {
-  .machine-grid { grid-template-columns: repeat(3, 1fr); }
-  .machine-grid .machine-special { grid-column: span 3; }
+.section-sub-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-dim);
+  margin: 12px 0 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .lookup-box {
@@ -414,6 +430,85 @@ body {
   vertical-align: middle;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ===== Admin Mode ===== */
+.admin-bar {
+  display: flex; align-items: center; gap: 10px;
+  background: linear-gradient(90deg, #fef3c7, #fde68a);
+  padding: 10px 14px; border-radius: 10px;
+  margin-bottom: 12px; border: 1px solid var(--warning);
+  font-size: 13px; font-weight: 600; color: #78350f;
+}
+.admin-bar .admin-icon { font-size: 18px; }
+.admin-bar .admin-info { flex: 1; }
+.admin-bar button {
+  background: white; border: 1px solid var(--warning);
+  color: var(--warning); padding: 5px 12px;
+  border-radius: 6px; font-size: 12px; font-weight: 700;
+  cursor: pointer;
+}
+.admin-bar button:hover { background: var(--warning); color: white; }
+
+.btn-admin-login {
+  padding: 8px 14px; background: #1f2937; color: white;
+  border: none; border-radius: 7px; font-size: 13px;
+  font-weight: 600; cursor: pointer;
+}
+.btn-admin-login:hover { background: #111827; }
+
+.outflow-edit, .outflow-delete {
+  background: none; border: 1px solid var(--border-strong);
+  padding: 4px 8px; border-radius: 6px;
+  font-size: 12px; cursor: pointer; font-weight: 600;
+  margin-left: 4px;
+}
+.outflow-edit { color: var(--info); border-color: var(--info-light); }
+.outflow-edit:hover { background: var(--info-light); }
+.outflow-delete { color: var(--primary); border-color: var(--primary-light); }
+.outflow-delete:hover { background: var(--primary-light); }
+
+/* ===== Edit Modal ===== */
+.modal.modal-large {
+  max-width: 540px;
+  text-align: left;
+}
+.modal.modal-large h3 { text-align: left; }
+.modal.modal-large .form-group { margin-bottom: 12px; }
+.modal.modal-large p { text-align: left; }
+.edit-readonly-info {
+  background: var(--bg);
+  padding: 10px;
+  border-radius: 8px;
+  margin: 8px 0;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.edit-readonly-info .grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 12px;
+}
+.edit-readonly-info b { color: var(--text); }
+.edit-machine-pills {
+  display: flex; flex-wrap: wrap; gap: 4px;
+  margin-top: 4px;
+}
+.edit-machine-pill {
+  padding: 6px 10px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  background: white;
+  transition: all 0.15s;
+}
+.edit-machine-pill:hover { border-color: var(--text-dim); }
+.edit-machine-pill.active {
+  border-color: var(--primary);
+  background: var(--primary-light);
+  color: var(--primary-dark);
+}
 </style>
 </head>
 <body>
@@ -443,8 +538,18 @@ body {
       </div>
 
       <div class="form-group">
-        <label class="form-label required">เครื่องที่ตัด</label>
-        <div class="machine-grid">
+        <label class="form-label required">ฝั่งที่ตัดกระดาษ</label>
+        <div class="machine-side-grid">
+          <button class="machine-btn machine-side" data-machine="winder">
+            🌀 เครื่องพัน
+          </button>
+          <button class="machine-btn machine-side" data-machine="sheeter">
+            📐 เครื่องฉาก
+          </button>
+        </div>
+
+        <div class="section-sub-label">หมายเลขเครื่อง Slitter</div>
+        <div class="machine-slitter-grid">
           <button class="machine-btn" data-machine="slitter_1">
             <span class="machine-num">1</span>
             <span class="machine-label">Slitter</span>
@@ -469,12 +574,6 @@ body {
             <span class="machine-num">6</span>
             <span class="machine-label">Slitter</span>
           </button>
-          <button class="machine-btn machine-special" data-machine="winder">
-            🌀 เครื่องพัน
-          </button>
-          <button class="machine-btn machine-special" data-machine="sheeter">
-            📐 เครื่องฉาก
-          </button>
         </div>
       </div>
 
@@ -495,6 +594,8 @@ body {
 
   <!-- ============ LIST ============ -->
   <div id="section-list" class="section">
+    <div id="adminBar" style="display:none;"></div>
+    
     <div class="list-stats">
       <div class="stat">
         <div class="stat-value" id="statToday">0</div>
@@ -523,6 +624,7 @@ body {
         <option value="all">ทั้งหมด</option>
       </select>
       <button id="btnExport">📥 Export CSV</button>
+      <button id="btnAdminLogin" class="btn-admin-login">🔐 Admin</button>
     </div>
 
     <div id="outflowList">
@@ -571,6 +673,87 @@ body {
     <button class="scanner-close" onclick="stopScanner()">×</button>
     <video id="scannerVideo" class="scanner-video" autoplay muted playsinline></video>
     <div class="scanner-hint">📷 หันกล้องเข้าหา QR Code</div>
+  </div>
+</div>
+
+<!-- ===== Modal: Admin Login ===== -->
+<div class="modal-overlay" id="modalAdminLogin">
+  <div class="modal">
+    <div class="modal-icon">🔐</div>
+    <h3>เข้าสู่ระบบผู้จัดการ</h3>
+    <p>กรอก username และ password เพื่อเข้าโหมดผู้จัดการ</p>
+    <div class="form-group">
+      <label class="form-label">Username</label>
+      <input type="text" id="loginUsername" class="form-input" autocomplete="username">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Password</label>
+      <input type="password" id="loginPassword" class="form-input" autocomplete="current-password">
+    </div>
+    <div id="loginError" style="display:none;color:var(--primary);font-size:13px;text-align:center;margin-bottom:8px;font-weight:600;"></div>
+    <div class="modal-actions">
+      <button class="modal-btn-cancel" onclick="window.closeAdminLogin()">ยกเลิก</button>
+      <button class="modal-btn-confirm" id="btnDoLogin" style="background:#1f2937;border-color:#1f2937;">เข้าสู่ระบบ</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Modal: Edit Record ===== -->
+<div class="modal-overlay" id="modalEdit">
+  <div class="modal modal-large">
+    <h3>✏️ แก้ไขรายการ</h3>
+    
+    <div class="form-group">
+      <label class="form-label">วันที่ตัดออก</label>
+      <input type="date" id="editDate" class="form-input">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">ฝั่งที่ตัดกระดาษ / เครื่อง</label>
+      <div class="edit-machine-pills" id="editMachinePills"></div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Paper Lot</label>
+      <input type="text" id="editLot" class="form-input lot" style="font-family:var(--mono);">
+      <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">
+        ⚠️ เปลี่ยน lot จะ trigger การ sync paper_invoices.status อัตโนมัติ
+      </div>
+    </div>
+
+    <div class="edit-readonly-info" id="editReadonly">
+      <div style="font-weight:700;margin-bottom:6px;">ข้อมูลสนับสนุน (จาก paper_invoices):</div>
+      <div class="grid" id="editReadonlyGrid"></div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">หมายเหตุ</label>
+      <textarea id="editNotes" class="form-input" rows="2" style="resize:vertical;"></textarea>
+    </div>
+
+    <div id="editError" style="display:none;color:var(--primary);font-size:13px;text-align:center;margin-bottom:8px;font-weight:600;"></div>
+
+    <div class="modal-actions">
+      <button class="modal-btn-cancel" onclick="window.closeEditModal()">ยกเลิก</button>
+      <button class="modal-btn-confirm" id="btnSaveEdit" style="background:var(--info);border-color:var(--info);">💾 บันทึก</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Modal: Delete Confirm (2 ชั้น) ===== -->
+<div class="modal-overlay" id="modalDelete">
+  <div class="modal">
+    <div class="modal-icon">🗑️</div>
+    <h3>ยืนยันลบถาวร</h3>
+    <p>คุณต้องการลบรายการของ:</p>
+    <p><span class="lot-display" id="deleteLotDisplay"></span></p>
+    <p style="color:var(--primary);font-weight:700;">⚠️ การลบนี้ <u>กู้คืนไม่ได้</u></p>
+    <p style="font-size:13px;">พิมพ์ <b>DELETE</b> เพื่อยืนยัน:</p>
+    <input type="text" id="deleteConfirmInput" class="form-input" style="font-family:var(--mono);text-transform:uppercase;text-align:center;font-weight:700;letter-spacing:2px;">
+    <div class="modal-actions">
+      <button class="modal-btn-cancel" onclick="window.closeDeleteModal()">ยกเลิก</button>
+      <button class="modal-btn-confirm" id="btnDoDelete" style="background:var(--primary);border-color:var(--primary);" disabled>🗑️ ลบถาวร</button>
+    </div>
   </div>
 </div>
 
@@ -959,6 +1142,10 @@ function renderList() {
                     ${o.voided 
                       ? `<span style="color:var(--text-muted);font-size:11px;">VOIDED</span>` 
                       : `<button class="outflow-undo" onclick="window.voidOutflow('${o.id}', '${escapeHtml(o.paper_lot)}')">↩ Undo</button>`}
+                    ${currentAdmin ? `
+                      <button class="outflow-edit" onclick="window.openEditModal('${o.id}')" title="แก้ไข">✏️</button>
+                      <button class="outflow-delete" onclick="window.openDeleteModal('${o.id}', '${escapeHtml(o.paper_lot)}')" title="ลบถาวร">🗑️</button>
+                    ` : ''}
                   </div>
                 </div>
               `).join('')}
@@ -1132,8 +1319,343 @@ window.stopScanner = function() {
   document.getElementById('modalScanner').classList.remove('show');
 };
 
+// ============================================
+// ====== ADMIN MODE ======
+// ============================================
+let currentAdmin = null;  // {id, username, full_name}
+
+// Restore admin session ถ้ามี
+const savedAdmin = sessionStorage.getItem('paper_admin');
+if (savedAdmin) {
+  try { currentAdmin = JSON.parse(savedAdmin); } catch(e) {}
+}
+
+function renderAdminBar() {
+  const bar = document.getElementById('adminBar');
+  if (currentAdmin) {
+    bar.style.display = 'flex';
+    bar.className = 'admin-bar';
+    bar.innerHTML = `
+      <span class="admin-icon">🔐</span>
+      <div class="admin-info">
+        เข้าสู่ระบบในฐานะ <b>${escapeHtml(currentAdmin.full_name || currentAdmin.username)}</b>
+        <div style="font-size:11px;opacity:0.8;">โหมดผู้จัดการ — สามารถแก้ไข/ลบรายการได้</div>
+      </div>
+      <button onclick="window.adminLogout()">ออกจากระบบ</button>
+    `;
+  } else {
+    bar.style.display = 'none';
+  }
+}
+
+document.getElementById('btnAdminLogin').addEventListener('click', () => {
+  if (currentAdmin) {
+    if (confirm(`ออกจากระบบ ${currentAdmin.full_name || currentAdmin.username}?`)) {
+      window.adminLogout();
+    }
+  } else {
+    document.getElementById('loginUsername').value = '';
+    document.getElementById('loginPassword').value = '';
+    document.getElementById('loginError').style.display = 'none';
+    document.getElementById('modalAdminLogin').classList.add('show');
+    setTimeout(() => document.getElementById('loginUsername').focus(), 100);
+  }
+});
+
+window.closeAdminLogin = function() {
+  document.getElementById('modalAdminLogin').classList.remove('show');
+};
+
+window.adminLogout = function() {
+  currentAdmin = null;
+  sessionStorage.removeItem('paper_admin');
+  renderAdminBar();
+  renderList();
+  document.getElementById('btnAdminLogin').textContent = '🔐 Admin';
+  showToast('✓ ออกจากระบบแล้ว', 'success');
+};
+
+document.getElementById('btnDoLogin').addEventListener('click', doLogin);
+document.getElementById('loginPassword').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doLogin();
+});
+
+async function doLogin() {
+  const username = document.getElementById('loginUsername').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const errorDiv = document.getElementById('loginError');
+  const btn = document.getElementById('btnDoLogin');
+  
+  if (!username || !password) {
+    errorDiv.textContent = 'กรุณากรอก username และ password';
+    errorDiv.style.display = 'block';
+    return;
+  }
+  
+  btn.disabled = true;
+  btn.innerHTML = '<span class="loading"></span> กำลังตรวจสอบ...';
+  errorDiv.style.display = 'none';
+  
+  try {
+    const { data, error } = await supabase
+      .rpc('verify_admin_login', { p_username: username, p_password: password });
+    
+    if (error) throw error;
+    
+    if (data && data.length > 0) {
+      currentAdmin = {
+        id: data[0].out_id,
+        username: data[0].out_username,
+        full_name: data[0].out_full_name
+      };
+      sessionStorage.setItem('paper_admin', JSON.stringify(currentAdmin));
+      
+      document.getElementById('modalAdminLogin').classList.remove('show');
+      document.getElementById('btnAdminLogin').textContent = '🔓 Admin';
+      renderAdminBar();
+      renderList();
+      showToast(`✓ ยินดีต้อนรับ ${currentAdmin.full_name || currentAdmin.username}`, 'success');
+    } else {
+      errorDiv.textContent = '❌ Username หรือ Password ไม่ถูกต้อง';
+      errorDiv.style.display = 'block';
+    }
+  } catch (err) {
+    errorDiv.textContent = '❌ ' + err.message;
+    errorDiv.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'เข้าสู่ระบบ';
+  }
+}
+
+// ============================================
+// ====== EDIT RECORD ======
+// ============================================
+let editingId = null;
+let editingMachine = null;
+
+const ALL_MACHINES = [
+  { id: 'winder',    label: '🌀 เครื่องพัน' },
+  { id: 'sheeter',   label: '📐 เครื่องฉาก' },
+  { id: 'slitter_1', label: '🔧 Slitter 1' },
+  { id: 'slitter_2', label: '🔧 Slitter 2' },
+  { id: 'slitter_3', label: '🔧 Slitter 3' },
+  { id: 'slitter_4', label: '🔧 Slitter 4' },
+  { id: 'slitter_5', label: '🔧 Slitter 5' },
+  { id: 'slitter_6', label: '🔧 Slitter 6' }
+];
+
+window.openEditModal = function(id) {
+  if (!currentAdmin) {
+    showToast('❌ ต้องเข้าสู่ระบบก่อน', 'error');
+    return;
+  }
+  
+  const record = allOutflows.find(o => o.id === id);
+  if (!record) return;
+  
+  editingId = id;
+  editingMachine = record.machine_id;
+  
+  document.getElementById('editDate').value = record.outflow_date || '';
+  document.getElementById('editLot').value = record.paper_lot || '';
+  document.getElementById('editNotes').value = record.notes || '';
+  
+  // Render machine pills
+  const pillsHtml = ALL_MACHINES.map(m => `
+    <button class="edit-machine-pill ${m.id === editingMachine ? 'active' : ''}" 
+            data-machine="${m.id}">${m.label}</button>
+  `).join('');
+  document.getElementById('editMachinePills').innerHTML = pillsHtml;
+  
+  document.querySelectorAll('.edit-machine-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      document.querySelectorAll('.edit-machine-pill').forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+      editingMachine = pill.dataset.machine;
+    });
+  });
+  
+  // Show readonly info
+  renderEditReadonly(record);
+  
+  document.getElementById('editError').style.display = 'none';
+  document.getElementById('modalEdit').classList.add('show');
+};
+
+function renderEditReadonly(record) {
+  const grid = document.getElementById('editReadonlyGrid');
+  grid.innerHTML = `
+    <div>Supplier: <b>${escapeHtml(record.supplier_name || '-')}</b></div>
+    <div>ประเภท: <b>${escapeHtml(record.paper_type || '-')}</b></div>
+    <div>หน้ากว้าง: <b>${record.width_mm || '-'} mm</b></div>
+    <div>น้ำหนัก: <b>${record.weight_kg || '-'} kg</b></div>
+    <div>Pre-stock: <b>${record.outflow_reason === 'pre_stock' ? 'YES ⚠️' : '-'}</b></div>
+    <div>สร้างเมื่อ: <b>${fmtDateTime(record.created_at)}</b></div>
+  `;
+}
+
+function fmtDateTime(d) {
+  if (!d) return '-';
+  return new Date(d).toLocaleString('th-TH', { 
+    day:'2-digit', month:'2-digit', year:'2-digit',
+    hour:'2-digit', minute:'2-digit' 
+  });
+}
+
+window.closeEditModal = function() {
+  document.getElementById('modalEdit').classList.remove('show');
+  editingId = null;
+  editingMachine = null;
+};
+
+document.getElementById('btnSaveEdit').addEventListener('click', async () => {
+  if (!editingId) return;
+  
+  const btn = document.getElementById('btnSaveEdit');
+  const errorDiv = document.getElementById('editError');
+  
+  const newDate = document.getElementById('editDate').value;
+  const newLot = document.getElementById('editLot').value.trim().toUpperCase();
+  const newNotes = document.getElementById('editNotes').value.trim() || null;
+  
+  if (!newDate || !newLot || !editingMachine) {
+    errorDiv.textContent = '❌ กรุณากรอกข้อมูลให้ครบ (วันที่, lot, เครื่อง)';
+    errorDiv.style.display = 'block';
+    return;
+  }
+  
+  btn.disabled = true;
+  btn.innerHTML = '<span class="loading"></span> กำลังบันทึก...';
+  errorDiv.style.display = 'none';
+  
+  try {
+    // ถ้าเปลี่ยน lot → re-lookup จาก paper_invoices
+    const oldRecord = allOutflows.find(o => o.id === editingId);
+    const oldLotNorm = oldRecord.paper_lot_normalized;
+    const newLotNorm = normalize(newLot);
+    
+    const updatePayload = {
+      outflow_date: newDate,
+      paper_lot: newLot,
+      machine_id: editingMachine,
+      notes: newNotes
+    };
+    
+    // ถ้าเปลี่ยน lot → ดึงข้อมูล supplier/type ใหม่
+    if (oldLotNorm !== newLotNorm) {
+      const { data: invoice } = await supabase
+        .from('paper_invoices')
+        .select('id, supplier, paper_type, width_mm, weight_kg')
+        .eq('paper_lot_normalized', newLotNorm)
+        .maybeSingle();
+      
+      if (invoice) {
+        updatePayload.paper_invoice_id = invoice.id;
+        updatePayload.supplier_name = invoice.supplier;
+        updatePayload.paper_type = invoice.paper_type;
+        updatePayload.width_mm = invoice.width_mm ? parseInt(invoice.width_mm) : null;
+        updatePayload.weight_kg = invoice.weight_kg;
+        updatePayload.outflow_reason = 'sale';
+      } else {
+        // lot ใหม่ไม่มี → set เป็น pre_stock
+        updatePayload.paper_invoice_id = null;
+        updatePayload.supplier_name = null;
+        updatePayload.paper_type = null;
+        updatePayload.width_mm = null;
+        updatePayload.weight_kg = null;
+        updatePayload.outflow_reason = 'pre_stock';
+      }
+    }
+    
+    const { error } = await supabase
+      .from('paper_outflows')
+      .update(updatePayload)
+      .eq('id', editingId);
+    
+    if (error) throw error;
+    
+    showToast('✓ บันทึกการแก้ไขสำเร็จ', 'success');
+    window.closeEditModal();
+    loadOutflows();
+    loadTabBadge();
+  } catch (err) {
+    errorDiv.textContent = '❌ ' + err.message;
+    errorDiv.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '💾 บันทึก';
+  }
+});
+
+// ============================================
+// ====== DELETE RECORD (2-step confirm) ======
+// ============================================
+let deletingId = null;
+
+window.openDeleteModal = function(id, lot) {
+  if (!currentAdmin) {
+    showToast('❌ ต้องเข้าสู่ระบบก่อน', 'error');
+    return;
+  }
+  
+  deletingId = id;
+  document.getElementById('deleteLotDisplay').textContent = lot;
+  document.getElementById('deleteConfirmInput').value = '';
+  document.getElementById('btnDoDelete').disabled = true;
+  document.getElementById('modalDelete').classList.add('show');
+  setTimeout(() => document.getElementById('deleteConfirmInput').focus(), 100);
+};
+
+window.closeDeleteModal = function() {
+  document.getElementById('modalDelete').classList.remove('show');
+  deletingId = null;
+};
+
+document.getElementById('deleteConfirmInput').addEventListener('input', e => {
+  e.target.value = e.target.value.toUpperCase();
+  document.getElementById('btnDoDelete').disabled = e.target.value.trim() !== 'DELETE';
+});
+
+document.getElementById('btnDoDelete').addEventListener('click', async () => {
+  if (!deletingId) return;
+  
+  const btn = document.getElementById('btnDoDelete');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="loading"></span> กำลังลบ...';
+  
+  try {
+    // ก่อนลบ → set voided=true ก่อน เพื่อ trigger คืน status
+    await supabase
+      .from('paper_outflows')
+      .update({ voided: true, voided_at: new Date().toISOString(), voided_reason: 'ลบถาวรโดย admin: ' + (currentAdmin.username || '') })
+      .eq('id', deletingId);
+    
+    // จากนั้นลบจริง
+    const { error } = await supabase
+      .from('paper_outflows')
+      .delete()
+      .eq('id', deletingId);
+    
+    if (error) throw error;
+    
+    showToast('✓ ลบรายการถาวรแล้ว', 'success');
+    window.closeDeleteModal();
+    loadOutflows();
+    loadTabBadge();
+  } catch (err) {
+    showToast('❌ ' + err.message, 'error');
+    btn.disabled = false;
+    btn.textContent = '🗑️ ลบถาวร';
+  }
+});
+
 // ====== Init ======
 loadTabBadge();
+renderAdminBar();
+if (currentAdmin) {
+  document.getElementById('btnAdminLogin').textContent = '🔓 Admin';
+}
 lotInput.focus();
 </script>
 
