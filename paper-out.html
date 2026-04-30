@@ -578,12 +578,29 @@ body {
       </div>
 
       <div class="form-group">
+        <label class="form-label required">Supplier</label>
+        <select id="supplierSelect" class="form-select">
+          <option value="">— เลือก Supplier —</option>
+          <option value="SCG">SCG</option>
+          <option value="Muda">Muda</option>
+          <option value="MPK">MPK</option>
+          <option value="UTP">UTP</option>
+          <option value="NTPM">NTPM</option>
+          <option value="Ching Mei">Ching Mei</option>
+          <option value="AP">AP</option>
+          <option value="อื่นๆ">อื่นๆ</option>
+        </select>
+        <div id="supplierHint" style="font-size:11px;color:var(--text-dim);margin-top:4px;display:none;"></div>
+      </div>
+
+      <div class="form-group">
         <label class="form-label required">เลข Paper Lot</label>
         <div class="lot-input-wrap">
           <input type="text" id="lotInput" class="form-input lot" 
                  placeholder="พิมพ์หรือ scan QR..." autocomplete="off">
           <button class="scan-btn" id="btnScan">📷 Scan</button>
         </div>
+        <div id="lotValidation" style="font-size:12px;margin-top:4px;display:none;font-weight:600;"></div>
       </div>
 
       <div id="lookupBox" class="lookup-box"></div>
@@ -777,6 +794,52 @@ const MACHINE_LABELS = {
   sheeter: '📐 เครื่องฉาก'
 };
 
+// ====== Supplier patterns (จาก qr_printer.py) ======
+const SCG_PATTERN = /^[0-9A-Z]{2}-\d-A\d{4}-\d[A-Z]$/;
+const MUDA_PATTERN = /^\d{11}[A-Z]$/;
+
+const SUPPLIER_HINTS = {
+  'SCG': '💡 SCG: XX-#-A####-#A เช่น 77-5-A8383-1I',
+  'Muda': '💡 Muda: 11 ตัวเลข + ตัวอักษร 1 ตัว เช่น 05630602351I',
+  'MPK': '💡 MPK: รหัสอิสระ',
+  'UTP': '💡 UTP: รหัสอิสระ',
+  'NTPM': '💡 NTPM: รหัสอิสระ',
+  'Ching Mei': '💡 Ching Mei: รหัสอิสระ',
+  'AP': '💡 AP: รหัสอิสระ',
+  'อื่นๆ': '💡 รหัสอิสระ'
+};
+
+function validateLot(lot, supplier) {
+  lot = (lot || '').trim().toUpperCase();
+  if (!lot) return { ok: false, msg: 'กรุณากรอก Paper Lot' };
+  if (lot.includes('_') || lot.includes(' ')) {
+    return { ok: false, msg: 'Paper Lot ห้ามมี _ หรือช่องว่าง' };
+  }
+  if (!supplier) return { ok: false, msg: 'กรุณาเลือก Supplier' };
+  
+  if (supplier === 'SCG') {
+    if (!SCG_PATTERN.test(lot)) {
+      return { ok: false, msg: '❌ SCG ต้องเป็น XX-#-A####-#A' };
+    }
+    return { ok: true, msg: '✓ SCG format ถูกต้อง' };
+  }
+  
+  // Non-SCG: ห้ามมี dash
+  if (lot.includes('-')) {
+    return { ok: false, msg: `❌ ${supplier}: ห้ามมี dash` };
+  }
+  
+  if (supplier === 'Muda') {
+    if (!MUDA_PATTERN.test(lot)) {
+      return { ok: false, msg: '❌ Muda ต้องเป็น 11 ตัวเลข + 1 ตัวอักษร' };
+    }
+    return { ok: true, msg: '✓ Muda format ถูกต้อง' };
+  }
+  
+  // Other suppliers: free format
+  return { ok: true, msg: `✓ ${supplier} (${lot.length} ตัว)` };
+}
+
 // ====== State ======
 let currentLot = null;
 let currentInvoice = null;
@@ -843,6 +906,38 @@ document.querySelectorAll('.machine-btn').forEach(btn => {
   });
 });
 
+// ====== Supplier selection ======
+const supplierSelect = document.getElementById('supplierSelect');
+const supplierHint = document.getElementById('supplierHint');
+const lotValidation = document.getElementById('lotValidation');
+
+supplierSelect.addEventListener('change', () => {
+  const sup = supplierSelect.value;
+  if (sup && SUPPLIER_HINTS[sup]) {
+    supplierHint.textContent = SUPPLIER_HINTS[sup];
+    supplierHint.style.display = 'block';
+  } else {
+    supplierHint.style.display = 'none';
+  }
+  showLotValidation();
+  updateSubmitState();
+});
+
+function showLotValidation() {
+  const lot = document.getElementById('lotInput').value.trim().toUpperCase();
+  const sup = supplierSelect.value;
+  
+  if (!lot || !sup) {
+    lotValidation.style.display = 'none';
+    return;
+  }
+  
+  const result = validateLot(lot, sup);
+  lotValidation.textContent = result.msg;
+  lotValidation.style.color = result.ok ? 'var(--success)' : 'var(--primary)';
+  lotValidation.style.display = 'block';
+}
+
 // ====== Lot Input ======
 const lotInput = document.getElementById('lotInput');
 
@@ -852,6 +947,7 @@ lotInput.addEventListener('input', e => {
   if (currentLot && normalize(e.target.value) !== currentLot) {
     clearLookup();
   }
+  showLotValidation();
   updateSubmitState();
 });
 
@@ -885,6 +981,17 @@ async function doLookup(normLot) {
       currentLot = normLot;
       currentInvoice = data;
       isPreStock = false;
+      
+      // Auto-set supplier dropdown ตามที่เจอ
+      if (data.supplier) {
+        const opt = Array.from(supplierSelect.options).find(o => o.value === data.supplier);
+        if (opt) {
+          supplierSelect.value = data.supplier;
+          supplierHint.textContent = SUPPLIER_HINTS[data.supplier] || '';
+          supplierHint.style.display = 'block';
+        }
+      }
+      showLotValidation();
       
       const isUsed = data.status === 'used';
       box.className = `lookup-box show ${isUsed ? 'found-used' : 'found'}`;
@@ -986,6 +1093,21 @@ document.getElementById('btnSubmit').addEventListener('click', async () => {
     return;
   }
   
+  const supplier = supplierSelect.value;
+  if (!supplier) {
+    showToast('❌ กรุณาเลือก Supplier', 'error');
+    supplierSelect.focus();
+    return;
+  }
+  
+  // Validate format ตาม supplier
+  const validation = validateLot(lotRaw, supplier);
+  if (!validation.ok) {
+    showToast(validation.msg, 'error');
+    document.getElementById('lotInput').focus();
+    return;
+  }
+  
   // ถ้ายังไม่ได้ lookup หรือ lookup คนละ lot → lookup ก่อน
   const normLot = normalize(lotRaw);
   if (!currentLot || currentLot !== normLot) {
@@ -998,7 +1120,6 @@ document.getElementById('btnSubmit').addEventListener('click', async () => {
     updateSubmitState();
     
     // ถ้า lookup แล้วเปิด modal "ไม่พบ" → ให้ผู้ใช้กดยืนยันก่อน
-    // ไม่ดำเนินการ save ในรอบนี้
     if (!currentLot) return;
   }
   
@@ -1021,6 +1142,9 @@ document.getElementById('btnSubmit').addEventListener('click', async () => {
     payload.paper_type = currentInvoice.paper_type;
     payload.width_mm = currentInvoice.width_mm ? parseInt(currentInvoice.width_mm) : null;
     payload.weight_kg = currentInvoice.weight_kg;
+  } else {
+    // Pre-stock: ใช้ supplier จาก dropdown
+    payload.supplier_name = supplier;
   }
   
   try {
@@ -1035,8 +1159,9 @@ document.getElementById('btnSubmit').addEventListener('click', async () => {
     
     showToast('✓ ตัดออกสำเร็จ', 'success');
     
-    // Reset form
+    // Reset form (ไม่ต้อง reset supplier dropdown - พนักงานน่าจะตัดยี่ห้อเดิมต่อ)
     document.getElementById('lotInput').value = '';
+    lotValidation.style.display = 'none';
     clearLookup();
     document.getElementById('lotInput').focus();
     
