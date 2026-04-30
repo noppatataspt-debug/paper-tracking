@@ -1,0 +1,1395 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📊 Stock Dashboard | Asia Paper Tube</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f8fafc;
+  --panel: #ffffff;
+  --panel-2: #f1f5f9;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --text: #0f172a;
+  --text-dim: #475569;
+  --text-muted: #94a3b8;
+  --accent: #2563eb;
+  --accent-dark: #1e40af;
+  --success: #16a34a;
+  --success-bg: #dcfce7;
+  --warning: #d97706;
+  --warning-bg: #fef3c7;
+  --danger: #dc2626;
+  --danger-bg: #fee2e2;
+  --info: #0ea5e9;
+  --info-bg: #e0f2fe;
+  --mono: 'JetBrains Mono', monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: 'IBM Plex Sans Thai', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+  min-height: 100vh;
+}
+
+/* ===== Header ===== */
+.header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 16px 24px; background: white;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap; gap: 12px;
+}
+.header h1 { 
+  margin: 0; font-size: 22px; font-weight: 700;
+  display: flex; align-items: center; gap: 8px;
+}
+.header h1 span { color: var(--accent); }
+.header .subtitle { 
+  font-size: 13px; color: var(--text-dim); 
+  margin-top: 2px;
+}
+.nav-links { display: flex; gap: 8px; flex-wrap: wrap; }
+.nav-link {
+  padding: 8px 14px; background: var(--panel-2);
+  border: 1px solid var(--border); border-radius: 8px;
+  text-decoration: none; color: var(--text);
+  font-size: 13px; font-weight: 600;
+  transition: all 0.2s;
+}
+.nav-link:hover { background: var(--panel); border-color: var(--accent); }
+.nav-link.active { background: var(--accent); color: white; border-color: var(--accent); }
+
+/* ===== Main Container ===== */
+.container {
+  max-width: 1400px; margin: 0 auto; padding: 16px 24px;
+}
+
+/* ===== Login overlay ===== */
+.login-overlay {
+  position: fixed; inset: 0; background: rgba(15, 23, 42, 0.85);
+  display: none; align-items: center; justify-content: center;
+  z-index: 1000; padding: 16px;
+}
+.login-overlay.show { display: flex; }
+.login-box {
+  background: white; border-radius: 14px; padding: 32px;
+  max-width: 400px; width: 100%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+}
+.login-icon { font-size: 56px; text-align: center; margin-bottom: 8px; }
+.login-box h2 {
+  text-align: center; margin: 0 0 8px; font-size: 20px;
+}
+.login-box p {
+  text-align: center; margin: 0 0 20px; 
+  color: var(--text-dim); font-size: 14px;
+}
+.login-box label {
+  display: block; font-size: 13px; font-weight: 600;
+  margin: 12px 0 4px; color: var(--text-dim);
+}
+.login-box input {
+  width: 100%; padding: 11px 14px;
+  border: 1.5px solid var(--border-strong); border-radius: 8px;
+  font-size: 15px; font-family: inherit;
+}
+.login-box input:focus {
+  outline: none; border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+.login-error {
+  display: none; color: var(--danger);
+  font-size: 13px; text-align: center;
+  margin-top: 10px; font-weight: 600;
+}
+.login-btn {
+  width: 100%; padding: 12px; margin-top: 16px;
+  background: #1f2937; color: white; border: none;
+  border-radius: 8px; font-size: 15px; font-weight: 700;
+  cursor: pointer; font-family: inherit;
+  transition: background 0.2s;
+}
+.login-btn:hover { background: #111827; }
+.login-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ===== Toolbar ===== */
+.dashboard-toolbar {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 16px; flex-wrap: wrap; gap: 12px;
+}
+.toolbar-left { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.toolbar-right { display: flex; align-items: center; gap: 8px; }
+.month-picker {
+  padding: 8px 14px; border: 1px solid var(--border-strong);
+  border-radius: 8px; font-family: inherit; font-size: 14px;
+  background: white; cursor: pointer;
+  font-weight: 600;
+}
+.month-picker:focus { outline: none; border-color: var(--accent); }
+.role-badge {
+  padding: 4px 10px; border-radius: 12px;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.role-manager { background: #fef3c7; color: #92400e; border: 1px solid #fbbf24; }
+.role-staff { background: #dbeafe; color: #1e40af; border: 1px solid #60a5fa; }
+
+.btn {
+  padding: 8px 14px; border-radius: 8px;
+  border: 1px solid var(--border-strong); background: white;
+  font-size: 13px; font-weight: 600; cursor: pointer;
+  font-family: inherit; transition: all 0.2s;
+}
+.btn:hover { background: var(--panel-2); }
+.btn-primary { background: var(--accent); color: white; border-color: var(--accent); }
+.btn-primary:hover { background: var(--accent-dark); }
+
+/* ===== KPI Cards ===== */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px; margin-bottom: 20px;
+}
+.kpi-card {
+  background: white; border: 1px solid var(--border);
+  border-radius: 10px; padding: 16px;
+}
+.kpi-card.alert { 
+  background: var(--warning-bg); 
+  border-color: var(--warning); 
+}
+.kpi-label {
+  font-size: 12px; color: var(--text-dim); margin-bottom: 6px;
+  font-weight: 600;
+}
+.kpi-value {
+  font-size: 26px; font-weight: 700; color: var(--text);
+  font-family: var(--mono); line-height: 1.1;
+}
+.kpi-value.alert { color: var(--warning); }
+.kpi-sub {
+  font-size: 11px; color: var(--text-muted); margin-top: 4px;
+}
+
+/* ===== Section ===== */
+.section {
+  background: white; border: 1px solid var(--border);
+  border-radius: 12px; padding: 18px; margin-bottom: 16px;
+}
+.section-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 14px; cursor: pointer;
+  user-select: none;
+}
+.section-title { 
+  font-size: 15px; font-weight: 700; 
+  display: flex; align-items: center; gap: 8px;
+}
+.section-meta { font-size: 12px; color: var(--text-muted); }
+.section-toggle {
+  font-size: 12px; color: var(--text-dim);
+  transition: transform 0.2s;
+}
+.section-toggle.collapsed { transform: rotate(-90deg); }
+.section-body { display: block; }
+.section-body.hidden { display: none; }
+
+/* ===== Movement Section ===== */
+.movement-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+.movement-cell {
+  padding: 12px 0;
+}
+.movement-cell + .movement-cell {
+  border-left: 1px solid var(--border);
+  padding-left: 16px;
+}
+.movement-label {
+  font-size: 11px; color: var(--text-dim); margin-bottom: 4px;
+  font-weight: 600;
+}
+.movement-label.income { color: var(--success); }
+.movement-label.outflow { color: var(--danger); }
+.movement-value {
+  font-size: 18px; font-weight: 700; font-family: var(--mono);
+}
+.movement-value.income { color: var(--success); }
+.movement-value.outflow { color: var(--danger); }
+.movement-sub {
+  font-size: 11px; color: var(--text-muted); margin-top: 2px;
+  font-family: var(--mono);
+}
+
+/* ===== Category Cards ===== */
+.category-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+.category-card {
+  padding: 14px; border-radius: 8px;
+  border-left: 3px solid;
+}
+.cat-card-Liner { background: #dbeafe; border-color: #1e40af; color: #0c447c; }
+.cat-card-Grey-Board { background: #f1f5f9; border-color: #475569; color: #1e293b; }
+.cat-card-Core-Board { background: #fef3c7; border-color: #b45309; color: #78350f; }
+.category-name { font-size: 13px; font-weight: 700; margin-bottom: 4px; }
+.category-rolls { font-size: 22px; font-weight: 700; font-family: var(--mono); }
+.category-detail { font-size: 11px; margin-top: 2px; opacity: 0.85; font-family: var(--mono); }
+
+/* ===== Project Table ===== */
+.project-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.project-table th {
+  background: var(--panel-2); padding: 10px;
+  text-align: left; font-weight: 600;
+  border-bottom: 1px solid var(--border);
+}
+.project-table th.right { text-align: right; }
+.project-table td {
+  padding: 10px; border-bottom: 1px solid var(--border);
+  font-family: var(--mono);
+}
+.project-table td.right { text-align: right; }
+.project-table tr:hover { background: var(--panel-2); }
+
+.project-badge {
+  display: inline-block; padding: 3px 10px; border-radius: 4px;
+  font-size: 11px; font-weight: 700; font-family: var(--mono);
+  white-space: nowrap;
+}
+.proj-FREE-MKT { background: #fce7f3; color: #831843; }
+.proj-VKPC { background: #d1fae5; color: #065f46; }
+.proj-SKIC { background: #ddd6fe; color: #5b21b6; }
+.proj-Normal { background: #dbeafe; color: #1e40af; }
+.proj-w-MOG { background: #fed7aa; color: #9a3412; }
+
+/* ===== Supplier Detail Table ===== */
+.supplier-group {
+  background: var(--warning-bg); padding: 8px 12px;
+  font-weight: 700; color: #78350f;
+  border-radius: 6px; margin: 12px 0 6px;
+  cursor: pointer; user-select: none;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.supplier-group:hover { background: #fde68a; }
+.supplier-group .arrow { font-size: 11px; transition: transform 0.2s; }
+.supplier-group.expanded .arrow { transform: rotate(90deg); }
+
+.heat-low { background: #fecaca !important; }
+.heat-mid { background: #fed7aa !important; }
+.heat-high { background: #bbf7d0 !important; }
+
+.heat-legend {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 11px; color: var(--text-muted); margin-top: 8px;
+}
+.heat-pill {
+  padding: 2px 8px; border-radius: 3px; font-family: var(--mono); font-size: 10px;
+}
+
+/* ===== Aging ===== */
+.aging-buckets {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 8px; margin-bottom: 16px;
+}
+.aging-bucket {
+  padding: 12px; border-radius: 8px; text-align: center;
+}
+.aging-0-30 { background: #dcfce7; color: #14532d; }
+.aging-31-60 { background: #fef3c7; color: #78350f; }
+.aging-61-90 { background: #fed7aa; color: #7c2d12; }
+.aging-over-90 { background: #fee2e2; color: #7f1d1d; border: 1px solid #f87171; }
+.aging-label { font-size: 11px; margin-bottom: 4px; }
+.aging-count { font-size: 20px; font-weight: 700; font-family: var(--mono); }
+.aging-pct { font-size: 11px; opacity: 0.8; margin-top: 2px; font-family: var(--mono); }
+
+/* ===== Trend Chart ===== */
+.trend-chart-wrap {
+  position: relative; height: 280px; margin-bottom: 8px;
+}
+
+/* ===== Drill-down Modal ===== */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(15, 23, 42, 0.7);
+  display: none; align-items: flex-start; justify-content: center;
+  z-index: 900; padding: 40px 16px; overflow-y: auto;
+}
+.modal-overlay.show { display: flex; }
+.modal-box {
+  background: white; border-radius: 14px;
+  max-width: 900px; width: 100%; padding: 24px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  max-height: 90vh; overflow-y: auto;
+}
+.modal-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 16px; padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.modal-header h3 { margin: 0; font-size: 18px; }
+.modal-close {
+  background: var(--panel-2); border: none; width: 32px; height: 32px;
+  border-radius: 50%; font-size: 16px; cursor: pointer;
+}
+.modal-close:hover { background: var(--border); }
+
+/* ===== Loading ===== */
+.loading {
+  display: inline-block; width: 16px; height: 16px;
+  border: 2px solid var(--border); border-top-color: var(--accent);
+  border-radius: 50%; animation: spin 0.8s linear infinite;
+  vertical-align: middle;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.loading-state {
+  text-align: center; padding: 40px; color: var(--text-dim);
+}
+
+/* ===== Mobile ===== */
+@media (max-width: 768px) {
+  .header { padding: 12px 16px; }
+  .container { padding: 12px 16px; }
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .movement-grid, .category-grid { grid-template-columns: 1fr; }
+  .movement-cell + .movement-cell { 
+    border-left: 0; border-top: 1px solid var(--border); 
+    padding-left: 0; padding-top: 12px; 
+  }
+  .aging-buckets { grid-template-columns: repeat(2, 1fr); }
+  .nav-links { width: 100%; }
+}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div>
+    <h1>📊 Stock <span>Dashboard</span></h1>
+    <p class="subtitle">Asia Paper Tube · ภาพรวมคลังกระดาษ</p>
+  </div>
+  <div class="nav-links">
+    <a href="paper-in.html" class="nav-link">📝 Paper-In</a>
+    <a href="paper-out.html" class="nav-link">📤 Paper-Out</a>
+    <a href="dashboard.html" class="nav-link">🏭 Production</a>
+    <a href="index.html" class="nav-link">🏠 Home</a>
+  </div>
+</header>
+
+<!-- ============ Login Overlay ============ -->
+<div class="login-overlay" id="loginOverlay">
+  <div class="login-box">
+    <div class="login-icon">🔐</div>
+    <h2>เข้าสู่ระบบ</h2>
+    <p>กรุณา login เพื่อดู Stock Dashboard</p>
+    <label>Username</label>
+    <input type="text" id="loginUsername" autocomplete="username">
+    <label>Password</label>
+    <input type="password" id="loginPassword" autocomplete="current-password">
+    <div id="loginError" class="login-error"></div>
+    <button class="login-btn" id="btnDoLogin">เข้าสู่ระบบ</button>
+  </div>
+</div>
+
+<!-- ============ Main Container ============ -->
+<div class="container" id="mainContainer" style="display:none;">
+
+  <!-- Toolbar -->
+  <div class="dashboard-toolbar">
+    <div class="toolbar-left">
+      <input type="month" class="month-picker" id="monthPicker">
+      <span id="userBadge"></span>
+    </div>
+    <div class="toolbar-right">
+      <button class="btn" id="btnRefresh">🔄 Refresh</button>
+      <button class="btn" id="btnExport" data-manager-only>📥 Export</button>
+      <button class="btn" id="btnLogout">🚪 ออก</button>
+    </div>
+  </div>
+
+  <!-- ROW 1: KPI Cards -->
+  <div class="kpi-grid" id="kpiGrid">
+    <div class="loading-state"><span class="loading"></span> กำลังโหลด...</div>
+  </div>
+
+  <!-- ROW 2: Movement -->
+  <div class="section">
+    <div class="section-header" data-toggle="movement">
+      <div class="section-title">📊 การเคลื่อนไหวของเดือน <span class="section-meta" id="movementMonthLabel"></span></div>
+      <span class="section-toggle">▼</span>
+    </div>
+    <div class="section-body" id="movementBody">
+      <div class="movement-grid" id="movementGrid"></div>
+    </div>
+  </div>
+
+  <!-- ROW 3: Stock by Category -->
+  <div class="section">
+    <div class="section-header" data-toggle="category">
+      <div class="section-title">🏷️ Stock แยกตามชนิด</div>
+      <span class="section-toggle">▼</span>
+    </div>
+    <div class="section-body">
+      <div class="category-grid" id="categoryGrid"></div>
+    </div>
+  </div>
+
+  <!-- ROW 4: Stock by Project (SCG) — Manager only -->
+  <div class="section" data-manager-only>
+    <div class="section-header" data-toggle="project">
+      <div class="section-title">🎯 Stock แยกตามโครงการ (SCG)</div>
+      <span class="section-toggle">▼</span>
+    </div>
+    <div class="section-body">
+      <div id="projectTable"></div>
+    </div>
+  </div>
+
+  <!-- ROW 5: Supplier x Type x Width -->
+  <div class="section">
+    <div class="section-header" data-toggle="supplier">
+      <div class="section-title">📋 รายงาน Stock แยก Supplier × ประเภท × หน้ากว้าง</div>
+      <span class="section-toggle">▼</span>
+    </div>
+    <div class="section-body">
+      <div id="supplierTable"></div>
+      <div class="heat-legend">
+        <span>Heat-map น้ำหนัก:</span>
+        <span class="heat-pill heat-low">น้อย</span>
+        <span class="heat-pill heat-mid">ปกติ</span>
+        <span class="heat-pill heat-high">มาก</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ROW 6: Aging -->
+  <div class="section">
+    <div class="section-header" data-toggle="aging">
+      <div class="section-title">⏰ รายงานม้วนค้าง Stock (Aging)</div>
+      <span class="section-toggle">▼</span>
+    </div>
+    <div class="section-body">
+      <div class="aging-buckets" id="agingBuckets"></div>
+      <div style="font-size:13px;color:var(--text-dim);margin-bottom:8px;">Top 10 ม้วนที่ค้านานสุด:</div>
+      <div id="agingTable"></div>
+    </div>
+  </div>
+
+  <!-- ROW 7: Trend Chart -->
+  <div class="section">
+    <div class="section-header" data-toggle="trend">
+      <div class="section-title">📈 Trend รับเข้า-จ่ายออก (12 เดือนย้อนหลัง)</div>
+      <span class="section-toggle">▼</span>
+    </div>
+    <div class="section-body">
+      <div class="trend-chart-wrap">
+        <canvas id="trendChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ============ Drill-down Modal ============ -->
+<div class="modal-overlay" id="drillDownModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 id="drillDownTitle">📦 ราย Lot</h3>
+      <button class="modal-close" onclick="window.closeDrillDown()">×</button>
+    </div>
+    <div id="drillDownBody"></div>
+  </div>
+</div>
+
+<!-- Libraries -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+<script type="module">
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+
+const SUPABASE_URL = 'https://lfrwghrlxaordpxrqyij.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxmcndnaHJseGFvcmRweHJxeWlqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE0NjUyOTYsImV4cCI6MjA3NzA0MTI5Nn0.U5z1f5oJ-pWfdUA73BfNQopN_MDt9_CpkX_7Kbwo7kY';
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const $ = sel => document.querySelector(sel);
+const $$ = sel => document.querySelectorAll(sel);
+
+// ============================================
+// State
+// ============================================
+let currentUser = null;  // { id, username, full_name, role }
+let currentMonth = null;  // YYYY-MM
+let trendChart = null;
+
+// ============================================
+// Auth
+// ============================================
+function getCurrentMonth() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function checkAuth() {
+  const saved = sessionStorage.getItem('paper_admin');
+  if (saved) {
+    try {
+      currentUser = JSON.parse(saved);
+      // ถ้ายังไม่มี role (login ก่อนเพิ่ม column) → set default
+      if (!currentUser.role) currentUser.role = 'manager';
+      showDashboard();
+      return true;
+    } catch(e) { /* fall through */ }
+  }
+  showLogin();
+  return false;
+}
+
+function showLogin() {
+  $('#loginOverlay').classList.add('show');
+  $('#mainContainer').style.display = 'none';
+  setTimeout(() => $('#loginUsername').focus(), 100);
+}
+
+function showDashboard() {
+  $('#loginOverlay').classList.remove('show');
+  $('#mainContainer').style.display = 'block';
+  
+  // Update UI based on role
+  const roleHTML = currentUser.role === 'manager' 
+    ? `<span class="role-badge role-manager">🔓 Manager</span>` 
+    : `<span class="role-badge role-staff">👁️ Staff</span>`;
+  $('#userBadge').innerHTML = `<b>${escapeHtml(currentUser.full_name || currentUser.username)}</b> ${roleHTML}`;
+  
+  // Hide manager-only sections for staff
+  if (currentUser.role !== 'manager') {
+    $$('[data-manager-only]').forEach(el => el.style.display = 'none');
+  }
+  
+  // Init month picker
+  if (!currentMonth) currentMonth = getCurrentMonth();
+  $('#monthPicker').value = currentMonth;
+  
+  loadDashboard();
+}
+
+async function doLogin() {
+  const username = $('#loginUsername').value.trim();
+  const password = $('#loginPassword').value;
+  const errorDiv = $('#loginError');
+  const btn = $('#btnDoLogin');
+  
+  if (!username || !password) {
+    errorDiv.textContent = 'กรุณากรอก username และ password';
+    errorDiv.style.display = 'block';
+    return;
+  }
+  
+  btn.disabled = true;
+  btn.innerHTML = '<span class="loading"></span> กำลังตรวจสอบ...';
+  errorDiv.style.display = 'none';
+  
+  try {
+    const { data, error } = await supabase
+      .rpc('verify_admin_login', { p_username: username, p_password: password });
+    
+    if (error) throw error;
+    
+    if (data && data.length > 0) {
+      currentUser = {
+        id: data[0].out_id,
+        username: data[0].out_username,
+        full_name: data[0].out_full_name,
+        role: data[0].out_role || 'manager'
+      };
+      sessionStorage.setItem('paper_admin', JSON.stringify(currentUser));
+      showDashboard();
+    } else {
+      errorDiv.textContent = '❌ Username หรือ Password ไม่ถูกต้อง';
+      errorDiv.style.display = 'block';
+    }
+  } catch (err) {
+    errorDiv.textContent = '❌ ' + err.message;
+    errorDiv.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'เข้าสู่ระบบ';
+  }
+}
+
+function logout() {
+  if (!confirm('ต้องการออกจากระบบ?')) return;
+  sessionStorage.removeItem('paper_admin');
+  currentUser = null;
+  if (trendChart) { trendChart.destroy(); trendChart = null; }
+  showLogin();
+}
+
+// ============================================
+// Helpers
+// ============================================
+function escapeHtml(s) {
+  if (s === null || s === undefined) return '';
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  })[c]);
+}
+
+function fmtNum(n, decimals = 0) {
+  if (n === null || n === undefined || isNaN(n)) return '—';
+  return Number(n).toLocaleString('en-US', { 
+    minimumFractionDigits: decimals, 
+    maximumFractionDigits: decimals 
+  });
+}
+
+function fmtMoney(n) {
+  if (n === null || n === undefined || isNaN(n)) return '—';
+  if (n >= 1000000) return '฿' + (n / 1000000).toFixed(2) + 'M';
+  if (n >= 1000) return '฿' + (n / 1000).toFixed(1) + 'K';
+  return '฿' + Math.round(n).toLocaleString();
+}
+
+function fmtMoneyFull(n) {
+  if (n === null || n === undefined || isNaN(n)) return '—';
+  return '฿' + Math.round(n).toLocaleString();
+}
+
+function isManager() {
+  return currentUser && currentUser.role === 'manager';
+}
+
+function startOfMonth(yyyymm) {
+  return `${yyyymm}-01`;
+}
+
+function endOfMonth(yyyymm) {
+  const [y, m] = yyyymm.split('-').map(Number);
+  const last = new Date(y, m, 0).getDate();
+  return `${yyyymm}-${String(last).padStart(2, '0')}`;
+}
+
+function daysSince(dateStr) {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  const now = new Date();
+  return Math.floor((now - d) / (1000 * 60 * 60 * 24));
+}
+
+// ============================================
+// Load Dashboard
+// ============================================
+async function loadDashboard() {
+  $('#movementMonthLabel').textContent = `· ${currentMonth}`;
+  
+  // Load all sections in parallel
+  await Promise.all([
+    loadKPI(),
+    loadMovement(),
+    loadCategory(),
+    isManager() ? loadProjects() : Promise.resolve(),
+    loadSupplierBreakdown(),
+    loadAging(),
+    loadTrend()
+  ]);
+}
+
+// ===== KPI =====
+async function loadKPI() {
+  const grid = $('#kpiGrid');
+  grid.innerHTML = '<div class="loading-state"><span class="loading"></span> โหลด KPI...</div>';
+  
+  try {
+    // Total in_stock
+    const { data: stockData, error } = await supabase
+      .from('paper_invoices')
+      .select('id, weight_kg, remaining_weight_kg, price_per_kg, receive_date')
+      .eq('status', 'in_stock');
+    
+    if (error) throw error;
+    
+    const totalRolls = stockData.length;
+    const totalKg = stockData.reduce((s, r) => s + parseFloat(r.remaining_weight_kg || 0), 0);
+    const totalValue = stockData.reduce((s, r) => 
+      s + (parseFloat(r.remaining_weight_kg || 0) * parseFloat(r.price_per_kg || 0)), 0);
+    const avgPrice = totalKg > 0 ? totalValue / totalKg : 0;
+    
+    // Aging > 90 days
+    const oldRolls = stockData.filter(r => {
+      const days = daysSince(r.receive_date);
+      return days !== null && days > 90;
+    }).length;
+    
+    let html = `
+      <div class="kpi-card">
+        <div class="kpi-label">ม้วนคงเหลือ</div>
+        <div class="kpi-value">${fmtNum(totalRolls)}</div>
+        <div class="kpi-sub">in_stock ทั้งหมด</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">น้ำหนักคงเหลือ</div>
+        <div class="kpi-value">${fmtNum(totalKg)}</div>
+        <div class="kpi-sub">kg</div>
+      </div>
+    `;
+    
+    if (isManager()) {
+      html += `
+        <div class="kpi-card">
+          <div class="kpi-label">มูลค่าคงเหลือ</div>
+          <div class="kpi-value">${fmtMoney(totalValue)}</div>
+          <div class="kpi-sub">~${avgPrice.toFixed(2)} ฿/kg</div>
+        </div>
+      `;
+    }
+    
+    html += `
+      <div class="kpi-card ${oldRolls > 0 ? 'alert' : ''}">
+        <div class="kpi-label">ค้าง Stock > 90 วัน</div>
+        <div class="kpi-value ${oldRolls > 0 ? 'alert' : ''}">${fmtNum(oldRolls)}</div>
+        <div class="kpi-sub">ม้วน</div>
+      </div>
+    `;
+    
+    grid.innerHTML = html;
+  } catch (err) {
+    grid.innerHTML = `<div class="loading-state" style="color:var(--danger);">❌ ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+// ===== Movement =====
+async function loadMovement() {
+  const wrap = $('#movementGrid');
+  wrap.innerHTML = '<div class="loading-state"><span class="loading"></span> โหลด...</div>';
+  
+  try {
+    const monthStart = startOfMonth(currentMonth);
+    const monthEnd = endOfMonth(currentMonth);
+    
+    // รับเข้าเดือนนี้
+    const { data: ins } = await supabase
+      .from('paper_invoices')
+      .select('weight_kg, price_per_kg')
+      .gte('receive_date', monthStart)
+      .lte('receive_date', monthEnd);
+    
+    // จ่ายออกเดือนนี้
+    const { data: outs } = await supabase
+      .from('paper_outflows')
+      .select('weight_kg, paper_invoice_id, paper_lot_normalized')
+      .gte('outflow_date', monthStart)
+      .lte('outflow_date', monthEnd)
+      .eq('voided', false);
+    
+    const inRolls = (ins || []).length;
+    const inKg = (ins || []).reduce((s, r) => s + parseFloat(r.weight_kg || 0), 0);
+    const inValue = (ins || []).reduce((s, r) => 
+      s + (parseFloat(r.weight_kg || 0) * parseFloat(r.price_per_kg || 0)), 0);
+    
+    const outRolls = (outs || []).length;
+    const outKg = (outs || []).reduce((s, r) => s + parseFloat(r.weight_kg || 0), 0);
+    
+    // คำนวณ outValue โดย lookup ราคาจาก paper_invoices
+    let outValue = 0;
+    if (isManager() && outs && outs.length > 0) {
+      const invoiceIds = outs.map(o => o.paper_invoice_id).filter(Boolean);
+      if (invoiceIds.length > 0) {
+        const { data: priceData } = await supabase
+          .from('paper_invoices')
+          .select('id, price_per_kg')
+          .in('id', invoiceIds);
+        
+        const priceMap = new Map();
+        (priceData || []).forEach(p => priceMap.set(p.id, parseFloat(p.price_per_kg) || 0));
+        
+        outValue = outs.reduce((s, o) => {
+          const price = priceMap.get(o.paper_invoice_id) || 0;
+          return s + (parseFloat(o.weight_kg || 0) * price);
+        }, 0);
+      }
+    }
+    
+    let html = `
+      <div class="movement-cell">
+        <div class="movement-label income">+ รับเข้า</div>
+        <div class="movement-value income">+${fmtNum(inRolls)} ม้วน</div>
+        <div class="movement-sub">${fmtNum(inKg)} kg${isManager() ? ` · ${fmtMoney(inValue)}` : ''}</div>
+      </div>
+      <div class="movement-cell">
+        <div class="movement-label outflow">− จ่ายออก</div>
+        <div class="movement-value outflow">−${fmtNum(outRolls)} ม้วน</div>
+        <div class="movement-sub">${fmtNum(outKg)} kg${isManager() ? ` · ${fmtMoney(outValue)}` : ''}</div>
+      </div>
+      <div class="movement-cell">
+        <div class="movement-label">Net Movement</div>
+        <div class="movement-value">${inRolls - outRolls >= 0 ? '+' : ''}${fmtNum(inRolls - outRolls)} ม้วน</div>
+        <div class="movement-sub">${inKg - outKg >= 0 ? '+' : ''}${fmtNum(inKg - outKg)} kg</div>
+      </div>
+    `;
+    
+    wrap.innerHTML = html;
+  } catch (err) {
+    wrap.innerHTML = `<div class="loading-state" style="color:var(--danger);">❌ ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+// ===== Category =====
+async function loadCategory() {
+  const grid = $('#categoryGrid');
+  grid.innerHTML = '<div class="loading-state"><span class="loading"></span> โหลด...</div>';
+  
+  try {
+    const { data, error } = await supabase
+      .from('paper_invoices')
+      .select('paper_category, weight_kg, remaining_weight_kg, price_per_kg')
+      .eq('status', 'in_stock')
+      .not('paper_category', 'is', null);
+    
+    if (error) throw error;
+    
+    const cats = new Map();
+    for (const r of (data || [])) {
+      const c = r.paper_category;
+      if (!cats.has(c)) cats.set(c, { rolls: 0, kg: 0, value: 0 });
+      const item = cats.get(c);
+      item.rolls += 1;
+      item.kg += parseFloat(r.remaining_weight_kg || 0);
+      item.value += parseFloat(r.remaining_weight_kg || 0) * parseFloat(r.price_per_kg || 0);
+    }
+    
+    const order = ['Liner', 'Grey-Board', 'Core-Board'];
+    let html = '';
+    for (const c of order) {
+      const item = cats.get(c) || { rolls: 0, kg: 0, value: 0 };
+      const valueLine = isManager() ? ` · ${fmtMoney(item.value)}` : '';
+      html += `
+        <div class="category-card cat-card-${c}">
+          <div class="category-name">${c}</div>
+          <div class="category-rolls">${fmtNum(item.rolls)} ม้วน</div>
+          <div class="category-detail">${fmtNum(item.kg)} kg${valueLine}</div>
+        </div>
+      `;
+    }
+    grid.innerHTML = html;
+  } catch (err) {
+    grid.innerHTML = `<div class="loading-state" style="color:var(--danger);">❌ ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+// ===== Project (SCG) — Manager only =====
+async function loadProjects() {
+  const wrap = $('#projectTable');
+  wrap.innerHTML = '<div class="loading-state"><span class="loading"></span> โหลด...</div>';
+  
+  try {
+    const { data, error } = await supabase
+      .from('paper_invoices')
+      .select('project_code, paper_type, weight_kg, remaining_weight_kg, price_per_kg')
+      .eq('status', 'in_stock')
+      .eq('supplier', 'SCG')
+      .not('project_code', 'is', null);
+    
+    if (error) throw error;
+    
+    const groups = new Map();
+    for (const r of (data || [])) {
+      const key = `${r.project_code}|${r.paper_type}`;
+      if (!groups.has(key)) {
+        groups.set(key, { 
+          project: r.project_code, type: r.paper_type, 
+          rolls: 0, kg: 0, value: 0, totalPriceKg: 0
+        });
+      }
+      const g = groups.get(key);
+      g.rolls += 1;
+      g.kg += parseFloat(r.remaining_weight_kg || 0);
+      const price = parseFloat(r.price_per_kg || 0);
+      g.value += parseFloat(r.remaining_weight_kg || 0) * price;
+      g.totalPriceKg += price;
+    }
+    
+    const arr = Array.from(groups.values()).sort((a, b) => b.value - a.value);
+    
+    if (arr.length === 0) {
+      wrap.innerHTML = '<div class="loading-state">ไม่มีข้อมูล project</div>';
+      return;
+    }
+    
+    let html = `
+      <table class="project-table">
+        <thead>
+          <tr>
+            <th>Project</th>
+            <th>Type</th>
+            <th class="right">ม้วน</th>
+            <th class="right">น้ำหนัก (kg)</th>
+            <th class="right">฿/kg เฉลี่ย</th>
+            <th class="right">มูลค่า (฿)</th>
+          </tr>
+        </thead>
+        <tbody>
+    `;
+    for (const g of arr) {
+      const cls = g.project.replace(/[^A-Za-z]/g, '-');
+      const avgPrice = g.kg > 0 ? g.value / g.kg : 0;
+      html += `
+        <tr>
+          <td><span class="project-badge proj-${cls}">${escapeHtml(g.project)}</span></td>
+          <td>${escapeHtml(g.type)}</td>
+          <td class="right">${fmtNum(g.rolls)}</td>
+          <td class="right">${fmtNum(g.kg)}</td>
+          <td class="right">${avgPrice.toFixed(2)}</td>
+          <td class="right">${fmtMoneyFull(g.value)}</td>
+        </tr>
+      `;
+    }
+    html += '</tbody></table>';
+    wrap.innerHTML = html;
+  } catch (err) {
+    wrap.innerHTML = `<div class="loading-state" style="color:var(--danger);">❌ ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+// ===== Supplier Breakdown (with drill-down) =====
+async function loadSupplierBreakdown() {
+  const wrap = $('#supplierTable');
+  wrap.innerHTML = '<div class="loading-state"><span class="loading"></span> โหลด...</div>';
+  
+  try {
+    const { data, error } = await supabase
+      .from('paper_invoices')
+      .select('supplier, paper_type, width_mm, weight_kg, remaining_weight_kg, price_per_kg')
+      .eq('status', 'in_stock');
+    
+    if (error) throw error;
+    
+    // Group by supplier > type > width
+    const supMap = new Map();
+    for (const r of (data || [])) {
+      const sup = r.supplier || '(ไม่ระบุ)';
+      if (!supMap.has(sup)) supMap.set(sup, { 
+        rolls: 0, kg: 0, value: 0, types: new Map() 
+      });
+      const supEntry = supMap.get(sup);
+      supEntry.rolls += 1;
+      supEntry.kg += parseFloat(r.remaining_weight_kg || 0);
+      supEntry.value += parseFloat(r.remaining_weight_kg || 0) * parseFloat(r.price_per_kg || 0);
+      
+      const typeKey = `${r.paper_type || '(none)'}|${r.width_mm || '?'}`;
+      if (!supEntry.types.has(typeKey)) {
+        supEntry.types.set(typeKey, {
+          paper_type: r.paper_type || '(none)',
+          width_mm: r.width_mm || '?',
+          rolls: 0, kg: 0, value: 0
+        });
+      }
+      const tEntry = supEntry.types.get(typeKey);
+      tEntry.rolls += 1;
+      tEntry.kg += parseFloat(r.remaining_weight_kg || 0);
+      tEntry.value += parseFloat(r.remaining_weight_kg || 0) * parseFloat(r.price_per_kg || 0);
+    }
+    
+    // Sort suppliers by total value
+    const supArr = Array.from(supMap.entries()).sort((a, b) => b[1].value - a[1].value);
+    
+    if (supArr.length === 0) {
+      wrap.innerHTML = '<div class="loading-state">ไม่มีข้อมูล stock</div>';
+      return;
+    }
+    
+    // Find max kg for heat map
+    const allKgs = supArr.flatMap(([_, s]) => Array.from(s.types.values()).map(t => t.kg));
+    const maxKg = Math.max(...allKgs, 1);
+    
+    let html = '';
+    let supIdx = 0;
+    for (const [sup, supEntry] of supArr) {
+      const supId = `sup-${supIdx}`;
+      const expanded = supIdx === 0;
+      
+      html += `
+        <div class="supplier-group ${expanded ? 'expanded' : ''}" data-target="${supId}">
+          <div>
+            <span class="arrow">▶</span>
+            <b>${escapeHtml(sup)}</b> · ${fmtNum(supEntry.rolls)} ม้วน · ${fmtNum(supEntry.kg)} kg${isManager() ? ` · ${fmtMoney(supEntry.value)}` : ''}
+          </div>
+          <button class="btn" style="font-size:11px;padding:4px 10px;" 
+                  onclick="event.stopPropagation();window.openDrillDown('${escapeHtml(sup)}')">
+            📦 ดู Lot
+          </button>
+        </div>
+        <div id="${supId}" style="display:${expanded ? 'block' : 'none'};">
+          <table class="project-table">
+            <thead>
+              <tr>
+                <th>ประเภท</th>
+                <th class="right">หน้ากว้าง (mm)</th>
+                <th class="right">ม้วน</th>
+                <th class="right">น้ำหนัก (kg)</th>
+                ${isManager() ? `
+                  <th class="right">฿/kg เฉลี่ย</th>
+                  <th class="right">มูลค่า (฿)</th>
+                ` : ''}
+              </tr>
+            </thead>
+            <tbody>
+      `;
+      
+      const typeArr = Array.from(supEntry.types.values()).sort((a, b) => b.kg - a.kg);
+      for (const t of typeArr) {
+        const ratio = t.kg / maxKg;
+        let heatClass = '';
+        if (ratio > 0.5) heatClass = 'heat-high';
+        else if (ratio > 0.2) heatClass = 'heat-mid';
+        else heatClass = 'heat-low';
+        
+        const avgPrice = t.kg > 0 ? t.value / t.kg : 0;
+        
+        html += `
+          <tr>
+            <td>${escapeHtml(t.paper_type)}</td>
+            <td class="right">${escapeHtml(t.width_mm)}</td>
+            <td class="right">${fmtNum(t.rolls)}</td>
+            <td class="right ${heatClass}">${fmtNum(t.kg)}</td>
+            ${isManager() ? `
+              <td class="right">${avgPrice.toFixed(2)}</td>
+              <td class="right">${fmtMoneyFull(t.value)}</td>
+            ` : ''}
+          </tr>
+        `;
+      }
+      
+      html += '</tbody></table></div>';
+      supIdx++;
+    }
+    
+    wrap.innerHTML = html;
+    
+    // Click handlers for supplier toggle
+    $$('.supplier-group').forEach(el => {
+      el.addEventListener('click', () => {
+        const target = $('#' + el.dataset.target);
+        if (!target) return;
+        const willExpand = !el.classList.contains('expanded');
+        el.classList.toggle('expanded', willExpand);
+        target.style.display = willExpand ? 'block' : 'none';
+      });
+    });
+  } catch (err) {
+    wrap.innerHTML = `<div class="loading-state" style="color:var(--danger);">❌ ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+// ===== Drill-down per Supplier =====
+window.openDrillDown = async function(supplier) {
+  $('#drillDownTitle').innerHTML = `📦 ราย Lot: <b>${escapeHtml(supplier)}</b>`;
+  $('#drillDownBody').innerHTML = '<div class="loading-state"><span class="loading"></span> โหลด...</div>';
+  $('#drillDownModal').classList.add('show');
+  
+  try {
+    const { data, error } = await supabase
+      .from('paper_invoices')
+      .select('paper_lot, paper_type, width_mm, weight_kg, remaining_weight_kg, price_per_kg, receive_date, invoice_no, paper_category, project_code')
+      .eq('status', 'in_stock')
+      .eq('supplier', supplier)
+      .order('receive_date', { ascending: false, nullsFirst: false });
+    
+    if (error) throw error;
+    
+    if (!data || data.length === 0) {
+      $('#drillDownBody').innerHTML = '<div class="loading-state">ไม่มี lot ใน stock</div>';
+      return;
+    }
+    
+    const totalKg = data.reduce((s, r) => s + parseFloat(r.remaining_weight_kg || 0), 0);
+    const totalValue = data.reduce((s, r) => 
+      s + (parseFloat(r.remaining_weight_kg || 0) * parseFloat(r.price_per_kg || 0)), 0);
+    
+    let html = `
+      <div style="background:var(--panel-2);padding:10px 12px;border-radius:8px;margin-bottom:12px;font-size:13px;">
+        <b>${data.length} ม้วน</b> · ${fmtNum(totalKg)} kg${isManager() ? ` · ${fmtMoneyFull(totalValue)}` : ''}
+      </div>
+      <table class="project-table">
+        <thead>
+          <tr>
+            <th>Lot</th>
+            <th>ประเภท</th>
+            <th class="right">กว้าง</th>
+            <th class="right">น้ำหนัก</th>
+            ${isManager() ? '<th class="right">฿/kg</th>' : ''}
+            <th>วันรับเข้า</th>
+            <th class="right">ค้าง (วัน)</th>
+          </tr>
+        </thead>
+        <tbody>
+    `;
+    
+    for (const r of data) {
+      const days = daysSince(r.receive_date);
+      const dayClass = days > 90 ? 'style="color:var(--danger);font-weight:700;"' 
+        : days > 60 ? 'style="color:var(--warning);font-weight:600;"' : '';
+      
+      html += `
+        <tr>
+          <td>${escapeHtml(r.paper_lot)}</td>
+          <td>${escapeHtml(r.paper_type || '—')}</td>
+          <td class="right">${escapeHtml(r.width_mm || '—')}</td>
+          <td class="right">${fmtNum(r.remaining_weight_kg)}</td>
+          ${isManager() ? `<td class="right">${r.price_per_kg ? Number(r.price_per_kg).toFixed(2) : '—'}</td>` : ''}
+          <td>${escapeHtml(r.receive_date || '—')}</td>
+          <td class="right" ${dayClass}>${days !== null ? days : '—'}</td>
+        </tr>
+      `;
+    }
+    
+    html += '</tbody></table>';
+    $('#drillDownBody').innerHTML = html;
+  } catch (err) {
+    $('#drillDownBody').innerHTML = `<div class="loading-state" style="color:var(--danger);">❌ ${escapeHtml(err.message)}</div>`;
+  }
+};
+
+window.closeDrillDown = function() {
+  $('#drillDownModal').classList.remove('show');
+};
+
+// ===== Aging =====
+async function loadAging() {
+  const buckets = $('#agingBuckets');
+  const tbl = $('#agingTable');
+  buckets.innerHTML = '<div class="loading-state"><span class="loading"></span></div>';
+  
+  try {
+    const { data, error } = await supabase
+      .from('paper_invoices')
+      .select('paper_lot, supplier, paper_type, weight_kg, remaining_weight_kg, receive_date')
+      .eq('status', 'in_stock')
+      .not('receive_date', 'is', null);
+    
+    if (error) throw error;
+    
+    const total = (data || []).length;
+    let b0_30 = 0, b31_60 = 0, b61_90 = 0, bOver90 = 0;
+    const withDays = [];
+    
+    for (const r of (data || [])) {
+      const d = daysSince(r.receive_date);
+      if (d === null) continue;
+      withDays.push({ ...r, days: d });
+      if (d <= 30) b0_30++;
+      else if (d <= 60) b31_60++;
+      else if (d <= 90) b61_90++;
+      else bOver90++;
+    }
+    
+    const pct = n => total > 0 ? (n / total * 100).toFixed(1) + '%' : '0%';
+    
+    buckets.innerHTML = `
+      <div class="aging-bucket aging-0-30">
+        <div class="aging-label">0–30 วัน</div>
+        <div class="aging-count">${fmtNum(b0_30)}</div>
+        <div class="aging-pct">${pct(b0_30)}</div>
+      </div>
+      <div class="aging-bucket aging-31-60">
+        <div class="aging-label">31–60 วัน</div>
+        <div class="aging-count">${fmtNum(b31_60)}</div>
+        <div class="aging-pct">${pct(b31_60)}</div>
+      </div>
+      <div class="aging-bucket aging-61-90">
+        <div class="aging-label">61–90 วัน</div>
+        <div class="aging-count">${fmtNum(b61_90)}</div>
+        <div class="aging-pct">${pct(b61_90)}</div>
+      </div>
+      <div class="aging-bucket aging-over-90">
+        <div class="aging-label">> 90 วัน ⚠️</div>
+        <div class="aging-count">${fmtNum(bOver90)}</div>
+        <div class="aging-pct">${pct(bOver90)}</div>
+      </div>
+    `;
+    
+    // Top 10 oldest
+    const top10 = withDays.sort((a, b) => b.days - a.days).slice(0, 10);
+    if (top10.length === 0) {
+      tbl.innerHTML = '<div class="loading-state">ไม่มีข้อมูล</div>';
+      return;
+    }
+    
+    let html = `
+      <table class="project-table">
+        <thead>
+          <tr>
+            <th>Lot</th>
+            <th>Supplier</th>
+            <th>ประเภท</th>
+            <th class="right">น้ำหนัก (kg)</th>
+            <th class="right">ค้าง (วัน)</th>
+          </tr>
+        </thead>
+        <tbody>
+    `;
+    for (const r of top10) {
+      const dayClass = r.days > 90 ? 'style="color:var(--danger);font-weight:700;"' 
+        : r.days > 60 ? 'style="color:var(--warning);font-weight:600;"' : '';
+      html += `
+        <tr>
+          <td>${escapeHtml(r.paper_lot)}</td>
+          <td>${escapeHtml(r.supplier || '—')}</td>
+          <td>${escapeHtml(r.paper_type || '—')}</td>
+          <td class="right">${fmtNum(r.remaining_weight_kg)}</td>
+          <td class="right" ${dayClass}>${r.days}</td>
+        </tr>
+      `;
+    }
+    html += '</tbody></table>';
+    tbl.innerHTML = html;
+  } catch (err) {
+    buckets.innerHTML = `<div class="loading-state" style="color:var(--danger);">❌ ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+// ===== Trend (12 months) =====
+async function loadTrend() {
+  const ctx = document.getElementById('trendChart');
+  if (!ctx) return;
+  
+  try {
+    // Build 12 month labels (current month - 11 → current month)
+    const months = [];
+    const now = new Date();
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+    }
+    
+    const start = startOfMonth(months[0]);
+    const end = endOfMonth(months[months.length - 1]);
+    
+    // Receipt
+    const { data: ins } = await supabase
+      .from('paper_invoices')
+      .select('weight_kg, receive_date')
+      .gte('receive_date', start)
+      .lte('receive_date', end);
+    
+    // Outflow
+    const { data: outs } = await supabase
+      .from('paper_outflows')
+      .select('weight_kg, outflow_date')
+      .gte('outflow_date', start)
+      .lte('outflow_date', end)
+      .eq('voided', false);
+    
+    const monthMap = new Map();
+    for (const m of months) monthMap.set(m, { in: 0, out: 0 });
+    
+    for (const r of (ins || [])) {
+      const m = (r.receive_date || '').slice(0, 7);
+      if (monthMap.has(m)) monthMap.get(m).in += parseFloat(r.weight_kg || 0);
+    }
+    for (const r of (outs || [])) {
+      const m = (r.outflow_date || '').slice(0, 7);
+      if (monthMap.has(m)) monthMap.get(m).out += parseFloat(r.weight_kg || 0);
+    }
+    
+    const dataIn = months.map(m => Math.round(monthMap.get(m).in));
+    const dataOut = months.map(m => Math.round(monthMap.get(m).out));
+    
+    if (trendChart) trendChart.destroy();
+    
+    trendChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: months,
+        datasets: [
+          {
+            label: 'รับเข้า (kg)',
+            data: dataIn,
+            backgroundColor: 'rgba(22, 163, 74, 0.7)',
+            borderColor: 'rgb(22, 163, 74)',
+            borderWidth: 1
+          },
+          {
+            label: 'จ่ายออก (kg)',
+            data: dataOut,
+            backgroundColor: 'rgba(220, 38, 38, 0.7)',
+            borderColor: 'rgb(220, 38, 38)',
+            borderWidth: 1
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'top' },
+          tooltip: {
+            callbacks: {
+              label: ctx => `${ctx.dataset.label}: ${ctx.raw.toLocaleString()} kg`
+            }
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              callback: v => v.toLocaleString()
+            }
+          }
+        }
+      }
+    });
+  } catch (err) {
+    console.error('Trend error:', err);
+  }
+}
+
+// ============================================
+// Section Toggle
+// ============================================
+$$('[data-toggle]').forEach(el => {
+  el.addEventListener('click', () => {
+    const body = el.nextElementSibling;
+    const toggle = el.querySelector('.section-toggle');
+    if (!body) return;
+    body.classList.toggle('hidden');
+    if (toggle) toggle.classList.toggle('collapsed');
+  });
+});
+
+// ============================================
+// Wire up Events
+// ============================================
+$('#btnDoLogin').addEventListener('click', doLogin);
+$('#loginPassword').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doLogin();
+});
+$('#btnLogout').addEventListener('click', logout);
+$('#btnRefresh').addEventListener('click', loadDashboard);
+
+$('#monthPicker').addEventListener('change', e => {
+  currentMonth = e.target.value;
+  loadDashboard();
+});
+
+$('#btnExport').addEventListener('click', () => {
+  alert('💡 Export feature: TODO\nจะเพิ่ม export CSV/Excel ในเวอร์ชันถัดไป');
+});
+
+// ============================================
+// Init
+// ============================================
+checkAuth();
+
+</script>
+
+</body>
+</html>
