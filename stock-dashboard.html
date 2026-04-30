@@ -248,19 +248,57 @@ body {
 .category-detail { font-size: 11px; margin-top: 2px; opacity: 0.85; font-family: var(--mono); }
 
 /* ===== Project Table ===== */
-.project-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.project-table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .project-table th {
-  background: var(--panel-2); padding: 10px;
+  background: var(--panel-2); padding: 12px 14px;
   text-align: left; font-weight: 600;
   border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 .project-table th.right { text-align: right; }
 .project-table td {
-  padding: 10px; border-bottom: 1px solid var(--border);
+  padding: 11px 14px; border-bottom: 1px solid var(--border);
   font-family: var(--mono);
+  font-size: 14px;
 }
 .project-table td.right { text-align: right; }
 .project-table tr:hover { background: var(--panel-2); }
+
+/* Type group header row */
+.type-group-row td {
+  background: #f8fafc;
+  font-weight: 700;
+  color: var(--text);
+  font-family: 'IBM Plex Sans Thai', sans-serif !important;
+  font-size: 14px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-strong);
+  border-top: 2px solid var(--border-strong);
+}
+.type-group-row .type-name {
+  display: inline-block;
+  background: white;
+  color: var(--accent);
+  padding: 2px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 13px;
+  margin-right: 8px;
+}
+.type-group-row .type-summary {
+  font-weight: 500;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+/* Width detail rows (indented) */
+.width-detail-row td:first-child {
+  padding-left: 36px;
+  color: var(--text-dim);
+}
 
 .project-badge {
   display: inline-block; padding: 3px 10px; border-radius: 4px;
@@ -275,14 +313,15 @@ body {
 
 /* ===== Supplier Detail Table ===== */
 .supplier-group {
-  background: var(--warning-bg); padding: 8px 12px;
+  background: var(--warning-bg); padding: 12px 16px;
   font-weight: 700; color: #78350f;
-  border-radius: 6px; margin: 12px 0 6px;
+  border-radius: 8px; margin: 14px 0 8px;
   cursor: pointer; user-select: none;
   display: flex; justify-content: space-between; align-items: center;
+  font-size: 14px;
 }
 .supplier-group:hover { background: #fde68a; }
-.supplier-group .arrow { font-size: 11px; transition: transform 0.2s; }
+.supplier-group .arrow { font-size: 12px; transition: transform 0.2s; }
 .supplier-group.expanded .arrow { transform: rotate(90deg); }
 
 .heat-low { background: #fecaca !important; }
@@ -300,18 +339,18 @@ body {
 /* ===== Aging ===== */
 .aging-buckets {
   display: grid; grid-template-columns: repeat(4, 1fr);
-  gap: 8px; margin-bottom: 16px;
+  gap: 10px; margin-bottom: 18px;
 }
 .aging-bucket {
-  padding: 12px; border-radius: 8px; text-align: center;
+  padding: 14px; border-radius: 10px; text-align: center;
 }
 .aging-0-30 { background: #dcfce7; color: #14532d; }
 .aging-31-60 { background: #fef3c7; color: #78350f; }
 .aging-61-90 { background: #fed7aa; color: #7c2d12; }
 .aging-over-90 { background: #fee2e2; color: #7f1d1d; border: 1px solid #f87171; }
-.aging-label { font-size: 11px; margin-bottom: 4px; }
-.aging-count { font-size: 20px; font-weight: 700; font-family: var(--mono); }
-.aging-pct { font-size: 11px; opacity: 0.8; margin-top: 2px; font-family: var(--mono); }
+.aging-label { font-size: 13px; margin-bottom: 6px; font-weight: 600; }
+.aging-count { font-size: 24px; font-weight: 700; font-family: var(--mono); }
+.aging-pct { font-size: 12px; opacity: 0.85; margin-top: 4px; font-family: var(--mono); }
 
 /* ===== Trend Chart ===== */
 .trend-chart-wrap {
@@ -972,42 +1011,62 @@ async function loadSupplierBreakdown() {
     
     if (error) throw error;
     
-    // Group by supplier > type > width
+    // Group by supplier > paper_type > width
+    // Structure: Map<supplier, { rolls, kg, value, types: Map<paper_type, { rolls, kg, value, widths: Map<width, {rolls, kg, value}> }> }>
     const supMap = new Map();
     for (const r of (data || [])) {
       const sup = r.supplier || '(ไม่ระบุ)';
+      const type = r.paper_type || '(none)';
+      const width = r.width_mm || '?';
+      const remaining = parseFloat(r.remaining_weight_kg || 0);
+      const value = remaining * parseFloat(r.price_per_kg || 0);
+      
       if (!supMap.has(sup)) supMap.set(sup, { 
         rolls: 0, kg: 0, value: 0, types: new Map() 
       });
       const supEntry = supMap.get(sup);
       supEntry.rolls += 1;
-      supEntry.kg += parseFloat(r.remaining_weight_kg || 0);
-      supEntry.value += parseFloat(r.remaining_weight_kg || 0) * parseFloat(r.price_per_kg || 0);
+      supEntry.kg += remaining;
+      supEntry.value += value;
       
-      const typeKey = `${r.paper_type || '(none)'}|${r.width_mm || '?'}`;
-      if (!supEntry.types.has(typeKey)) {
-        supEntry.types.set(typeKey, {
-          paper_type: r.paper_type || '(none)',
-          width_mm: r.width_mm || '?',
-          rolls: 0, kg: 0, value: 0
+      if (!supEntry.types.has(type)) {
+        supEntry.types.set(type, { 
+          rolls: 0, kg: 0, value: 0, widths: new Map() 
         });
       }
-      const tEntry = supEntry.types.get(typeKey);
-      tEntry.rolls += 1;
-      tEntry.kg += parseFloat(r.remaining_weight_kg || 0);
-      tEntry.value += parseFloat(r.remaining_weight_kg || 0) * parseFloat(r.price_per_kg || 0);
+      const typeEntry = supEntry.types.get(type);
+      typeEntry.rolls += 1;
+      typeEntry.kg += remaining;
+      typeEntry.value += value;
+      
+      if (!typeEntry.widths.has(width)) {
+        typeEntry.widths.set(width, { rolls: 0, kg: 0, value: 0 });
+      }
+      const widthEntry = typeEntry.widths.get(width);
+      widthEntry.rolls += 1;
+      widthEntry.kg += remaining;
+      widthEntry.value += value;
     }
     
-    // Sort suppliers by total value
-    const supArr = Array.from(supMap.entries()).sort((a, b) => b[1].value - a[1].value);
+    // Sort suppliers alphabetically
+    const supArr = Array.from(supMap.entries()).sort((a, b) => 
+      a[0].localeCompare(b[0], 'th')
+    );
     
     if (supArr.length === 0) {
       wrap.innerHTML = '<div class="loading-state">ไม่มีข้อมูล stock</div>';
       return;
     }
     
-    // Find max kg for heat map
-    const allKgs = supArr.flatMap(([_, s]) => Array.from(s.types.values()).map(t => t.kg));
+    // Find max kg in any (type-width row) for heat map
+    const allKgs = [];
+    for (const [_, supEntry] of supArr) {
+      for (const [__, typeEntry] of supEntry.types) {
+        for (const [___, widthEntry] of typeEntry.widths) {
+          allKgs.push(widthEntry.kg);
+        }
+      }
+    }
     const maxKg = Math.max(...allKgs, 1);
     
     let html = '';
@@ -1015,14 +1074,15 @@ async function loadSupplierBreakdown() {
     for (const [sup, supEntry] of supArr) {
       const supId = `sup-${supIdx}`;
       const expanded = supIdx === 0;
+      const valueLine = isManager() ? ` · ${fmtMoney(supEntry.value)}` : '';
       
       html += `
         <div class="supplier-group ${expanded ? 'expanded' : ''}" data-target="${supId}">
           <div>
             <span class="arrow">▶</span>
-            <b>${escapeHtml(sup)}</b> · ${fmtNum(supEntry.rolls)} ม้วน · ${fmtNum(supEntry.kg)} kg${isManager() ? ` · ${fmtMoney(supEntry.value)}` : ''}
+            <b>${escapeHtml(sup)}</b> · ${fmtNum(supEntry.rolls)} ม้วน · ${fmtNum(supEntry.kg)} kg${valueLine}
           </div>
-          <button class="btn" style="font-size:11px;padding:4px 10px;" 
+          <button class="btn" style="font-size:12px;padding:5px 12px;" 
                   onclick="event.stopPropagation();window.openDrillDown('${escapeHtml(sup)}')">
             📦 ดู Lot
           </button>
@@ -1031,8 +1091,7 @@ async function loadSupplierBreakdown() {
           <table class="project-table">
             <thead>
               <tr>
-                <th>ประเภท</th>
-                <th class="right">หน้ากว้าง (mm)</th>
+                <th>ประเภท / หน้ากว้าง</th>
                 <th class="right">ม้วน</th>
                 <th class="right">น้ำหนัก (kg)</th>
                 ${isManager() ? `
@@ -1044,28 +1103,55 @@ async function loadSupplierBreakdown() {
             <tbody>
       `;
       
-      const typeArr = Array.from(supEntry.types.values()).sort((a, b) => b.kg - a.kg);
-      for (const t of typeArr) {
-        const ratio = t.kg / maxKg;
-        let heatClass = '';
-        if (ratio > 0.5) heatClass = 'heat-high';
-        else if (ratio > 0.2) heatClass = 'heat-mid';
-        else heatClass = 'heat-low';
-        
-        const avgPrice = t.kg > 0 ? t.value / t.kg : 0;
+      // Sort types A-Z
+      const typeArr = Array.from(supEntry.types.entries()).sort((a, b) => 
+        a[0].localeCompare(b[0], 'en')
+      );
+      
+      const colspan = isManager() ? 5 : 3;
+      
+      for (const [type, typeEntry] of typeArr) {
+        // Type group header row
+        const typeAvgPrice = typeEntry.kg > 0 ? typeEntry.value / typeEntry.kg : 0;
+        const typeValueLine = isManager() ? ` · ฿/kg ${typeAvgPrice.toFixed(2)} · ${fmtMoneyFull(typeEntry.value)}` : '';
         
         html += `
-          <tr>
-            <td>${escapeHtml(t.paper_type)}</td>
-            <td class="right">${escapeHtml(t.width_mm)}</td>
-            <td class="right">${fmtNum(t.rolls)}</td>
-            <td class="right ${heatClass}">${fmtNum(t.kg)}</td>
-            ${isManager() ? `
-              <td class="right">${avgPrice.toFixed(2)}</td>
-              <td class="right">${fmtMoneyFull(t.value)}</td>
-            ` : ''}
+          <tr class="type-group-row">
+            <td colspan="${colspan}">
+              <span class="type-name">${escapeHtml(type)}</span>
+              <span class="type-summary">${fmtNum(typeEntry.rolls)} ม้วน · ${fmtNum(typeEntry.kg)} kg${typeValueLine}</span>
+            </td>
           </tr>
         `;
+        
+        // Width detail rows — sorted by width ascending
+        const widthArr = Array.from(typeEntry.widths.entries()).sort((a, b) => {
+          const wa = parseFloat(a[0]) || 0;
+          const wb = parseFloat(b[0]) || 0;
+          return wa - wb;
+        });
+        
+        for (const [width, widthEntry] of widthArr) {
+          const ratio = widthEntry.kg / maxKg;
+          let heatClass = '';
+          if (ratio > 0.5) heatClass = 'heat-high';
+          else if (ratio > 0.2) heatClass = 'heat-mid';
+          else heatClass = 'heat-low';
+          
+          const avgPrice = widthEntry.kg > 0 ? widthEntry.value / widthEntry.kg : 0;
+          
+          html += `
+            <tr class="width-detail-row">
+              <td>หน้ากว้าง <b>${escapeHtml(width)}</b> mm</td>
+              <td class="right">${fmtNum(widthEntry.rolls)}</td>
+              <td class="right ${heatClass}">${fmtNum(widthEntry.kg)}</td>
+              ${isManager() ? `
+                <td class="right">${avgPrice.toFixed(2)}</td>
+                <td class="right">${fmtMoneyFull(widthEntry.value)}</td>
+              ` : ''}
+            </tr>
+          `;
+        }
       }
       
       html += '</tbody></table></div>';
