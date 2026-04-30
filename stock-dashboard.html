@@ -1187,6 +1187,19 @@ async function loadTrend() {
       .from('paper_outflows').select('weight_kg, outflow_date')
       .gte('outflow_date', start).lte('outflow_date', end).eq('voided', false));
     
+    // คำนวณ baseline = stock คงเหลือ ณ ก่อนเดือนแรก
+    // baseline = (รับเข้าทั้งหมดก่อน start) − (จ่ายออกทั้งหมดก่อน start)
+    const baselineIns = await fetchAllRows(() => supabase
+      .from('paper_invoices').select('weight_kg')
+      .lt('receive_date', start));
+    const baselineOuts = await fetchAllRows(() => supabase
+      .from('paper_outflows').select('weight_kg')
+      .lt('outflow_date', start).eq('voided', false));
+    
+    const baselineInKg = (baselineIns || []).reduce((s, r) => s + parseFloat(r.weight_kg || 0), 0);
+    const baselineOutKg = (baselineOuts || []).reduce((s, r) => s + parseFloat(r.weight_kg || 0), 0);
+    const baseline = baselineInKg - baselineOutKg;
+    
     const monthMap = new Map();
     for (const m of months) monthMap.set(m, { in: 0, out: 0 });
     for (const r of (ins || [])) {
@@ -1222,7 +1235,7 @@ async function loadTrend() {
     });
     
     const cumNet = [];
-    let running = 0;
+    let running = baseline;  // เริ่มจาก stock จริงก่อน 12 เดือน (ไม่ใช่ 0)
     for (const m of months) {
       running += monthMap.get(m).in - monthMap.get(m).out;
       cumNet.push(Math.round(running));
