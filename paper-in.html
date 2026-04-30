@@ -476,6 +476,48 @@ tr:hover td { background: var(--panel-2); }
 }
 .btn-bulk-price:hover { background: #fbbf24; color: white; }
 
+/* Delete batch button per invoice */
+.btn-delete-batch {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: #fee2e2; color: #991b1b;
+  border: 1px solid #f87171;
+  padding: 4px 10px; border-radius: 6px;
+  font-size: 12px; font-weight: 700;
+  cursor: pointer; margin-left: 6px;
+  font-family: inherit;
+}
+.btn-delete-batch:hover { background: #dc2626; color: white; }
+
+/* Category badge */
+.category-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--mono);
+  white-space: nowrap;
+}
+.cat-Liner { background: #dbeafe; color: #1e40af; }
+.cat-Grey-Board { background: #e5e7eb; color: #374151; }
+.cat-Core-Board { background: #fef3c7; color: #92400e; }
+
+/* Project badge */
+.project-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--mono);
+  white-space: nowrap;
+}
+.proj-FREE-MKT { background: #fce7f3; color: #831843; }
+.proj-VKPC { background: #d1fae5; color: #065f46; }
+.proj-SKIC { background: #ddd6fe; color: #5b21b6; }
+.proj-Normal { background: #dbeafe; color: #1e40af; }
+.proj-w-MOG { background: #fed7aa; color: #9a3412; }
+
 /* Edit/Price Modal */
 .modal-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,0.5);
@@ -983,6 +1025,20 @@ tr:hover td { background: var(--panel-2); }
           <option value="partial">partial</option>
           <option value="damaged">damaged</option>
         </select>
+        <select class="filter-select" id="l-filter-category">
+          <option value="">ทุกชนิด</option>
+          <option value="Liner">Liner</option>
+          <option value="Grey-Board">Grey-Board</option>
+          <option value="Core-Board">Core-Board</option>
+        </select>
+        <select class="filter-select" id="l-filter-project">
+          <option value="">ทุกโครงการ</option>
+          <option value="FREE MKT">FREE MKT</option>
+          <option value="VKPC">VKPC</option>
+          <option value="SKIC">SKIC</option>
+          <option value="Normal">Normal</option>
+          <option value="w/MOG">w/MOG</option>
+        </select>
         <button class="btn btn-sm" id="l-refresh">🔄 Refresh</button>
         <button class="btn-admin-login" id="btnAdminLogin">🔐 Admin</button>
       </div>
@@ -1140,6 +1196,28 @@ tr:hover td { background: var(--panel-2); }
     <div class="modal-actions">
       <button class="btn-mod-cancel" onclick="window.closeBulkPrice()">ยกเลิก</button>
       <button class="btn-mod-confirm" id="btnSaveBulkPrice" style="background:#ca8a04;border-color:#ca8a04;">💾 บันทึกราคา</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Modal: Delete Batch (Safe Mode) ===== -->
+<div class="modal-overlay" id="modalDeleteBatch">
+  <div class="modal-box">
+    <div style="font-size:36px;text-align:center;margin-bottom:8px;">🗑️</div>
+    <h3 style="text-align:center;">ยืนยันลบทั้ง Batch</h3>
+    <div class="invoice-summary-info" id="deleteBatchInfo"></div>
+    <div id="deleteBatchSafetyCheck" style="font-size:13px;margin:10px 0;"></div>
+    <p style="text-align:center;color:var(--danger);font-weight:700;display:none;" id="deleteBatchWarn">
+      ⚠️ การลบนี้กู้คืนไม่ได้
+    </p>
+    <p style="font-size:13px;text-align:center;display:none;" id="deleteBatchConfirmHint">
+      พิมพ์ <b>DELETE BATCH</b> เพื่อยืนยัน:
+    </p>
+    <input type="text" id="deleteBatchConfirmInput" 
+      style="text-align:center;font-weight:700;letter-spacing:2px;text-transform:uppercase;font-family:var(--mono);display:none;">
+    <div class="modal-actions">
+      <button class="btn-mod-cancel" onclick="window.closeDeleteBatch()">ยกเลิก</button>
+      <button class="btn-mod-danger" id="btnDoDeleteBatch" disabled>🗑️ ลบทั้ง batch</button>
     </div>
   </div>
 </div>
@@ -1737,6 +1815,18 @@ function formatNumber(n) {
 function formatPrice(n) {
   if (n === null || n === undefined || n === '') return '—';
   return Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+}
+
+function renderCategoryBadge(cat) {
+  if (!cat) return '<span style="color:var(--text-dim);font-size:12px;">—</span>';
+  const cls = cat.replace(/[^A-Za-z]/g, '-');
+  return `<span class="category-badge cat-${cls}">${escapeHtml(cat)}</span>`;
+}
+
+function renderProjectBadge(proj) {
+  if (!proj) return '<span style="color:var(--text-dim);font-size:12px;">—</span>';
+  const cls = proj.replace(/[^A-Za-z]/g, '-');
+  return `<span class="project-badge proj-${cls}">${escapeHtml(proj)}</span>`;
 }
 
 // ====== Admin state (shared with paper-out via sessionStorage) ======
@@ -2395,6 +2485,8 @@ async function loadList() {
     const search = $('#l-search').value.trim();
     const filterSupp = $('#l-filter-supplier').value;
     const filterStatus = $('#l-filter-status').value;
+    const filterCategory = $('#l-filter-category')?.value || '';
+    const filterProject = $('#l-filter-project')?.value || '';
     
     // โหลดข้อมูลแบบ paginated by "วันที่รับ" — ดึง 100 ม้วนล่าสุดต่อหน้า
     let q = supabase.from('paper_invoices')
@@ -2407,6 +2499,8 @@ async function loadList() {
     
     if (filterSupp) q = q.eq('supplier', filterSupp);
     if (filterStatus) q = q.eq('status', filterStatus);
+    if (filterCategory) q = q.eq('paper_category', filterCategory);
+    if (filterProject) q = q.eq('project_code', filterProject);
     if (search) {
       q = q.or(`paper_lot.ilike.%${search}%,paper_lot_normalized.ilike.%${search.replace(/-/g,'').toUpperCase()}%,invoice_no.ilike.%${search}%,supplier.ilike.%${search}%`);
     }
@@ -2500,7 +2594,10 @@ function renderGroupedList(rows, totalCount) {
               <span class="group-inv-supplier">${escapeHtml(supplier)}</span>
               <span class="group-inv-no">${escapeHtml(invoice_no)}</span>
               <span class="group-inv-count">${arr.length} ม้วน</span>
-              ${currentAdmin ? `<button class="btn-bulk-price" onclick="event.stopPropagation();window.openBulkPrice('${escapeHtml(supplier)}','${escapeHtml(invoice_no)}','${date}')">💰 ใส่ราคา</button>` : ''}
+              ${currentAdmin ? `
+                <button class="btn-bulk-price" onclick="event.stopPropagation();window.openBulkPrice('${escapeHtml(supplier)}','${escapeHtml(invoice_no)}','${date}')">💰 ใส่ราคา</button>
+                <button class="btn-delete-batch" onclick="event.stopPropagation();window.openDeleteBatch('${escapeHtml(supplier)}','${escapeHtml(invoice_no)}','${date}')" title="ลบทั้ง batch">🗑️ ลบ batch</button>
+              ` : ''}
             </div>
             <div class="group-inv-stats">${formatNumber(sumWeight)} kg · คงเหลือ ${formatNumber(sumRemaining)} kg</div>
           </div>
@@ -2511,6 +2608,8 @@ function renderGroupedList(rows, totalCount) {
               <tr>
                 <th style="text-align:left;">Lot</th>
                 <th style="text-align:left;">ประเภท</th>
+                <th style="text-align:left;">ชนิด</th>
+                <th style="text-align:left;">โครงการ</th>
                 <th class="td-right">กว้าง</th>
                 <th class="td-right">น้ำหนัก</th>
                 <th class="td-right">คงเหลือ</th>
@@ -2524,6 +2623,8 @@ function renderGroupedList(rows, totalCount) {
                 <tr>
                   <td class="td-mono">${escapeHtml(r.paper_lot)}</td>
                   <td class="td-mono">${escapeHtml(r.paper_type || '—')}</td>
+                  <td>${renderCategoryBadge(r.paper_category)}</td>
+                  <td>${renderProjectBadge(r.project_code)}</td>
                   <td class="td-mono td-right">${r.width_mm || '—'}</td>
                   <td class="td-mono td-right">${formatNumber(r.weight_kg)}</td>
                   <td class="td-mono td-right">${formatNumber(r.remaining_weight_kg)}</td>
@@ -2609,6 +2710,16 @@ function setupListFilters() {
     loadList();
   });
   $('#l-filter-status').addEventListener('change', () => {
+    state.listPage = 1;
+    loadList();
+  });
+  const catFilter = $('#l-filter-category');
+  if (catFilter) catFilter.addEventListener('change', () => {
+    state.listPage = 1;
+    loadList();
+  });
+  const projFilter = $('#l-filter-project');
+  if (projFilter) projFilter.addEventListener('change', () => {
     state.listPage = 1;
     loadList();
   });
@@ -3147,6 +3258,173 @@ async function saveBulkPrice() {
     btn.textContent = '💾 บันทึกราคา';
   }
 }
+
+// ====== DELETE BATCH (Per Invoice — Safe Mode) ======
+let deleteBatchContext = null;
+
+window.openDeleteBatch = async function(supplier, invoice_no, date) {
+  if (!currentAdmin) return alert('ต้อง login ก่อน');
+  
+  const rolls = state.listData.filter(r => 
+    r.supplier === supplier && 
+    (r.invoice_no || '(ไม่ระบุ)') === invoice_no &&
+    (r.receive_date || '(ไม่ระบุ)') === date
+  );
+  
+  if (!rolls.length) return alert('ไม่พบม้วนใน batch นี้');
+  
+  deleteBatchContext = { supplier, invoice_no, date, rolls };
+  
+  const totalWeight = rolls.reduce((s, r) => s + parseFloat(r.weight_kg || 0), 0);
+  
+  $('#deleteBatchInfo').innerHTML = `
+    <div>Supplier: <b>${escapeHtml(supplier)}</b></div>
+    <div>Invoice: <b>${escapeHtml(invoice_no)}</b> · วันที่ <b>${escapeHtml(date)}</b></div>
+    <div>จำนวน: <b>${rolls.length} ม้วน</b> · น้ำหนัก <b>${formatNumber(totalWeight)} kg</b></div>
+  `;
+  
+  // เช็คความปลอดภัย — มีม้วนไหนถูกตัดออกแล้วบ้าง?
+  $('#deleteBatchSafetyCheck').innerHTML = '<div style="text-align:center;color:var(--text-dim);">⏳ กำลังตรวจสอบความปลอดภัย...</div>';
+  $('#btnDoDeleteBatch').disabled = true;
+  $('#deleteBatchWarn').style.display = 'none';
+  $('#deleteBatchConfirmHint').style.display = 'none';
+  $('#deleteBatchConfirmInput').style.display = 'none';
+  $('#deleteBatchConfirmInput').value = '';
+  
+  $('#modalDeleteBatch').classList.add('show');
+  
+  // เช็คว่ามีม้วนไหนใน batch ถูกใช้งานบ้าง (status != in_stock OR มี outflow)
+  const lotIds = rolls.map(r => r.id);
+  const lotNorms = rolls.map(r => r.paper_lot_normalized).filter(Boolean);
+  
+  try {
+    // 1. เช็ค status — มีม้วนไหน status != in_stock ไหม
+    const usedRolls = rolls.filter(r => r.status && r.status !== 'in_stock');
+    
+    // 2. เช็ค paper_outflows — มี outflow ของ lot ใน batch ไหม
+    let hasOutflow = false;
+    let outflowRolls = [];
+    if (lotNorms.length > 0) {
+      const { data: outflows } = await supabase
+        .from('paper_outflows')
+        .select('paper_lot_normalized, voided')
+        .in('paper_lot_normalized', lotNorms)
+        .eq('voided', false);
+      
+      if (outflows && outflows.length > 0) {
+        hasOutflow = true;
+        const outNorms = new Set(outflows.map(o => o.paper_lot_normalized));
+        outflowRolls = rolls.filter(r => outNorms.has(r.paper_lot_normalized));
+      }
+    }
+    
+    // 3. เช็ค paper_scans — มี scan ใน batch active ไหม
+    let hasActiveScan = false;
+    let scanRolls = [];
+    if (lotNorms.length > 0) {
+      const { data: scans } = await supabase
+        .from('paper_scans')
+        .select('jumbo_lot, batch_id, production_batches(voided)')
+        .in('jumbo_lot', rolls.map(r => r.paper_lot));
+      
+      if (scans && scans.length > 0) {
+        const activeScans = scans.filter(s => 
+          s.production_batches && !s.production_batches.voided
+        );
+        if (activeScans.length > 0) {
+          hasActiveScan = true;
+          const scanLots = new Set(activeScans.map(s => 
+            (s.jumbo_lot || '').toUpperCase().replace(/-/g, '')
+          ));
+          scanRolls = rolls.filter(r => scanLots.has(r.paper_lot_normalized));
+        }
+      }
+    }
+    
+    // ตัดสินใจ
+    const blocked = usedRolls.length > 0 || hasOutflow || hasActiveScan;
+    
+    if (blocked) {
+      const issues = [];
+      if (usedRolls.length > 0) issues.push(`<li>มี <b>${usedRolls.length} ม้วน</b> status ไม่ใช่ in_stock</li>`);
+      if (hasOutflow) issues.push(`<li>มี <b>${outflowRolls.length} ม้วน</b> ถูก paper-out ไปแล้ว</li>`);
+      if (hasActiveScan) issues.push(`<li>มี <b>${scanRolls.length} ม้วน</b> ใช้ใน production batch ที่ยัง active</li>`);
+      
+      $('#deleteBatchSafetyCheck').innerHTML = `
+        <div style="background:#fef2f2;border:1.5px solid var(--danger);border-radius:8px;padding:10px 12px;color:#991b1b;">
+          <div style="font-weight:700;margin-bottom:6px;">❌ ลบทั้ง batch ไม่ได้</div>
+          <ul style="margin:4px 0;padding-left:20px;font-size:13px;">${issues.join('')}</ul>
+          <div style="font-size:12px;margin-top:6px;color:var(--text-dim);">
+            💡 ใช้ปุ่ม Undo ใน paper-out หรือยกเลิก batch ใน dashboard ก่อน 
+            (หรือลบทีละม้วนที่ปลอดภัยด้วยปุ่ม 🗑️)
+          </div>
+        </div>
+      `;
+      $('#btnDoDeleteBatch').disabled = true;
+    } else {
+      $('#deleteBatchSafetyCheck').innerHTML = `
+        <div style="background:#f0fdf4;border:1.5px solid var(--success);border-radius:8px;padding:10px 12px;color:#065f46;">
+          <div style="font-weight:700;">✅ ปลอดภัยที่จะลบ</div>
+          <div style="font-size:12px;margin-top:4px;">ม้วนทั้งหมดยังเป็น in_stock และไม่มีการอ้างถึง</div>
+        </div>
+      `;
+      $('#deleteBatchWarn').style.display = 'block';
+      $('#deleteBatchConfirmHint').style.display = 'block';
+      $('#deleteBatchConfirmInput').style.display = 'block';
+      setTimeout(() => $('#deleteBatchConfirmInput').focus(), 100);
+    }
+  } catch (err) {
+    $('#deleteBatchSafetyCheck').innerHTML = `
+      <div style="color:var(--danger);text-align:center;">❌ ตรวจสอบไม่ได้: ${escapeHtml(err.message)}</div>
+    `;
+    $('#btnDoDeleteBatch').disabled = true;
+  }
+};
+
+window.closeDeleteBatch = function() {
+  $('#modalDeleteBatch').classList.remove('show');
+  deleteBatchContext = null;
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+  const input = $('#deleteBatchConfirmInput');
+  if (input) {
+    input.addEventListener('input', e => {
+      e.target.value = e.target.value.toUpperCase();
+      $('#btnDoDeleteBatch').disabled = e.target.value.trim() !== 'DELETE BATCH';
+    });
+  }
+  
+  const btn = $('#btnDoDeleteBatch');
+  if (btn) btn.addEventListener('click', doDeleteBatch);
+});
+
+async function doDeleteBatch() {
+  if (!deleteBatchContext) return;
+  
+  const btn = $('#btnDoDeleteBatch');
+  btn.disabled = true;
+  btn.textContent = `กำลังลบ ${deleteBatchContext.rolls.length} ม้วน...`;
+  
+  try {
+    const ids = deleteBatchContext.rolls.map(r => r.id);
+    
+    const { error } = await supabase
+      .from('paper_invoices')
+      .delete()
+      .in('id', ids);
+    
+    if (error) throw error;
+    
+    window.closeDeleteBatch();
+    loadList();
+  } catch (err) {
+    alert('❌ ' + err.message);
+    btn.disabled = false;
+    btn.textContent = '🗑️ ลบทั้ง batch';
+  }
+}
+
 
 // ====== Init Admin Features ======
 function initAdminFeatures() {
