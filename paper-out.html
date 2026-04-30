@@ -845,21 +845,23 @@ document.querySelectorAll('.machine-btn').forEach(btn => {
 
 // ====== Lot Input ======
 const lotInput = document.getElementById('lotInput');
-let lookupTimer = null;
 
 lotInput.addEventListener('input', e => {
   e.target.value = e.target.value.toUpperCase();
-  clearTimeout(lookupTimer);
-  const lot = normalize(e.target.value);
-  if (lot.length < 3) { clearLookup(); return; }
-  lookupTimer = setTimeout(() => doLookup(lot), 400);
+  // เคลียร์ lookup result เมื่อแก้ lot ใหม่
+  if (currentLot && normalize(e.target.value) !== currentLot) {
+    clearLookup();
+  }
+  updateSubmitState();
 });
 
 lotInput.addEventListener('keydown', e => {
   if (e.key === 'Enter') {
     e.preventDefault();
-    clearTimeout(lookupTimer);
-    doLookup(normalize(e.target.value));
+    const lot = normalize(e.target.value);
+    if (lot.length >= 3) {
+      doLookup(lot);
+    }
   }
 });
 
@@ -942,10 +944,10 @@ window.modalConfirmPreStock = function() {
   const box = document.getElementById('lookupBox');
   box.className = 'lookup-box show prestock';
   box.innerHTML = `
-    <div class="lookup-status">⚠️ ยืนยันข้อมูลถูกต้อง · ตัดต่อแบบ pre-stock</div>
+    <div class="lookup-status">⚠️ ยืนยันข้อมูลถูกต้อง — แจ้งหัวหน้างานให้ลงบันทึกข้อมูลรับเข้ากระดาษ</div>
     <div style="font-size:13px;color:var(--text-dim);">
       Lot <b style="font-family:var(--mono);">${escapeHtml(pendingPreStockLot)}</b> 
-      จะถูกบันทึกและรอข้อมูลรับเข้าจากหัวหน้า
+      จะถูกบันทึกเป็น pre-stock
     </div>
   `;
   pendingPreStockLot = null;
@@ -967,7 +969,9 @@ function clearLookup() {
 
 function updateSubmitState() {
   const btn = document.getElementById('btnSubmit');
-  btn.disabled = !currentLot || !currentMachine;
+  const lotValue = document.getElementById('lotInput').value.trim();
+  // Enable ถ้ามี lot ในช่อง + เลือกเครื่อง (ไม่จำเป็นต้อง lookup ก่อน)
+  btn.disabled = !lotValue || !currentMachine;
   btn.textContent = isPreStock ? '📦 บันทึก Pre-stock' : '✓ ตัดออกจาก Stock';
 }
 
@@ -976,11 +980,32 @@ document.getElementById('btnSubmit').addEventListener('click', async () => {
   const btn = document.getElementById('btnSubmit');
   if (btn.disabled) return;
   
+  const lotRaw = document.getElementById('lotInput').value.trim().toUpperCase();
+  if (!lotRaw) {
+    showToast('❌ กรุณากรอก Paper Lot', 'error');
+    return;
+  }
+  
+  // ถ้ายังไม่ได้ lookup หรือ lookup คนละ lot → lookup ก่อน
+  const normLot = normalize(lotRaw);
+  if (!currentLot || currentLot !== normLot) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="loading"></span> กำลังตรวจสอบ...';
+    
+    await doLookup(normLot);
+    
+    btn.disabled = false;
+    updateSubmitState();
+    
+    // ถ้า lookup แล้วเปิด modal "ไม่พบ" → ให้ผู้ใช้กดยืนยันก่อน
+    // ไม่ดำเนินการ save ในรอบนี้
+    if (!currentLot) return;
+  }
+  
   btn.disabled = true;
   btn.innerHTML = '<span class="loading"></span> กำลังบันทึก...';
   
   const date = document.getElementById('outflowDate').value;
-  const lotRaw = document.getElementById('lotInput').value.trim().toUpperCase();
   
   const payload = {
     paper_lot: lotRaw,
