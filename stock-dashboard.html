@@ -451,9 +451,9 @@ body {
       <div id="supplierValueTable"><div class="loading-state"><span class="loading"></span></div></div>
     </div>
     <div class="section">
-      <div class="section-title">⚖️ เปรียบเทียบราคาระหว่าง Supplier (Free Market)</div>
+      <div class="section-title">⚖️ เปรียบเทียบราคาระหว่าง Supplier (ราคาล่าสุดที่รับเข้า)</div>
       <div style="font-size:13px;color:var(--text-dim);margin-bottom:14px;">
-        💡 <b>Liner / Grey-Board</b> เทียบทุก supplier · <b>Core-Board</b> เทียบเฉพาะ SCG ที่เป็น FREE MKT (ข้าม VKPC/SKIC/Normal/w-MOG)
+        💡 ใช้ <b>ราคาเฉลี่ยของเดือนล่าสุด</b> ที่ supplier นั้นรับเข้าใน group นั้น · <b>Liner / Grey-Board</b> เทียบทุก supplier · <b>Core-Board</b> เทียบเฉพาะ SCG ที่เป็น FREE MKT (ยกเว้น MF เทียบทุก project)
       </div>
       <div id="priceCompareWrap"><div class="loading-state"><span class="loading"></span></div></div>
     </div>
@@ -1385,7 +1385,7 @@ async function loadSupplierValue() {
 }
 
 // ============================================
-// PRICE COMPARE — Free Market only
+// PRICE COMPARE — ราคาล่าสุด (เดือนล่าสุดที่รับเข้า)
 // ============================================
 async function loadPriceCompare() {
   const wrap = $('#priceCompareWrap');
@@ -1397,21 +1397,17 @@ async function loadPriceCompare() {
       .from('paper_grade_equivalence')
       .select('grade_group, supplier, paper_type_pattern, category');
     
-    // Build supplier+type → grade_group lookup
-    // ใช้ฟังก์ชันคัดเลือกแบบ JS เพราะ pattern matching อยู่ใน DB
-    // เราจะดึง mapping มา + match เอง
-    
-    // 2. Load stock with prices
-    const { data: stockData, error } = await supabase
+    // 2. Load ALL invoices ที่มีราคา (ไม่จำกัด status — ดูราคาที่รับเข้าจริง)
+    const { data: invoiceData, error } = await supabase
       .from('paper_invoices')
-      .select('supplier, paper_type, paper_category, project_code, remaining_weight_kg, price_per_kg')
-      .eq('status', 'in_stock')
+      .select('supplier, paper_type, paper_category, project_code, weight_kg, price_per_kg, receive_date')
       .gt('price_per_kg', 0)
-      .gt('remaining_weight_kg', 0);
+      .gt('weight_kg', 0)
+      .not('receive_date', 'is', null);
     
     if (error) throw error;
     
-    if (!stockData || stockData.length === 0) {
+    if (!invoiceData || invoiceData.length === 0) {
       wrap.innerHTML = '<div class="empty-msg">ไม่มีข้อมูลราคาสำหรับเปรียบเทียบ</div>';
       return;
     }
@@ -1421,10 +1417,8 @@ async function loadPriceCompare() {
       if (!mappings) return null;
       for (const m of mappings) {
         if (m.supplier !== supplier) continue;
-        // Pattern match: % = wildcard
         const pattern = m.paper_type_pattern;
         if (pattern.includes('%')) {
-          // Convert SQL LIKE pattern to regex
           const regex = new RegExp('^' + pattern.replace(/%/g, '.*') + '$');
           if (regex.test(paperType)) return m.grade_group;
         } else {
@@ -1434,14 +1428,11 @@ async function loadPriceCompare() {
       return null;
     }
     
-    // 3. Filter & group
-    // - Liner / Grey-Board → เทียบทุก supplier
-    // - Core-Board → เฉพาะ SCG ที่เป็น FREE MKT, supplier อื่นรวมหมด
-    // - Group key: grade_group ถ้ามี mapping, ไม่งั้นใช้ paper_type
+    // 3. แยกตาม group + supplier — เก็บ list of {date, weight, price, type}
+    // Structure: groupKey -> { category, isMapped, suppliers: Map<supplier, [{date, weight, price, type}]> }
+    const compareGroups = new Map();
     
-    const compareGroups = new Map();  // groupKey -> { category, suppliers: Map<supplier, {kg, value, rolls, avgPrice}> }
-    
-    for (const r of stockData) {
+    for (const r of invoiceData) {
       const sup = r.supplier;
       const type = r.paper_type;
       const cat = r.paper_category;
@@ -1456,56 +1447,63 @@ async function loadPriceCompare() {
         if (!isMF && proj && proj !== 'FREE MKT') continue;
       }
       
-      // Group key: grade_group ถ้ามี mapping
       const gradeGroup = findGradeGroup(sup, type);
       const groupKey = gradeGroup || type;
       
       if (!compareGroups.has(groupKey)) {
-        compareGroups.set(groupKey, { 
-          category: cat, 
+        compareGroups.set(groupKey, {
+          category: cat,
           isMapped: !!gradeGroup,
-          suppliers: new Map() 
+          suppliers: new Map()
         });
       }
       const g = compareGroups.get(groupKey);
       
-      if (!g.suppliers.has(sup)) {
-        g.suppliers.set(sup, { 
-          kg: 0, value: 0, rolls: 0,
-          // Track types ที่อยู่ใน group นี้ (สำหรับ tooltip/detail)
-          types: new Set()
-        });
-      }
-      const sEntry = g.suppliers.get(sup);
-      const remaining = parseFloat(r.remaining_weight_kg) || 0;
-      const price = parseFloat(r.price_per_kg) || 0;
-      sEntry.kg += remaining;
-      sEntry.value += remaining * price;
-      sEntry.rolls += 1;
-      sEntry.types.add(type);
+      if (!g.suppliers.has(sup)) g.suppliers.set(sup, []);
+      g.suppliers.get(sup).push({
+        date: r.receive_date,
+        weight: parseFloat(r.weight_kg) || 0,
+        price: parseFloat(r.price_per_kg) || 0,
+        type: type
+      });
     }
     
-    // 4. Filter — เก็บเฉพาะ group ที่มี supplier 2+ คน
+    // 4. คำนวณ — ใช้ราคาของเดือนล่าสุดที่ supplier นั้นรับเข้า (ใน group นั้น)
     const validGroups = [];
     for (const [key, g] of compareGroups) {
       if (g.suppliers.size < 2) continue;
       
-      // Calculate avgPrice + sort suppliers by price asc
       const supList = [];
-      for (const [sup, s] of g.suppliers) {
-        if (s.kg > 0 && s.value > 0) {
-          supList.push({
-            supplier: sup,
-            avgPrice: s.value / s.kg,
-            kg: s.kg,
-            rolls: s.rolls,
-            types: Array.from(s.types)
-          });
-        }
+      for (const [sup, lots] of g.suppliers) {
+        if (lots.length === 0) continue;
+        
+        // หาเดือนล่าสุด (YYYY-MM ของ receive_date ล่าสุด)
+        const sortedLots = [...lots].sort((a, b) => b.date.localeCompare(a.date));
+        const latestDate = sortedLots[0].date;
+        const latestMonth = latestDate.slice(0, 7);  // YYYY-MM
+        
+        // กรองเฉพาะ lot ในเดือนล่าสุด
+        const lotsInLatestMonth = lots.filter(l => l.date.slice(0, 7) === latestMonth);
+        
+        // คำนวณ weighted avg ของเดือนนั้น
+        const totalWeight = lotsInLatestMonth.reduce((s, l) => s + l.weight, 0);
+        const totalValue = lotsInLatestMonth.reduce((s, l) => s + l.weight * l.price, 0);
+        if (totalWeight === 0) continue;
+        
+        const latestPrice = totalValue / totalWeight;
+        const typesInLatest = Array.from(new Set(lotsInLatestMonth.map(l => l.type)));
+        
+        supList.push({
+          supplier: sup,
+          latestPrice: latestPrice,
+          latestMonth: latestMonth,
+          rollsInMonth: lotsInLatestMonth.length,
+          types: typesInLatest
+        });
       }
       
       if (supList.length < 2) continue;
-      supList.sort((a, b) => a.avgPrice - b.avgPrice);
+      supList.sort((a, b) => a.latestPrice - b.latestPrice);
       
       validGroups.push({
         groupKey: key,
@@ -1531,7 +1529,7 @@ async function loadPriceCompare() {
     // 5. Render cards
     let html = '<div class="price-compare-grid">';
     for (const g of validGroups) {
-      const cheapest = g.suppliers[0].avgPrice;
+      const cheapest = g.suppliers[0].latestPrice;
       const catCls = g.category.replace(/[^A-Za-z]/g, '-');
       
       html += `
@@ -1548,7 +1546,7 @@ async function loadPriceCompare() {
       for (let i = 0; i < g.suppliers.length; i++) {
         const s = g.suppliers[i];
         const isCheap = i === 0;
-        const diff = s.avgPrice - cheapest;
+        const diff = s.latestPrice - cheapest;
         const diffPct = cheapest > 0 ? (diff / cheapest * 100) : 0;
         
         let diffLabel = '';
@@ -1563,7 +1561,7 @@ async function loadPriceCompare() {
           diffLabel = `+${diffPct.toFixed(1)}% (+฿${diff.toFixed(2)})`;
         }
         
-        const typesLabel = s.types.length > 1 
+        const typesLabel = s.types.length > 0 
           ? ` <span style="color:var(--text-muted);font-size:11px;">(${s.types.join(', ')})</span>` 
           : '';
         
@@ -1572,8 +1570,8 @@ async function loadPriceCompare() {
             <div>
               <span class="compare-supplier-name">${escapeHtml(s.supplier)}</span>${typesLabel}
             </div>
-            <div class="compare-price">${s.avgPrice.toFixed(2)}</div>
-            <div class="compare-rolls">${fmtNum(s.rolls)} ม้วน</div>
+            <div class="compare-price">${s.latestPrice.toFixed(2)}</div>
+            <div class="compare-rolls" style="font-size:11px;">${escapeHtml(s.latestMonth)}<br><span style="color:var(--text-muted);">${fmtNum(s.rollsInMonth)} ม้วน</span></div>
             <div class="compare-diff ${diffCls}">${diffLabel}</div>
           </div>
         `;
