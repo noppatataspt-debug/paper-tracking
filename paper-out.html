@@ -13,7 +13,9 @@
   --success-light: #d1fae5;
   --warning: #d97706;
   --warning-light: #fef3c7;
+  --warning-bg: #fff7ed;
   --info: #2563eb;
+  --info-light: #dbeafe;
   --text: #1f2937;
   --text-dim: #6b7280;
   --text-muted: #9ca3af;
@@ -107,6 +109,40 @@ body {
 .scan-btn:hover { background: #1e40af; }
 .scan-btn:active { transform: scale(0.97); }
 
+/* ===== Machine selector ===== */
+.machine-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+.machine-grid .machine-special {
+  grid-column: span 2;
+}
+.machine-btn {
+  padding: 10px 8px;
+  border: 2px solid var(--border-strong);
+  border-radius: 8px;
+  background: white;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: center;
+}
+.machine-btn:hover { border-color: var(--text-dim); background: var(--bg); }
+.machine-btn.active {
+  border-color: var(--primary);
+  background: var(--primary-light);
+  color: var(--primary-dark);
+}
+.machine-btn .machine-num { font-size: 18px; display: block; margin-bottom: 2px; }
+.machine-btn .machine-label { font-size: 10px; color: var(--text-dim); font-weight: 500; }
+.machine-btn.active .machine-label { color: var(--primary-dark); }
+@media (max-width: 500px) {
+  .machine-grid { grid-template-columns: repeat(3, 1fr); }
+  .machine-grid .machine-special { grid-column: span 3; }
+}
+
 .lookup-box {
   border-radius: 10px; padding: 14px;
   margin-bottom: 14px; display: none;
@@ -115,6 +151,7 @@ body {
 .lookup-box.found { background: var(--success-light); border: 1.5px solid var(--success); }
 .lookup-box.found-used { background: var(--warning-light); border: 1.5px solid var(--warning); }
 .lookup-box.notfound { background: var(--primary-light); border: 1.5px solid var(--primary); }
+.lookup-box.prestock { background: var(--warning-bg); border: 1.5px solid var(--warning); }
 .lookup-status {
   font-weight: 700; font-size: 14px; margin-bottom: 8px;
   display: flex; align-items: center; gap: 6px;
@@ -126,18 +163,6 @@ body {
 .lookup-grid > div { display: flex; gap: 6px; }
 .lookup-grid label { color: var(--text-dim); font-weight: 500; }
 .lookup-grid span { font-weight: 700; color: var(--text); }
-.lookup-actions {
-  display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap;
-}
-.lookup-actions button {
-  flex: 1; min-width: 100px; padding: 9px 12px;
-  border-radius: 7px; border: 1.5px solid;
-  font-size: 13px; font-weight: 600; cursor: pointer; background: white;
-}
-.btn-warn { border-color: var(--warning); color: var(--warning); }
-.btn-warn:hover { background: var(--warning); color: white; }
-.btn-secondary { border-color: var(--border-strong); color: var(--text-dim); }
-.btn-secondary:hover { background: var(--bg); }
 
 .btn-submit {
   width: 100%; background: var(--primary); color: white;
@@ -163,6 +188,7 @@ body {
   to { transform: translate(-50%, 0); opacity: 1; }
 }
 
+/* ===== List view ===== */
 .list-stats {
   display: grid; grid-template-columns: repeat(4, 1fr);
   gap: 8px; margin-bottom: 12px;
@@ -190,22 +216,83 @@ body {
 }
 .list-controls button:hover { background: #1e40af; }
 
-.outflow-list {
-  background: var(--panel); border: 1px solid var(--border);
-  border-radius: 12px; overflow: hidden;
+/* Group view */
+.group-day {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-bottom: 12px;
+  overflow: hidden;
 }
+.group-day-header {
+  background: #1f2937;
+  color: white;
+  padding: 12px 16px;
+  font-weight: 700;
+  font-size: 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.group-day-header .day-stats {
+  font-size: 12px;
+  opacity: 0.8;
+  font-weight: 500;
+}
+.group-machine {
+  border-bottom: 1px solid var(--border);
+}
+.group-machine:last-child { border-bottom: none; }
+.group-machine-header {
+  background: #f3f4f6;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid var(--border);
+}
+.group-machine-header:first-child { border-top: none; }
+.group-machine-header .m-stats {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-weight: 500;
+}
+
 .outflow-row {
-  display: grid; grid-template-columns: 130px 130px 1fr auto;
-  gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border);
+  display: grid; grid-template-columns: 80px 130px 1fr auto;
+  gap: 8px; padding: 10px 16px; border-top: 1px solid var(--border);
   align-items: center; font-size: 13px; transition: background 0.15s;
 }
-.outflow-row:last-child { border-bottom: none; }
 .outflow-row:hover { background: var(--bg); }
 .outflow-row.voided { opacity: 0.5; text-decoration: line-through; }
-.outflow-date { color: var(--text-dim); font-size: 12px; }
+.outflow-row.prestock {
+  background: var(--warning-bg);
+  border-left: 3px solid var(--warning);
+}
+.outflow-row.prestock:hover { background: #fed7aa; }
+
+.outflow-time { color: var(--text-dim); font-size: 12px; font-family: var(--mono); }
 .outflow-lot { font-family: var(--mono); font-weight: 700; font-size: 14px; }
+.outflow-lot .prestock-icon {
+  display: inline-block;
+  margin-right: 4px;
+  color: var(--warning);
+}
 .outflow-info { font-size: 12px; color: var(--text-dim); }
 .outflow-info b { color: var(--text); font-weight: 600; }
+.outflow-prestock-tag {
+  display: inline-block;
+  background: var(--warning);
+  color: white;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  margin-top: 3px;
+}
 .outflow-undo {
   background: none; border: 1px solid var(--border-strong);
   color: var(--text-dim); padding: 4px 10px; border-radius: 6px;
@@ -214,7 +301,7 @@ body {
 .outflow-undo:hover { background: var(--primary-light); color: var(--primary); border-color: var(--primary); }
 
 @media (max-width: 700px) {
-  .outflow-row { grid-template-columns: 1fr auto; gap: 4px; padding: 12px; }
+  .outflow-row { grid-template-columns: 1fr auto; gap: 4px; padding: 12px 14px; }
   .outflow-row > div:nth-child(1) { grid-column: 1; }
   .outflow-row > div:nth-child(2) { grid-column: 1; grid-row: 2; font-size: 15px; }
   .outflow-row > div:nth-child(3) { grid-column: 1 / -1; grid-row: 3; }
@@ -224,12 +311,85 @@ body {
 .empty-state { padding: 40px 20px; text-align: center; color: var(--text-dim); }
 .empty-state .icon { font-size: 36px; margin-bottom: 8px; }
 
+/* ===== Modal ===== */
 .modal-overlay {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.85);
+  position: fixed; inset: 0; background: rgba(0,0,0,0.5);
   display: none; align-items: center; justify-content: center;
   z-index: 1000; padding: 16px;
 }
 .modal-overlay.show { display: flex; }
+.modal {
+  background: white;
+  border-radius: 14px;
+  padding: 22px;
+  max-width: 440px;
+  width: 100%;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+}
+.modal-icon {
+  font-size: 40px;
+  text-align: center;
+  margin-bottom: 8px;
+}
+.modal h3 {
+  margin: 0 0 10px;
+  font-size: 18px;
+  text-align: center;
+}
+.modal p {
+  margin: 0 0 14px;
+  color: var(--text-dim);
+  font-size: 14px;
+  text-align: center;
+  line-height: 1.6;
+}
+.modal .lot-display {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--text);
+  background: var(--bg);
+  padding: 8px 12px;
+  border-radius: 6px;
+  display: inline-block;
+  margin: 4px 0;
+}
+.modal-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+.modal-actions button {
+  flex: 1;
+  padding: 12px;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  border: 1.5px solid;
+  transition: all 0.15s;
+}
+.modal-btn-confirm {
+  background: var(--warning);
+  border-color: var(--warning);
+  color: white;
+}
+.modal-btn-confirm:hover { background: #b45309; border-color: #b45309; }
+.modal-btn-cancel {
+  background: white;
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+.modal-btn-cancel:hover { background: var(--bg); }
+.modal-btn-ok {
+  background: var(--info);
+  border-color: var(--info);
+  color: white;
+  width: 100%;
+}
+.modal-btn-ok:hover { background: #1e40af; }
+
+/* QR Scanner */
 .scanner-modal {
   background: black; width: 100%; max-width: 500px;
   border-radius: 14px; overflow: hidden; position: relative;
@@ -274,11 +434,48 @@ body {
     <button class="tab" data-tab="list">📋 รายการ <span id="tabBadge"></span></button>
   </div>
 
+  <!-- ============ FORM ============ -->
   <div id="section-form" class="section active">
     <div class="card">
       <div class="form-group">
         <label class="form-label required">วันที่ตัดออก</label>
         <input type="date" id="outflowDate" class="form-input">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label required">เครื่องที่ตัด</label>
+        <div class="machine-grid">
+          <button class="machine-btn" data-machine="slitter_1">
+            <span class="machine-num">1</span>
+            <span class="machine-label">Slitter</span>
+          </button>
+          <button class="machine-btn" data-machine="slitter_2">
+            <span class="machine-num">2</span>
+            <span class="machine-label">Slitter</span>
+          </button>
+          <button class="machine-btn" data-machine="slitter_3">
+            <span class="machine-num">3</span>
+            <span class="machine-label">Slitter</span>
+          </button>
+          <button class="machine-btn" data-machine="slitter_4">
+            <span class="machine-num">4</span>
+            <span class="machine-label">Slitter</span>
+          </button>
+          <button class="machine-btn" data-machine="slitter_5">
+            <span class="machine-num">5</span>
+            <span class="machine-label">Slitter</span>
+          </button>
+          <button class="machine-btn" data-machine="slitter_6">
+            <span class="machine-num">6</span>
+            <span class="machine-label">Slitter</span>
+          </button>
+          <button class="machine-btn machine-special" data-machine="winder">
+            🌀 เครื่องพัน
+          </button>
+          <button class="machine-btn machine-special" data-machine="sheeter">
+            📐 เครื่องฉาก
+          </button>
+        </div>
       </div>
 
       <div class="form-group">
@@ -296,6 +493,7 @@ body {
     </div>
   </div>
 
+  <!-- ============ LIST ============ -->
   <div id="section-list" class="section">
     <div class="list-stats">
       <div class="stat">
@@ -311,8 +509,8 @@ body {
         <div class="stat-label">เดือนนี้ (ม้วน)</div>
       </div>
       <div class="stat">
-        <div class="stat-value" id="statMonthKg">0</div>
-        <div class="stat-label">เดือนนี้ (kg)</div>
+        <div class="stat-value" id="statPreStock">0</div>
+        <div class="stat-label">⚠️ Pre-stock</div>
       </div>
     </div>
 
@@ -327,7 +525,7 @@ body {
       <button id="btnExport">📥 Export CSV</button>
     </div>
 
-    <div class="outflow-list" id="outflowList">
+    <div id="outflowList">
       <div class="empty-state">
         <div class="icon">⏳</div>
         <div>กำลังโหลด...</div>
@@ -337,6 +535,37 @@ body {
 
 </div>
 
+<!-- ===== Modal: Lot Not Found ===== -->
+<div class="modal-overlay" id="modalNotFound">
+  <div class="modal">
+    <div class="modal-icon">❌</div>
+    <h3>ไม่พบหมายเลข lot นี้ในคลัง</h3>
+    <p>
+      <span class="lot-display" id="modalNotFoundLot"></span>
+    </p>
+    <p>กรุณาตรวจสอบข้อมูลว่าถูกต้อง</p>
+    <div class="modal-actions">
+      <button class="modal-btn-cancel" onclick="window.modalCancel()">↩ ข้อมูลไม่ถูกต้อง<br>แก้ไขเลขม้วน</button>
+      <button class="modal-btn-confirm" onclick="window.modalConfirmPreStock()">✓ ข้อมูลถูกต้อง</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Modal: Pre-stock Reminder ===== -->
+<div class="modal-overlay" id="modalPreStockReminder">
+  <div class="modal">
+    <div class="modal-icon">📢</div>
+    <h3>โปรดแจ้งหัวหน้างาน</h3>
+    <p>ให้บันทึกข้อมูลรับเข้ากระดาษของ lot นี้:</p>
+    <p><span class="lot-display" id="modalPreStockLot"></span></p>
+    <p style="font-size:13px;color:var(--warning);">⚠️ Lot นี้จะถูก highlight ในรายการ จนกว่าหัวหน้าจะลงข้อมูลรับเข้าคลัง</p>
+    <div class="modal-actions">
+      <button class="modal-btn-ok" onclick="window.closePreStockReminder()">รับทราบ</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Modal: QR Scanner ===== -->
 <div class="modal-overlay" id="modalScanner">
   <div class="scanner-modal">
     <button class="scanner-close" onclick="stopScanner()">×</button>
@@ -353,11 +582,27 @@ const SUPABASE_URL = 'https://lfrwghrlxaordpxrqyij.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxmcndnaHJseGFvcmRweHJxeWlqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MzQ5MjgsImV4cCI6MjA5MjQxMDkyOH0.M13hI5TUqEL8iVmGM3pWcjbyULSx_n7VPgI2TcHnNZA';
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// ====== Machine labels ======
+const MACHINE_LABELS = {
+  slitter_1: '🔧 Slitter 1',
+  slitter_2: '🔧 Slitter 2',
+  slitter_3: '🔧 Slitter 3',
+  slitter_4: '🔧 Slitter 4',
+  slitter_5: '🔧 Slitter 5',
+  slitter_6: '🔧 Slitter 6',
+  winder: '🌀 เครื่องพัน',
+  sheeter: '📐 เครื่องฉาก'
+};
+
+// ====== State ======
 let currentLot = null;
 let currentInvoice = null;
 let isPreStock = false;
+let currentMachine = null;
 let allOutflows = [];
+let pendingPreStockLot = null;
 
+// ====== Helpers ======
 function normalize(lot) {
   return (lot || '').toUpperCase().replace(/-/g, '').trim();
 }
@@ -381,15 +626,20 @@ function fmtDate(d) {
   return new Date(d).toLocaleDateString('th-TH', { day:'2-digit', month:'2-digit', year:'numeric' });
 }
 
-function fmtDateTime(d) {
+function fmtDateLong(d) {
   if (!d) return '-';
-  return new Date(d).toLocaleString('th-TH', { 
-    day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' 
-  });
+  return new Date(d).toLocaleDateString('th-TH', { weekday: 'short', day:'2-digit', month:'short', year:'numeric' });
 }
 
+function fmtTime(d) {
+  if (!d) return '-';
+  return new Date(d).toLocaleTimeString('th-TH', { hour:'2-digit', minute:'2-digit' });
+}
+
+// ====== Init ======
 document.getElementById('outflowDate').value = new Date().toISOString().split('T')[0];
 
+// ====== Tab switching ======
 document.querySelectorAll('.tab').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
@@ -400,6 +650,17 @@ document.querySelectorAll('.tab').forEach(btn => {
   });
 });
 
+// ====== Machine selection ======
+document.querySelectorAll('.machine-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.machine-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentMachine = btn.dataset.machine;
+    updateSubmitState();
+  });
+});
+
+// ====== Lot Input ======
 const lotInput = document.getElementById('lotInput');
 let lookupTimer = null;
 
@@ -457,17 +718,17 @@ async function doLookup(normLot) {
       `;
       updateSubmitState();
     } else {
+      // ไม่พบ → เปิด modal
       currentLot = null;
       currentInvoice = null;
-      box.className = 'lookup-box show notfound';
-      box.innerHTML = `
-        <div class="lookup-status">❌ ไม่พบ lot นี้ในคลัง</div>
-        <div style="font-size:13px;color:var(--text-dim);">Lot <b style="font-family:var(--mono);">${escapeHtml(lotInput.value)}</b> ยังไม่มีใน paper_invoices</div>
-        <div class="lookup-actions">
-          <button class="btn-warn" onclick="window.confirmPreStock('${escapeHtml(normLot)}')">📦 ตัดต่อ (pre-stock)</button>
-          <button class="btn-secondary" onclick="window.clearLot()">↩ แก้ไขเลข lot</button>
-        </div>
-      `;
+      isPreStock = false;
+      pendingPreStockLot = normLot;
+      
+      box.className = 'lookup-box';
+      box.innerHTML = '';
+      
+      document.getElementById('modalNotFoundLot').textContent = lotInput.value;
+      document.getElementById('modalNotFound').classList.add('show');
       updateSubmitState();
     }
   } catch (err) {
@@ -477,27 +738,39 @@ async function doLookup(normLot) {
   }
 }
 
-window.confirmPreStock = function(normLot) {
-  currentLot = normLot;
+// ====== Modal: Not Found Actions ======
+window.modalCancel = function() {
+  document.getElementById('modalNotFound').classList.remove('show');
+  pendingPreStockLot = null;
+  document.getElementById('lotInput').value = '';
+  clearLookup();
+  document.getElementById('lotInput').focus();
+};
+
+window.modalConfirmPreStock = function() {
+  document.getElementById('modalNotFound').classList.remove('show');
+  
+  if (!pendingPreStockLot) return;
+  
+  currentLot = pendingPreStockLot;
   currentInvoice = null;
   isPreStock = true;
   
   const box = document.getElementById('lookupBox');
-  box.className = 'lookup-box show found-used';
+  box.className = 'lookup-box show prestock';
   box.innerHTML = `
-    <div class="lookup-status">📦 ตัดต่อแบบ pre-stock</div>
-    <div style="font-size:13px;color:var(--text-dim);">Lot <b style="font-family:var(--mono);">${escapeHtml(normLot)}</b> จะถูกบันทึกเป็น "pre_stock" — รอข้อมูลรับเข้าจากหัวหน้า</div>
-    <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:12px;">
-      ⚠️ กรุณาแจ้งหัวหน้าให้ลงข้อมูลรับเข้าคลังโดยเร็วที่สุด
+    <div class="lookup-status">⚠️ ยืนยันข้อมูลถูกต้อง · ตัดต่อแบบ pre-stock</div>
+    <div style="font-size:13px;color:var(--text-dim);">
+      Lot <b style="font-family:var(--mono);">${escapeHtml(pendingPreStockLot)}</b> 
+      จะถูกบันทึกและรอข้อมูลรับเข้าจากหัวหน้า
     </div>
   `;
+  pendingPreStockLot = null;
   updateSubmitState();
 };
 
-window.clearLot = function() {
-  document.getElementById('lotInput').value = '';
-  clearLookup();
-  document.getElementById('lotInput').focus();
+window.closePreStockReminder = function() {
+  document.getElementById('modalPreStockReminder').classList.remove('show');
 };
 
 function clearLookup() {
@@ -511,10 +784,11 @@ function clearLookup() {
 
 function updateSubmitState() {
   const btn = document.getElementById('btnSubmit');
-  btn.disabled = !currentLot;
+  btn.disabled = !currentLot || !currentMachine;
   btn.textContent = isPreStock ? '📦 บันทึก Pre-stock' : '✓ ตัดออกจาก Stock';
 }
 
+// ====== Submit ======
 document.getElementById('btnSubmit').addEventListener('click', async () => {
   const btn = document.getElementById('btnSubmit');
   if (btn.disabled) return;
@@ -525,11 +799,11 @@ document.getElementById('btnSubmit').addEventListener('click', async () => {
   const date = document.getElementById('outflowDate').value;
   const lotRaw = document.getElementById('lotInput').value.trim().toUpperCase();
   
-  // Default reason = sale (เพราะ use case ส่วนใหญ่คือขายออก)
   const payload = {
     paper_lot: lotRaw,
     outflow_date: date,
     outflow_reason: isPreStock ? 'pre_stock' : 'sale',
+    machine_id: currentMachine,
     source: 'paper-out'
   };
   
@@ -548,13 +822,25 @@ document.getElementById('btnSubmit').addEventListener('click', async () => {
     
     if (error) throw error;
     
-    showToast(isPreStock ? '✓ บันทึก pre-stock สำเร็จ' : '✓ ตัดออกจาก stock สำเร็จ', 'success');
+    const wasPreStock = isPreStock;
+    const savedLot = lotRaw;
     
+    showToast('✓ ตัดออกสำเร็จ', 'success');
+    
+    // Reset form
     document.getElementById('lotInput').value = '';
     clearLookup();
     document.getElementById('lotInput').focus();
     
     loadTabBadge();
+    
+    // ถ้าเป็น pre-stock → เด้ง popup เตือนหลังจากบันทึกแล้ว
+    if (wasPreStock) {
+      setTimeout(() => {
+        document.getElementById('modalPreStockLot').textContent = savedLot;
+        document.getElementById('modalPreStockReminder').classList.add('show');
+      }, 300);
+    }
     
   } catch (err) {
     console.error('Insert error:', err);
@@ -565,6 +851,7 @@ document.getElementById('btnSubmit').addEventListener('click', async () => {
   }
 });
 
+// ====== List View ======
 async function loadOutflows() {
   const list = document.getElementById('outflowList');
   list.innerHTML = '<div class="empty-state"><span class="loading"></span><div style="margin-top:8px;">กำลังโหลด...</div></div>';
@@ -611,24 +898,76 @@ function renderList() {
     return;
   }
   
-  list.innerHTML = filtered.map(o => `
-    <div class="outflow-row ${o.voided ? 'voided' : ''}">
-      <div class="outflow-date">${fmtDateTime(o.created_at)}</div>
-      <div class="outflow-lot">${escapeHtml(o.paper_lot)}</div>
-      <div class="outflow-info">
-        ${o.supplier_name ? `<b>${escapeHtml(o.supplier_name)}</b>` : ''}
-        ${o.paper_type ? ` · ${escapeHtml(o.paper_type)}` : ''}
-        ${o.width_mm ? ` · ${o.width_mm}mm` : ''}
-        ${o.weight_kg ? ` · ${o.weight_kg}kg` : ''}
-        ${o.outflow_reason === 'pre_stock' ? '<br><span style="color:var(--warning);font-weight:600;">📦 PRE-STOCK</span>' : ''}
+  // ====== Group: วันที่ → เครื่อง ======
+  const byDate = {};
+  filtered.forEach(o => {
+    const date = o.outflow_date || 'unknown';
+    if (!byDate[date]) byDate[date] = {};
+    const m = o.machine_id || 'unknown';
+    if (!byDate[date][m]) byDate[date][m] = [];
+    byDate[date][m].push(o);
+  });
+  
+  const sortedDates = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
+  
+  list.innerHTML = sortedDates.map(date => {
+    const machines = byDate[date];
+    const allRows = Object.values(machines).flat();
+    const totalRolls = allRows.filter(o => !o.voided).length;
+    const totalKg = Math.round(allRows.filter(o => !o.voided).reduce((s, o) => s + (Number(o.weight_kg) || 0), 0));
+    
+    // Sort machines: slitter_1..6, winder, sheeter, unknown
+    const machineOrder = ['slitter_1', 'slitter_2', 'slitter_3', 'slitter_4', 'slitter_5', 'slitter_6', 'winder', 'sheeter', 'unknown'];
+    const sortedMachines = Object.keys(machines).sort((a, b) => {
+      const ai = machineOrder.indexOf(a);
+      const bi = machineOrder.indexOf(b);
+      return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+    });
+    
+    return `
+      <div class="group-day">
+        <div class="group-day-header">
+          <span>📅 ${fmtDateLong(date)}</span>
+          <span class="day-stats">${totalRolls} ม้วน · ${totalKg} kg</span>
+        </div>
+        ${sortedMachines.map(m => {
+          const rows = machines[m];
+          const mRolls = rows.filter(o => !o.voided).length;
+          const mKg = Math.round(rows.filter(o => !o.voided).reduce((s, o) => s + (Number(o.weight_kg) || 0), 0));
+          const mLabel = MACHINE_LABELS[m] || `❓ ${m}`;
+          
+          return `
+            <div class="group-machine">
+              <div class="group-machine-header">
+                <span>${mLabel}</span>
+                <span class="m-stats">${mRolls} ม้วน · ${mKg} kg</span>
+              </div>
+              ${rows.map(o => `
+                <div class="outflow-row ${o.voided ? 'voided' : ''} ${o.outflow_reason === 'pre_stock' ? 'prestock' : ''}">
+                  <div class="outflow-time">${fmtTime(o.created_at)}</div>
+                  <div class="outflow-lot">
+                    ${o.outflow_reason === 'pre_stock' ? '<span class="prestock-icon">⚠️</span>' : ''}${escapeHtml(o.paper_lot)}
+                  </div>
+                  <div class="outflow-info">
+                    ${o.supplier_name ? `<b>${escapeHtml(o.supplier_name)}</b>` : ''}
+                    ${o.paper_type ? ` · ${escapeHtml(o.paper_type)}` : ''}
+                    ${o.width_mm ? ` · ${o.width_mm}mm` : ''}
+                    ${o.weight_kg ? ` · ${o.weight_kg}kg` : ''}
+                    ${o.outflow_reason === 'pre_stock' ? '<br><span class="outflow-prestock-tag">⚠️ รอลงข้อมูลรับเข้า</span>' : ''}
+                  </div>
+                  <div>
+                    ${o.voided 
+                      ? `<span style="color:var(--text-muted);font-size:11px;">VOIDED</span>` 
+                      : `<button class="outflow-undo" onclick="window.voidOutflow('${o.id}', '${escapeHtml(o.paper_lot)}')">↩ Undo</button>`}
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          `;
+        }).join('')}
       </div>
-      <div>
-        ${o.voided 
-          ? `<span style="color:var(--text-muted);font-size:11px;">VOIDED</span>` 
-          : `<button class="outflow-undo" onclick="window.voidOutflow('${o.id}', '${escapeHtml(o.paper_lot)}')">↩ Undo</button>`}
-      </div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
 }
 
 function renderStats() {
@@ -637,11 +976,12 @@ function renderStats() {
   
   const todayList = allOutflows.filter(o => !o.voided && o.outflow_date === today);
   const monthList = allOutflows.filter(o => !o.voided && o.outflow_date >= monthStart);
+  const preStockList = allOutflows.filter(o => !o.voided && o.outflow_reason === 'pre_stock');
   
   document.getElementById('statToday').textContent = todayList.length;
   document.getElementById('statTodayKg').textContent = Math.round(todayList.reduce((s, o) => s + (Number(o.weight_kg) || 0), 0));
   document.getElementById('statMonth').textContent = monthList.length;
-  document.getElementById('statMonthKg').textContent = Math.round(monthList.reduce((s, o) => s + (Number(o.weight_kg) || 0), 0));
+  document.getElementById('statPreStock').textContent = preStockList.length;
 }
 
 window.voidOutflow = async function(id, lot) {
@@ -669,19 +1009,22 @@ window.voidOutflow = async function(id, lot) {
 document.getElementById('searchInput').addEventListener('input', renderList);
 document.getElementById('filterPeriod').addEventListener('change', loadOutflows);
 
+// ====== Export CSV ======
 document.getElementById('btnExport').addEventListener('click', () => {
   const rows = [
-    ['วันที่ตัดออก', 'เวลาบันทึก', 'Paper Lot', 'Supplier', 'ประเภท', 'หน้ากว้าง', 'น้ำหนัก', 'สถานะ']
+    ['วันที่ตัดออก', 'เวลาบันทึก', 'เครื่อง', 'Paper Lot', 'Supplier', 'ประเภท', 'หน้ากว้าง', 'น้ำหนัก', 'Pre-stock', 'สถานะ']
   ];
   allOutflows.forEach(o => {
     rows.push([
       o.outflow_date || '',
       o.created_at || '',
+      MACHINE_LABELS[o.machine_id] || o.machine_id || '',
       o.paper_lot || '',
       o.supplier_name || '',
       o.paper_type || '',
       o.width_mm || '',
       o.weight_kg || '',
+      o.outflow_reason === 'pre_stock' ? 'YES' : '',
       o.voided ? 'VOIDED' : 'ACTIVE'
     ]);
   });
@@ -714,6 +1057,7 @@ async function loadTabBadge() {
   }
 }
 
+// ====== QR Scanner ======
 let scanStream = null;
 let scanRAF = null;
 
@@ -749,8 +1093,24 @@ function scanLoop(video) {
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const code = jsQR(imageData.data, imageData.width, imageData.height);
       if (code && code.data) {
+        // QR format: paper_ddmmyy_rollNo_slitter_lot
         const parts = code.data.split('_');
         const lot = parts.length >= 5 ? parts[parts.length - 1] : code.data;
+        
+        // ถ้า QR มีข้อมูล slitter → auto-select machine
+        if (parts.length >= 4) {
+          const slitterNum = parts[3];
+          if (['1','2','3','4','5','6'].includes(slitterNum)) {
+            const machineKey = `slitter_${slitterNum}`;
+            const btn = document.querySelector(`.machine-btn[data-machine="${machineKey}"]`);
+            if (btn) {
+              document.querySelectorAll('.machine-btn').forEach(b => b.classList.remove('active'));
+              btn.classList.add('active');
+              currentMachine = machineKey;
+            }
+          }
+        }
+        
         document.getElementById('lotInput').value = lot.toUpperCase();
         doLookup(normalize(lot));
         stopScanner();
@@ -772,6 +1132,7 @@ window.stopScanner = function() {
   document.getElementById('modalScanner').classList.remove('show');
 };
 
+// ====== Init ======
 loadTabBadge();
 lotInput.focus();
 </script>
