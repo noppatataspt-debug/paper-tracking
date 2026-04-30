@@ -188,6 +188,93 @@ body {
 .proj-Normal { background: #dbeafe; color: #1e40af; }
 .proj-w-MOG { background: #fed7aa; color: #9a3412; }
 
+/* ===== Supplier drill-down rows ===== */
+.supplier-detail-row {
+  background: #fafbfc;
+  cursor: pointer;
+}
+.supplier-detail-row:hover { background: var(--panel-2); }
+.supplier-detail-row td:first-child { padding-left: 36px; color: var(--text-dim); }
+.supplier-detail-row.expanded { background: #f1f5f9; }
+
+.supplier-master-row { 
+  background: #fef3c7;
+  cursor: pointer;
+  font-weight: 700;
+}
+.supplier-master-row:hover { background: #fde68a; }
+.supplier-master-row .arrow { display: inline-block; transition: transform 0.2s; margin-right: 6px; }
+.supplier-master-row.expanded .arrow { transform: rotate(90deg); }
+.supplier-master-row td { color: #78350f; }
+
+/* ===== Price Comparison ===== */
+.price-compare-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 14px;
+}
+.compare-card {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+}
+.compare-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.compare-card-title {
+  font-weight: 700; font-size: 15px;
+  font-family: var(--mono);
+}
+.compare-card-category {
+  font-size: 11px; padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 700; letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.compare-cat-Liner { background: #dbeafe; color: #1e40af; }
+.compare-cat-Grey-Board { background: #f1f5f9; color: #1e293b; border: 1px solid var(--border); }
+.compare-cat-Core-Board { background: #fef3c7; color: #78350f; }
+
+.compare-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  gap: 10px;
+  padding: 8px 0;
+  align-items: center;
+  font-size: 13px;
+  border-bottom: 1px dashed var(--border);
+}
+.compare-row:last-child { border-bottom: none; }
+.compare-row.cheapest { background: #ecfdf5; padding: 8px; border-radius: 6px; border-bottom: none; margin: 2px 0; }
+.compare-supplier-name { font-weight: 700; font-family: 'IBM Plex Sans Thai', sans-serif; }
+.compare-price { font-family: var(--mono); font-weight: 600; text-align: right; min-width: 60px; }
+.compare-rolls { font-family: var(--mono); color: var(--text-dim); font-size: 12px; text-align: right; min-width: 50px; }
+.compare-diff {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: right;
+  min-width: 100px;
+}
+.compare-diff.cheapest-tag { color: var(--success); }
+.compare-diff.diff-low { color: var(--success); }
+.compare-diff.diff-mid { color: var(--warning); }
+.compare-diff.diff-high { color: var(--danger); }
+
+.compare-empty-msg {
+  color: var(--text-muted);
+  font-style: italic;
+  text-align: center;
+  padding: 20px;
+  font-size: 13px;
+}
+
 .pivot-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; }
 .pivot-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 1100px; }
 .pivot-table th, .pivot-table td {
@@ -360,8 +447,15 @@ body {
       <div id="projectTable"><div class="loading-state"><span class="loading"></span></div></div>
     </div>
     <div class="section">
-      <div class="section-title">💎 มูลค่ารวมแยกตาม Supplier</div>
+      <div class="section-title">💎 มูลค่ารวมแยกตาม Supplier <span style="font-size:13px;color:var(--text-muted);font-weight:500;">· คลิกเพื่อขยายดูแต่ละประเภท</span></div>
       <div id="supplierValueTable"><div class="loading-state"><span class="loading"></span></div></div>
+    </div>
+    <div class="section">
+      <div class="section-title">⚖️ เปรียบเทียบราคาระหว่าง Supplier (Free Market)</div>
+      <div style="font-size:13px;color:var(--text-dim);margin-bottom:14px;">
+        💡 <b>Liner / Grey-Board</b> เทียบทุก supplier · <b>Core-Board</b> เทียบเฉพาะ SCG ที่เป็น FREE MKT (ข้าม VKPC/SKIC/Normal/w-MOG)
+      </div>
+      <div id="priceCompareWrap"><div class="loading-state"><span class="loading"></span></div></div>
     </div>
   </div>
 
@@ -1109,7 +1203,7 @@ async function loadTrend() {
 
 // ===== TAB 5: VALUE =====
 async function loadValueTab() {
-  await Promise.all([loadProjects(), loadSupplierValue()]);
+  await Promise.all([loadProjects(), loadSupplierValue(), loadPriceCompare()]);
 }
 
 async function loadProjects() {
@@ -1170,43 +1264,65 @@ async function loadSupplierValue() {
   try {
     const { data, error } = await supabase
       .from('paper_invoices')
-      .select('supplier, weight_kg, remaining_weight_kg, price_per_kg')
+      .select('supplier, paper_type, weight_kg, remaining_weight_kg, price_per_kg')
       .eq('status', 'in_stock');
     if (error) throw error;
     
-    const groups = new Map();
+    // Group: supplier > paper_type
+    const supMap = new Map();
     for (const r of (data || [])) {
       const sup = r.supplier || '(ไม่ระบุ)';
-      if (!groups.has(sup)) groups.set(sup, { rolls: 0, kg: 0, value: 0, withPrice: 0 });
-      const g = groups.get(sup);
-      g.rolls += 1;
-      g.kg += parseFloat(r.remaining_weight_kg || 0);
+      const type = r.paper_type || '(none)';
+      const remaining = parseFloat(r.remaining_weight_kg || 0);
       const price = parseFloat(r.price_per_kg || 0);
+      const value = remaining * price;
+      
+      if (!supMap.has(sup)) supMap.set(sup, { 
+        rolls: 0, kg: 0, value: 0, withPrice: 0, types: new Map() 
+      });
+      const s = supMap.get(sup);
+      s.rolls += 1;
+      s.kg += remaining;
       if (price > 0) {
-        g.withPrice += 1;
-        g.value += parseFloat(r.remaining_weight_kg || 0) * price;
+        s.value += value;
+        s.withPrice += 1;
+      }
+      
+      if (!s.types.has(type)) s.types.set(type, { rolls: 0, kg: 0, value: 0, withPrice: 0 });
+      const t = s.types.get(type);
+      t.rolls += 1;
+      t.kg += remaining;
+      if (price > 0) {
+        t.value += value;
+        t.withPrice += 1;
       }
     }
     
-    const arr = Array.from(groups.entries()).sort((a, b) => b[1].value - a[1].value);
+    const supArr = Array.from(supMap.entries()).sort((a, b) => b[1].value - a[1].value);
     let totalValue = 0, totalRolls = 0, totalKg = 0;
-    arr.forEach(([_, g]) => { totalValue += g.value; totalRolls += g.rolls; totalKg += g.kg; });
+    supArr.forEach(([_, g]) => { totalValue += g.value; totalRolls += g.rolls; totalKg += g.kg; });
     
     let html = `
       <table class="data-table">
         <thead><tr>
-          <th>Supplier</th><th class="right">ม้วน</th><th class="right">น้ำหนัก (kg)</th>
+          <th>Supplier / ประเภท</th>
+          <th class="right">ม้วน</th><th class="right">น้ำหนัก (kg)</th>
           <th class="right">฿/kg เฉลี่ย</th><th class="right">มูลค่า (฿)</th>
-          <th class="right">% ของทั้งหมด</th><th class="right">ม้วนที่มีราคา</th>
+          <th class="right">% ของทั้งหมด</th><th class="right">มีราคา</th>
         </tr></thead>
         <tbody>
     `;
-    for (const [sup, g] of arr) {
+    
+    let supIdx = 0;
+    for (const [sup, g] of supArr) {
+      const supId = `sv-${supIdx}`;
+      const expanded = supIdx === 0;  // first supplier auto-expand
       const avgPrice = g.kg > 0 && g.value > 0 ? g.value / g.kg : 0;
       const pct = totalValue > 0 ? (g.value / totalValue * 100).toFixed(1) : '0';
+      
       html += `
-        <tr>
-          <td class="thai-text"><b>${escapeHtml(sup)}</b></td>
+        <tr class="supplier-master-row ${expanded ? 'expanded' : ''}" data-target="${supId}">
+          <td class="thai-text"><span class="arrow">▶</span><b>${escapeHtml(sup)}</b></td>
           <td class="right">${fmtNum(g.rolls)}</td>
           <td class="right">${fmtNum(g.kg)}</td>
           <td class="right">${avgPrice > 0 ? avgPrice.toFixed(2) : '—'}</td>
@@ -1215,7 +1331,29 @@ async function loadSupplierValue() {
           <td class="right">${g.withPrice}/${g.rolls}</td>
         </tr>
       `;
+      
+      // Type detail rows (sorted A-Z)
+      const typeArr = Array.from(g.types.entries()).sort((a, b) => a[0].localeCompare(b[0], 'en'));
+      for (const [type, t] of typeArr) {
+        const tAvg = t.kg > 0 && t.value > 0 ? t.value / t.kg : 0;
+        const tPct = totalValue > 0 ? (t.value / totalValue * 100).toFixed(2) : '0';
+        html += `
+          <tr class="supplier-detail-row" data-parent="${supId}"
+              style="display:${expanded ? 'table-row' : 'none'};">
+            <td>${escapeHtml(type)}</td>
+            <td class="right">${fmtNum(t.rolls)}</td>
+            <td class="right">${fmtNum(t.kg)}</td>
+            <td class="right">${tAvg > 0 ? tAvg.toFixed(2) : '—'}</td>
+            <td class="right">${fmtMoneyFull(t.value)}</td>
+            <td class="right">${tPct}%</td>
+            <td class="right">${t.withPrice}/${t.rolls}</td>
+          </tr>
+        `;
+      }
+      supIdx++;
     }
+    
+    // Total row
     html += `
       <tr style="background:var(--panel-2);font-weight:700;">
         <td class="thai-text">รวมทั้งหมด</td>
@@ -1229,8 +1367,227 @@ async function loadSupplierValue() {
     `;
     html += '</tbody></table>';
     wrap.innerHTML = html;
+    
+    // Toggle handlers
+    $$('.supplier-master-row').forEach(el => {
+      el.addEventListener('click', () => {
+        const target = el.dataset.target;
+        const willExpand = !el.classList.contains('expanded');
+        el.classList.toggle('expanded', willExpand);
+        $$(`.supplier-detail-row[data-parent="${target}"]`).forEach(d => {
+          d.style.display = willExpand ? 'table-row' : 'none';
+        });
+      });
+    });
   } catch (err) {
     wrap.innerHTML = `<div class="loading-state" style="color:var(--danger);">❌ ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+// ============================================
+// PRICE COMPARE — Free Market only
+// ============================================
+async function loadPriceCompare() {
+  const wrap = $('#priceCompareWrap');
+  wrap.innerHTML = '<div class="loading-state"><span class="loading"></span></div>';
+  
+  try {
+    // 1. Load grade equivalence mapping
+    const { data: mappings } = await supabase
+      .from('paper_grade_equivalence')
+      .select('grade_group, supplier, paper_type_pattern, category');
+    
+    // Build supplier+type → grade_group lookup
+    // ใช้ฟังก์ชันคัดเลือกแบบ JS เพราะ pattern matching อยู่ใน DB
+    // เราจะดึง mapping มา + match เอง
+    
+    // 2. Load stock with prices
+    const { data: stockData, error } = await supabase
+      .from('paper_invoices')
+      .select('supplier, paper_type, paper_category, project_code, remaining_weight_kg, price_per_kg')
+      .eq('status', 'in_stock')
+      .gt('price_per_kg', 0)
+      .gt('remaining_weight_kg', 0);
+    
+    if (error) throw error;
+    
+    if (!stockData || stockData.length === 0) {
+      wrap.innerHTML = '<div class="empty-msg">ไม่มีข้อมูลราคาสำหรับเปรียบเทียบ</div>';
+      return;
+    }
+    
+    // Helper: หา grade_group สำหรับ row นี้
+    function findGradeGroup(supplier, paperType) {
+      if (!mappings) return null;
+      for (const m of mappings) {
+        if (m.supplier !== supplier) continue;
+        // Pattern match: % = wildcard
+        const pattern = m.paper_type_pattern;
+        if (pattern.includes('%')) {
+          // Convert SQL LIKE pattern to regex
+          const regex = new RegExp('^' + pattern.replace(/%/g, '.*') + '$');
+          if (regex.test(paperType)) return m.grade_group;
+        } else {
+          if (pattern === paperType) return m.grade_group;
+        }
+      }
+      return null;
+    }
+    
+    // 3. Filter & group
+    // - Liner / Grey-Board → เทียบทุก supplier
+    // - Core-Board → เฉพาะ SCG ที่เป็น FREE MKT, supplier อื่นรวมหมด
+    // - Group key: grade_group ถ้ามี mapping, ไม่งั้นใช้ paper_type
+    
+    const compareGroups = new Map();  // groupKey -> { category, suppliers: Map<supplier, {kg, value, rolls, avgPrice}> }
+    
+    for (const r of stockData) {
+      const sup = r.supplier;
+      const type = r.paper_type;
+      const cat = r.paper_category;
+      const proj = r.project_code;
+      
+      if (!type || !cat) continue;
+      
+      // Filter Core-Board: ข้าม SCG project อื่นนอกจาก FREE MKT
+      // ยกเว้น MF — เทียบได้ทุก project (Normal/w-MOG)
+      if (cat === 'Core-Board' && sup === 'SCG') {
+        const isMF = type && type.startsWith('MF');
+        if (!isMF && proj && proj !== 'FREE MKT') continue;
+      }
+      
+      // Group key: grade_group ถ้ามี mapping
+      const gradeGroup = findGradeGroup(sup, type);
+      const groupKey = gradeGroup || type;
+      
+      if (!compareGroups.has(groupKey)) {
+        compareGroups.set(groupKey, { 
+          category: cat, 
+          isMapped: !!gradeGroup,
+          suppliers: new Map() 
+        });
+      }
+      const g = compareGroups.get(groupKey);
+      
+      if (!g.suppliers.has(sup)) {
+        g.suppliers.set(sup, { 
+          kg: 0, value: 0, rolls: 0,
+          // Track types ที่อยู่ใน group นี้ (สำหรับ tooltip/detail)
+          types: new Set()
+        });
+      }
+      const sEntry = g.suppliers.get(sup);
+      const remaining = parseFloat(r.remaining_weight_kg) || 0;
+      const price = parseFloat(r.price_per_kg) || 0;
+      sEntry.kg += remaining;
+      sEntry.value += remaining * price;
+      sEntry.rolls += 1;
+      sEntry.types.add(type);
+    }
+    
+    // 4. Filter — เก็บเฉพาะ group ที่มี supplier 2+ คน
+    const validGroups = [];
+    for (const [key, g] of compareGroups) {
+      if (g.suppliers.size < 2) continue;
+      
+      // Calculate avgPrice + sort suppliers by price asc
+      const supList = [];
+      for (const [sup, s] of g.suppliers) {
+        if (s.kg > 0 && s.value > 0) {
+          supList.push({
+            supplier: sup,
+            avgPrice: s.value / s.kg,
+            kg: s.kg,
+            rolls: s.rolls,
+            types: Array.from(s.types)
+          });
+        }
+      }
+      
+      if (supList.length < 2) continue;
+      supList.sort((a, b) => a.avgPrice - b.avgPrice);
+      
+      validGroups.push({
+        groupKey: key,
+        category: g.category,
+        isMapped: g.isMapped,
+        suppliers: supList
+      });
+    }
+    
+    if (validGroups.length === 0) {
+      wrap.innerHTML = '<div class="empty-msg">ไม่มีกลุ่มที่มี supplier 2 รายขึ้นไปสำหรับเปรียบเทียบ</div>';
+      return;
+    }
+    
+    // Sort: by category (Liner > Grey-Board > Core-Board), then by groupKey
+    const catOrder = { 'Liner': 1, 'Grey-Board': 2, 'Core-Board': 3 };
+    validGroups.sort((a, b) => {
+      const co = (catOrder[a.category] || 99) - (catOrder[b.category] || 99);
+      if (co !== 0) return co;
+      return a.groupKey.localeCompare(b.groupKey, 'en');
+    });
+    
+    // 5. Render cards
+    let html = '<div class="price-compare-grid">';
+    for (const g of validGroups) {
+      const cheapest = g.suppliers[0].avgPrice;
+      const catCls = g.category.replace(/[^A-Za-z]/g, '-');
+      
+      html += `
+        <div class="compare-card">
+          <div class="compare-card-header">
+            <div class="compare-card-title">
+              ${escapeHtml(g.groupKey)}
+              ${g.isMapped ? '<span style="font-size:10px;color:var(--text-muted);font-weight:500;">· เทียบเกรดเทียบเท่า</span>' : ''}
+            </div>
+            <span class="compare-card-category compare-cat-${catCls}">${escapeHtml(g.category)}</span>
+          </div>
+      `;
+      
+      for (let i = 0; i < g.suppliers.length; i++) {
+        const s = g.suppliers[i];
+        const isCheap = i === 0;
+        const diff = s.avgPrice - cheapest;
+        const diffPct = cheapest > 0 ? (diff / cheapest * 100) : 0;
+        
+        let diffLabel = '';
+        let diffCls = '';
+        if (isCheap) {
+          diffLabel = '⭐ ถูกสุด';
+          diffCls = 'cheapest-tag';
+        } else {
+          if (diffPct < 3) diffCls = 'diff-low';
+          else if (diffPct < 7) diffCls = 'diff-mid';
+          else diffCls = 'diff-high';
+          diffLabel = `+${diffPct.toFixed(1)}% (+฿${diff.toFixed(2)})`;
+        }
+        
+        const typesLabel = s.types.length > 1 
+          ? ` <span style="color:var(--text-muted);font-size:11px;">(${s.types.join(', ')})</span>` 
+          : '';
+        
+        html += `
+          <div class="compare-row${isCheap ? ' cheapest' : ''}">
+            <div>
+              <span class="compare-supplier-name">${escapeHtml(s.supplier)}</span>${typesLabel}
+            </div>
+            <div class="compare-price">${s.avgPrice.toFixed(2)}</div>
+            <div class="compare-rolls">${fmtNum(s.rolls)} ม้วน</div>
+            <div class="compare-diff ${diffCls}">${diffLabel}</div>
+          </div>
+        `;
+      }
+      
+      html += '</div>';
+    }
+    html += '</div>';
+    
+    wrap.innerHTML = html;
+    
+  } catch (err) {
+    wrap.innerHTML = `<div class="loading-state" style="color:var(--danger);">❌ ${escapeHtml(err.message)}</div>`;
+    console.error(err);
   }
 }
 
