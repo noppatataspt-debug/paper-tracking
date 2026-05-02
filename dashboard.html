@@ -1216,6 +1216,29 @@
   </div>
 </div>
 
+<!-- Admin Login Modal (Hybrid Phase C) -->
+<div id="admin-login-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:9999; align-items:center; justify-content:center;">
+  <div style="background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:24px; max-width:400px; width:90%; box-shadow:0 10px 40px rgba(0,0,0,0.5);">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px;">
+      <div style="font-size:18px; font-weight:700;">🔐 Admin Login</div>
+      <button id="admin-modal-close" style="background:none; border:none; color:var(--text); font-size:22px; cursor:pointer;">✕</button>
+    </div>
+    <div style="font-size:13px; color:var(--text-dim); margin-bottom:14px;">
+      ต้อง login ก่อนแก้ไข / ลบ / ยกเลิก batch
+    </div>
+    <div style="margin-bottom:12px;">
+      <label style="display:block; font-size:13px; font-weight:600; margin-bottom:6px;">Username</label>
+      <input type="text" id="admin-login-username" autocomplete="username" style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px; background:var(--panel-2); color:var(--text); font-size:14px;">
+    </div>
+    <div style="margin-bottom:14px;">
+      <label style="display:block; font-size:13px; font-weight:600; margin-bottom:6px;">Password</label>
+      <input type="password" id="admin-login-password" autocomplete="current-password" style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px; background:var(--panel-2); color:var(--text); font-size:14px;">
+    </div>
+    <div id="admin-login-error" style="display:none; padding:8px 10px; background:#fee; border:1px solid #fcc; color:#c00; border-radius:6px; font-size:13px; margin-bottom:12px;"></div>
+    <button id="btn-admin-do-login" class="btn primary" style="width:100%;">เข้าสู่ระบบ</button>
+  </div>
+</div>
+
 <div class="container" id="main-container" style="display:none;">
   <div class="header">
     <div class="header-top">
@@ -1223,8 +1246,9 @@
         <h1>📊 Dashboard <span>สอบกลับวัตถุดิบ</span></h1>
         <p>สำหรับหัวหน้างาน — ค้นหาข้อมูลการใช้กระดาษ และสอบกลับจาก Jumbo Lot</p>
       </div>
-      <div style="display:flex; gap:8px;">
+      <div style="display:flex; gap:8px;" id="header-actions">
         <a href="./" class="nav-link">📱 กลับหน้าบันทึก</a>
+        <button class="nav-link" id="btn-admin-login" style="border:none;cursor:pointer;background:var(--panel);">🔐 Admin</button>
         <button class="nav-link" id="btn-logout" style="border:none;cursor:pointer;background:var(--panel);">🚪 ออก</button>
       </div>
     </div>
@@ -1551,6 +1575,171 @@ const SUPABASE_URL = 'https://lfrwghrlxaordpxrqyij.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxmcndnaHJseGFvcmRweHJxeWlqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MzQ5MjgsImV4cCI6MjA5MjQxMDkyOH0.M13hI5TUqEL8iVmGM3pWcjbyULSx_n7VPgI2TcHnNZA';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ==================== ADMIN AUTH (Phase C Hybrid) ====================
+let currentAdmin = null;
+const savedAdmin = sessionStorage.getItem('paper_admin');
+if (savedAdmin) {
+  try { currentAdmin = JSON.parse(savedAdmin); } catch(e) {}
+}
+
+// Helper: เรียก admin RPC + ส่ง session token
+async function callAdminRPC(funcName, params) {
+  if (!currentAdmin || !currentAdmin.session_token) {
+    throw new Error('กรุณา Admin login ก่อน');
+  }
+  const { data, error } = await supabase.rpc(funcName, {
+    p_token: currentAdmin.session_token,
+    ...params
+  });
+  if (error) {
+    if (error.message && (error.message.includes('Session expired') || error.message.includes('invalid'))) {
+      sessionStorage.removeItem('paper_admin');
+      currentAdmin = null;
+      renderAdminBar();
+      alert('Session หมดอายุ กรุณา Admin login ใหม่');
+      throw error;
+    }
+    throw error;
+  }
+  return data;
+}
+
+// Guard: เช็คว่า login admin หรือยัง — ถ้ายัง → popup login
+async function requireAdmin() {
+  if (currentAdmin && currentAdmin.session_token) return true;
+  return new Promise((resolve) => {
+    openAdminLogin(() => resolve(true), () => resolve(false));
+  });
+}
+
+// แสดง/ซ่อนปุ่ม Admin
+function renderAdminBar() {
+  const btn = document.getElementById('btn-admin-login');
+  if (!btn) return;
+  if (currentAdmin && currentAdmin.username) {
+    btn.textContent = `👤 ${currentAdmin.username} 🚪`;
+    btn.title = 'คลิกเพื่อ logout';
+  } else {
+    btn.textContent = '🔐 Admin';
+    btn.title = 'คลิกเพื่อ login';
+  }
+}
+
+// เปิด modal — onSuccess/onCancel callback (optional)
+let _adminLoginCallback = null;
+function openAdminLogin(onSuccess, onCancel) {
+  _adminLoginCallback = { onSuccess, onCancel };
+  document.getElementById('admin-login-username').value = currentAdmin?.username || '';
+  document.getElementById('admin-login-password').value = '';
+  document.getElementById('admin-login-error').style.display = 'none';
+  document.getElementById('admin-login-modal').style.display = 'flex';
+  setTimeout(() => document.getElementById('admin-login-username').focus(), 50);
+}
+
+function closeAdminLogin() {
+  document.getElementById('admin-login-modal').style.display = 'none';
+  if (_adminLoginCallback?.onCancel) _adminLoginCallback.onCancel();
+  _adminLoginCallback = null;
+}
+
+async function doAdminLogin() {
+  const username = document.getElementById('admin-login-username').value.trim();
+  const password = document.getElementById('admin-login-password').value;
+  const errorDiv = document.getElementById('admin-login-error');
+  const btn = document.getElementById('btn-admin-do-login');
+  
+  if (!username || !password) {
+    errorDiv.textContent = 'กรุณากรอก username และ password';
+    errorDiv.style.display = 'block';
+    return;
+  }
+  
+  btn.disabled = true;
+  btn.textContent = 'กำลังตรวจสอบ...';
+  errorDiv.style.display = 'none';
+  
+  try {
+    const { data, error } = await supabase.rpc('verify_admin_login', {
+      p_username: username,
+      p_password: password
+    });
+    
+    if (error) throw error;
+    if (!data || !data.success) {
+      throw new Error(data?.message || 'Username หรือ Password ไม่ถูกต้อง');
+    }
+    
+    currentAdmin = {
+      username: data.username || username,
+      session_token: data.session_token,
+      session_expires_at: data.session_expires_at
+    };
+    sessionStorage.setItem('paper_admin', JSON.stringify(currentAdmin));
+    
+    document.getElementById('admin-login-modal').style.display = 'none';
+    renderAdminBar();
+    
+    if (_adminLoginCallback?.onSuccess) _adminLoginCallback.onSuccess();
+    _adminLoginCallback = null;
+  } catch (err) {
+    errorDiv.textContent = '❌ ' + err.message;
+    errorDiv.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'เข้าสู่ระบบ';
+  }
+}
+
+async function adminLogout() {
+  if (currentAdmin && currentAdmin.session_token) {
+    console.log('🔍 [LOGOUT] Token ที่จะส่งไป:', currentAdmin.session_token);
+    try {
+      const { data, error } = await supabase.rpc('admin_logout', { 
+        p_token: currentAdmin.session_token 
+      });
+      if (error) {
+        console.error('❌ [LOGOUT] RPC error:', error);
+      } else {
+        console.log('✅ [LOGOUT] RPC response:', data);
+      }
+    } catch (e) {
+      console.error('❌ [LOGOUT] Exception:', e);
+    }
+  }
+  currentAdmin = null;
+  sessionStorage.removeItem('paper_admin');
+  renderAdminBar();
+}
+
+// Hook handlers (ทันทีที่ DOM พร้อม)
+document.addEventListener('DOMContentLoaded', () => {
+  const adminBtn = document.getElementById('btn-admin-login');
+  if (adminBtn) {
+    adminBtn.addEventListener('click', () => {
+      if (currentAdmin && currentAdmin.session_token) {
+        if (confirm('ออกจากระบบ Admin?')) adminLogout();
+      } else {
+        openAdminLogin();
+      }
+    });
+  }
+  const closeBtn = document.getElementById('admin-modal-close');
+  if (closeBtn) closeBtn.addEventListener('click', closeAdminLogin);
+  
+  const doLoginBtn = document.getElementById('btn-admin-do-login');
+  if (doLoginBtn) doLoginBtn.addEventListener('click', doAdminLogin);
+  
+  ['admin-login-username', 'admin-login-password'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('keydown', e => {
+      if (e.key === 'Enter') doAdminLogin();
+    });
+  });
+  
+  renderAdminBar();
+});
+// ==================== END ADMIN AUTH ====================
 
 // ==================== AUTH CONFIG ====================
 const DASHBOARD_PASSWORD = 'rptasia';
@@ -3808,19 +3997,20 @@ function attachEditHandlers(container) {
 
 // ---- Void / Restore ----
 async function voidBatch(batchId) {
+  if (!await requireAdmin()) return;
+  
   const reason = prompt('กรุณาระบุเหตุผลในการยกเลิก batch นี้:');
   if (reason == null || !reason.trim()) return;
 
   try {
-    const { error } = await supabase
-      .from('production_batches')
-      .update({
+    await callAdminRPC('admin_update_batch', {
+      p_batch_id: batchId,
+      p_updates: {
         voided: true,
         voided_at: new Date().toISOString(),
         voided_reason: reason.trim()
-      })
-      .eq('id', batchId);
-    if (error) throw error;
+      }
+    });
     await logEdit('void', 'production_batches', batchId, null, null, reason.trim(), batchId, 'Voided batch');
     alert('✓ ยกเลิก batch เรียบร้อย');
     loadEditList();
@@ -3831,13 +4021,14 @@ async function voidBatch(batchId) {
 }
 
 async function restoreBatch(batchId) {
+  if (!await requireAdmin()) return;
+  
   if (!confirm('กู้คืน batch นี้ให้กลับมาใช้งาน?')) return;
   try {
-    const { error } = await supabase
-      .from('production_batches')
-      .update({ voided: false, voided_at: null, voided_reason: null })
-      .eq('id', batchId);
-    if (error) throw error;
+    await callAdminRPC('admin_update_batch', {
+      p_batch_id: batchId,
+      p_updates: { voided: false, voided_at: null, voided_reason: null }
+    });
     await logEdit('restore', 'production_batches', batchId, null, null, null, batchId, 'Restored batch');
     alert('✓ กู้คืนเรียบร้อย');
     loadEditList();
@@ -4312,6 +4503,9 @@ async function saveEditor() {
     alert('ไม่มีการเปลี่ยนแปลง');
     return;
   }
+  
+  // 🔐 Phase C Hybrid: ต้อง admin login ก่อน
+  if (!await requireAdmin()) return;
 
   const saveBtn = document.getElementById('btn-editor-save');
   saveBtn.disabled = true;
@@ -4323,16 +4517,18 @@ async function saveEditor() {
 
     // 1. Batch header changes
     if (ed.batch.production_date !== ed.original.production_date) {
-      await supabase.from('production_batches')
-        .update({ production_date: ed.batch.production_date })
-        .eq('id', batchId);
+      await callAdminRPC('admin_update_batch', {
+        p_batch_id: batchId,
+        p_updates: { production_date: ed.batch.production_date }
+      });
       changes.push({ action: 'update', table: 'production_batches', id: batchId,
                      field: 'production_date', old: ed.original.production_date, new: ed.batch.production_date });
     }
     if (ed.batch.machine_id !== ed.original.machine_id) {
-      await supabase.from('production_batches')
-        .update({ machine_id: ed.batch.machine_id })
-        .eq('id', batchId);
+      await callAdminRPC('admin_update_batch', {
+        p_batch_id: batchId,
+        p_updates: { machine_id: ed.batch.machine_id }
+      });
       changes.push({ action: 'update', table: 'production_batches', id: batchId,
                      field: 'machine_id', old: ed.original.machine_id, new: ed.batch.machine_id });
     }
@@ -4340,6 +4536,7 @@ async function saveEditor() {
     // 2. Product changes: insert new, update modified, delete removed
     for (const p of ed.products) {
       if (p._isNew) {
+        // NOTE: insert ยังใช้ direct insert (ยังไม่มี RPC admin_insert_batch_product)
         const { data, error } = await supabase.from('batch_products').insert({
           batch_id: batchId,
           product_name: p.product_name,
@@ -4354,10 +4551,13 @@ async function saveEditor() {
         changes.push({ action: 'insert', table: 'batch_products', id: data.id, field: null,
                        old: null, new: p.product_name });
       } else if (p._original && (p.product_name !== p._original.product_name || p.is_new_product !== p._original.is_new_product)) {
-        await supabase.from('batch_products').update({
-          product_name: p.product_name,
-          is_new_product: p.is_new_product
-        }).eq('id', p.id);
+        await callAdminRPC('admin_update_batch_product', {
+          p_product_id: p.id,
+          p_updates: {
+            product_name: p.product_name,
+            is_new_product: p.is_new_product
+          }
+        });
         if (p.product_name !== p._original.product_name) {
           changes.push({ action: 'update', table: 'batch_products', id: p.id,
                          field: 'product_name', old: p._original.product_name, new: p.product_name });
@@ -4368,7 +4568,7 @@ async function saveEditor() {
     // 3. Scan changes: update modified, delete marked
     for (const s of ed.scans) {
       if (s._deleted && !String(s.id).startsWith('new_')) {
-        await supabase.from('paper_scans').delete().eq('id', s.id);
+        await callAdminRPC('admin_delete_scan', { p_scan_id: s.id });
         changes.push({ action: 'delete', table: 'paper_scans', id: s.id, field: null,
                        old: s._original.barcode_raw, new: null });
         continue;
@@ -4380,14 +4580,17 @@ async function saveEditor() {
         s.slitter !== s._original.slitter ||
         s.jumbo_lot !== s._original.jumbo_lot;
       if (modified && !s._deleted) {
-        await supabase.from('paper_scans').update({
-          batch_product_id: s.batch_product_id,
-          paper_type: s.paper_type,
-          cut_date: s.cut_date,
-          slitter: s.slitter,
-          jumbo_lot: s.jumbo_lot,
-          barcode_raw: s.barcode_raw
-        }).eq('id', s.id);
+        await callAdminRPC('admin_update_scan', {
+          p_scan_id: s.id,
+          p_updates: {
+            batch_product_id: s.batch_product_id,
+            paper_type: s.paper_type,
+            cut_date: s.cut_date,
+            slitter: s.slitter,
+            jumbo_lot: s.jumbo_lot,
+            barcode_raw: s.barcode_raw
+          }
+        });
         // Log per-field changes
         ['batch_product_id', 'paper_type', 'cut_date', 'slitter', 'jumbo_lot'].forEach(f => {
           if (s[f] !== s._original[f]) {
