@@ -4084,6 +4084,7 @@ async function openEditor(batchId) {
       },
       products: batch.batch_products.sort((a, b) => a.sequence - b.sequence).map(p => ({ ...p, _original: { ...p } })),
       scans: scans.map(s => ({ ...s, _original: { ...s }, _deleted: false })),
+      deletedProducts: [],  // ✅ Phase C fix: track ลบ product เพื่อ save ได้
       auditLog: auditLog || []
     };
 
@@ -4348,6 +4349,10 @@ function renderEditor() {
         ed.scans.forEach(s => { if (s.batch_product_id === prod.id) s._deleted = true; });
       }
       prod._deleted = true;
+      // ✅ Phase C fix: track ใน deletedProducts ถ้าไม่ใช่ product ที่เพิ่งสร้าง
+      if (!prod._isNew) {
+        ed.deletedProducts.push(prod);
+      }
       ed.products.splice(idx, 1);
       renderEditor();
     });
@@ -4486,6 +4491,8 @@ function hasChanges() {
   if (!ed) return false;
   if (ed.batch.production_date !== ed.original.production_date) return true;
   if (ed.batch.machine_id !== ed.original.machine_id) return true;
+  // ✅ Phase C fix: check ลบ product
+  if (ed.deletedProducts && ed.deletedProducts.length > 0) return true;
   if (ed.products.some(p => p._isNew || p._deleted ||
       p.product_name !== p._original?.product_name ||
       p.is_new_product !== p._original?.is_new_product)) return true;
@@ -4600,6 +4607,18 @@ async function saveEditor() {
                            field: f, old: s._original[f], new: s[f] });
           }
         });
+      }
+    }
+
+    // ✅ Phase C fix: 3.5 ลบ batch_products ที่ถูก mark _deleted
+    // (ทำหลังจากลบ scan ที่อ้างถึงแล้ว — เพื่อไม่ติด FK)
+    if (ed.deletedProducts && ed.deletedProducts.length > 0) {
+      for (const p of ed.deletedProducts) {
+        await callAdminRPC('admin_delete_batch_product', {
+          p_product_id: p.id
+        });
+        changes.push({ action: 'delete', table: 'batch_products', id: p.id, field: null,
+                       old: p.product_name, new: null });
       }
     }
 
