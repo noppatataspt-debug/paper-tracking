@@ -343,6 +343,51 @@ body {
   min-width: 180px; max-width: 220px;
 }
 
+/* ===== Excel-style strong borders ===== */
+/* เส้นเข้มแยกกลุ่มคอลัมน์ (ระหว่าง ยอดเดือนก่อน / รับเข้า / จ่ายออก / Balance) */
+.pivot-table th.col-first,
+.pivot-table td.col-first {
+  border-right: 2.5px solid #475569 !important;
+}
+/* เซลล์สุดท้ายของแต่ละกลุ่ม: th แต่ละ rowspan + cells ทั้ง prev/in/out */
+.pivot-table th.col-prev:last-of-type,
+.pivot-table th.col-in:last-of-type,
+.pivot-table th.col-out:last-of-type {
+  border-right: 2.5px solid #475569 !important;
+}
+/* td: ใช้กฎ — column สุดท้ายของกลุ่ม (col-prev, col-in, col-out) คือตัวที่ตามด้วย col- ถัดไป */
+/* วิธีตรง: เซลล์ที่มีคลาสอย่างใดอย่างหนึ่ง + adjacent ที่ class ต่างกัน */
+.pivot-table td.col-prev + td.col-in,
+.pivot-table td.col-in + td.col-out,
+.pivot-table td.col-out + td.col-bal {
+  border-left: 2.5px solid #475569 !important;
+}
+/* th แถวล่าง (ม้วน/kg/฿) ก็ใช้กฎเดียวกัน */
+.pivot-table th.col-prev + th.col-in,
+.pivot-table th.col-in + th.col-out,
+.pivot-table th.col-out + th.col-bal {
+  border-left: 2.5px solid #475569 !important;
+}
+/* แถว header กลุ่ม (rowspan): ใช้ adjacent selector เพื่อบังคับ border ระหว่างกลุ่ม */
+.pivot-table th.month-prev + th.month-in,
+.pivot-table th.month-in + th.month-out,
+.pivot-table th.month-out + th.month-balance {
+  border-left: 2.5px solid #475569 !important;
+}
+
+/* เส้นเข้มแยก row ระดับ Supplier (top of each supplier row) */
+.pivot-table tr.pivot-row-supplier td {
+  border-top: 2.5px solid #475569 !important;
+}
+/* แถวแรกของ tbody ไม่ต้องเส้นเข้มบน (มี header แล้ว) */
+.pivot-table tbody tr.pivot-row-supplier:first-child td {
+  border-top: 1px solid var(--border) !important;
+}
+/* Grand total ก็ใช้เส้นเข้มบน */
+.pivot-table tr.pivot-row-grand td {
+  border-top: 3px solid #1e293b !important;
+}
+
 .pivot-row-supplier { background: #fef3c7; cursor: pointer; font-weight: 700; }
 .pivot-row-supplier:hover { background: #fde68a; }
 .pivot-row-supplier td { font-family: 'IBM Plex Sans Thai', sans-serif !important; color: #78350f; }
@@ -643,6 +688,29 @@ body {
   /* Compact column groups in pivot - ปรับน้ำหนัก */
   .pivot-table thead th { font-size: 10px !important; padding: 4px 3px !important; }
   
+  /* Excel-style strong borders ตอนพิมพ์ */
+  .pivot-table th.col-first,
+  .pivot-table td.col-first {
+    border-right: 2px solid #475569 !important;
+  }
+  .pivot-table td.col-prev + td.col-in,
+  .pivot-table td.col-in + td.col-out,
+  .pivot-table td.col-out + td.col-bal,
+  .pivot-table th.col-prev + th.col-in,
+  .pivot-table th.col-in + th.col-out,
+  .pivot-table th.col-out + th.col-bal,
+  .pivot-table th.month-prev + th.month-in,
+  .pivot-table th.month-in + th.month-out,
+  .pivot-table th.month-out + th.month-balance {
+    border-left: 2px solid #475569 !important;
+  }
+  .pivot-table tr.pivot-row-supplier td {
+    border-top: 2px solid #475569 !important;
+  }
+  .pivot-table tr.pivot-row-grand td {
+    border-top: 2.5px solid #1e293b !important;
+  }
+  
   /* Disable sticky positioning ตอนพิมพ์ — ทำให้ตารางแสดงครบ */
   .heatmap-table th, .heatmap-table td,
   .pivot-table th, .pivot-table td,
@@ -919,8 +987,13 @@ body {
   <div class="tab-content" id="tab-detail">
     <div class="section">
       <div class="section-title">📋 รายละเอียด Stock — เดือนก่อน / รับเข้า / จ่ายออก / Balance</div>
-      <div style="font-size:13px;color:var(--text-dim);margin-bottom:14px;">
+      <div style="font-size:13px;color:var(--text-dim);margin-bottom:10px;">
         💡 คลิกที่ Supplier เพื่อขยาย/ย่อ · คลิกประเภทเพื่อดูแยกตามหน้ากว้าง
+      </div>
+      <div style="display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
+        <button class="btn" id="pivot-expand-all" style="font-size:13px;">▽ ขยายทุกระดับ</button>
+        <button class="btn" id="pivot-expand-types" style="font-size:13px;">▽ ขยายเฉพาะประเภท</button>
+        <button class="btn" id="pivot-collapse-all" style="font-size:13px;">▷ ปิดทั้งหมด</button>
       </div>
       <div id="pivotTableWrap"><div class="loading-state"><span class="loading"></span> กำลังโหลด...</div></div>
     </div>
@@ -1650,25 +1723,25 @@ async function loadDetailPivot() {
         <table class="pivot-table">
           <thead>
             <tr>
-              <th rowspan="2" class="left">Supplier / ประเภท / หน้ากว้าง</th>
-              <th colspan="${colsPerSection}" class="month-prev">ยอดเดือนก่อน (${prevMonthStr})</th>
-              <th colspan="${colsPerSection}" class="month-in">รับเข้า (${currentMonth})</th>
-              <th colspan="${colsPerSection}" class="month-out">จ่ายออก (${currentMonth})</th>
-              <th colspan="${colsPerSection}" class="month-balance">Balance (${currentMonth})</th>
+              <th rowspan="2" class="left col-first">Supplier / ประเภท / หน้ากว้าง</th>
+              <th colspan="${colsPerSection}" class="month-prev col-prev">ยอดเดือนก่อน (${prevMonthStr})</th>
+              <th colspan="${colsPerSection}" class="month-in col-in">รับเข้า (${currentMonth})</th>
+              <th colspan="${colsPerSection}" class="month-out col-out">จ่ายออก (${currentMonth})</th>
+              <th colspan="${colsPerSection}" class="month-balance col-bal">Balance (${currentMonth})</th>
             </tr>
             <tr>
-              <th class="month-prev right">ม้วน</th>
-              <th class="month-prev right">kg</th>
-              ${showMoney ? '<th class="month-prev right">฿</th>' : ''}
-              <th class="month-in right">ม้วน</th>
-              <th class="month-in right">kg</th>
-              ${showMoney ? '<th class="month-in right">฿</th>' : ''}
-              <th class="month-out right">ม้วน</th>
-              <th class="month-out right">kg</th>
-              ${showMoney ? '<th class="month-out right">฿</th>' : ''}
-              <th class="month-balance right">ม้วน</th>
-              <th class="month-balance right">kg</th>
-              ${showMoney ? '<th class="month-balance right">฿</th>' : ''}
+              <th class="month-prev right col-prev">ม้วน</th>
+              <th class="month-prev right col-prev">kg</th>
+              ${showMoney ? '<th class="month-prev right col-prev">฿</th>' : ''}
+              <th class="month-in right col-in">ม้วน</th>
+              <th class="month-in right col-in">kg</th>
+              ${showMoney ? '<th class="month-in right col-in">฿</th>' : ''}
+              <th class="month-out right col-out">ม้วน</th>
+              <th class="month-out right col-out">kg</th>
+              ${showMoney ? '<th class="month-out right col-out">฿</th>' : ''}
+              <th class="month-balance right col-bal">ม้วน</th>
+              <th class="month-balance right col-bal">kg</th>
+              ${showMoney ? '<th class="month-balance right col-bal">฿</th>' : ''}
             </tr>
           </thead>
           <tbody>
@@ -1693,19 +1766,19 @@ async function loadDetailPivot() {
         }
       }
       
-      function renderCells(t) {
-        let s = `<td class="right">${fmtPivotCell(t.rolls, 'num')}</td><td class="right">${fmtPivotCell(t.kg, 'kg')}</td>`;
-        if (showMoney) s += `<td class="right">${fmtPivotCell(t.value, 'money')}</td>`;
+      function renderCells(t, group) {
+        let s = `<td class="right ${group}">${fmtPivotCell(t.rolls, 'num')}</td><td class="right ${group}">${fmtPivotCell(t.kg, 'kg')}</td>`;
+        if (showMoney) s += `<td class="right ${group}">${fmtPivotCell(t.value, 'money')}</td>`;
         return s;
       }
       
       html += `
         <tr class="pivot-row-supplier ${expanded ? 'expanded' : ''}" data-target="${supId}">
-          <td class="left"><span class="arrow">▶</span><b>${escapeHtml(sup)}</b></td>
-          ${renderCells(supTotal.prev)}
-          ${renderCells(supTotal.in)}
-          ${renderCells(supTotal.out)}
-          ${renderCells(supTotal.bal)}
+          <td class="left col-first"><span class="arrow">▶</span><b>${escapeHtml(sup)}</b></td>
+          ${renderCells(supTotal.prev, 'col-prev')}
+          ${renderCells(supTotal.in, 'col-in')}
+          ${renderCells(supTotal.out, 'col-out')}
+          ${renderCells(supTotal.bal, 'col-bal')}
         </tr>
       `;
       
@@ -1729,11 +1802,11 @@ async function loadDetailPivot() {
         html += `
           <tr class="pivot-row-type" data-parent="${supId}" data-target="${typeId}" 
               style="display:${expanded ? 'table-row' : 'none'};">
-            <td class="left">${escapeHtml(type)}</td>
-            ${renderCells(tTotal.prev)}
-            ${renderCells(tTotal.in)}
-            ${renderCells(tTotal.out)}
-            ${renderCells(tTotal.bal)}
+            <td class="left col-first">${escapeHtml(type)}</td>
+            ${renderCells(tTotal.prev, 'col-prev')}
+            ${renderCells(tTotal.in, 'col-in')}
+            ${renderCells(tTotal.out, 'col-out')}
+            ${renderCells(tTotal.bal, 'col-bal')}
           </tr>
         `;
         
@@ -1741,11 +1814,11 @@ async function loadDetailPivot() {
         for (const [width, c] of widthArr) {
           html += `
             <tr class="pivot-row-width" data-parent="${typeId}" style="display:none;">
-              <td class="left">${escapeHtml(width)} mm</td>
-              ${renderCells(c.prev)}
-              ${renderCells(c.in)}
-              ${renderCells(c.out)}
-              ${renderCells(c.bal)}
+              <td class="left col-first">${escapeHtml(width)} mm</td>
+              ${renderCells(c.prev, 'col-prev')}
+              ${renderCells(c.in, 'col-in')}
+              ${renderCells(c.out, 'col-out')}
+              ${renderCells(c.bal, 'col-bal')}
             </tr>
           `;
         }
@@ -1772,19 +1845,19 @@ async function loadDetailPivot() {
       }
     }
     
-    function renderGrandCells(t) {
-      let s = `<td class="right">${fmtPivotCell(t.rolls, 'num')}</td><td class="right">${fmtPivotCell(t.kg, 'kg')}</td>`;
-      if (showMoney) s += `<td class="right">${fmtPivotCell(t.value, 'money')}</td>`;
+    function renderGrandCells(t, group) {
+      let s = `<td class="right ${group}">${fmtPivotCell(t.rolls, 'num')}</td><td class="right ${group}">${fmtPivotCell(t.kg, 'kg')}</td>`;
+      if (showMoney) s += `<td class="right ${group}">${fmtPivotCell(t.value, 'money')}</td>`;
       return s;
     }
     
     html += `
       <tr class="pivot-row-grand">
-        <td class="left">📊 รวมทั้งหมด</td>
-        ${renderGrandCells(grandTotal.prev)}
-        ${renderGrandCells(grandTotal.in)}
-        ${renderGrandCells(grandTotal.out)}
-        ${renderGrandCells(grandTotal.bal)}
+        <td class="left col-first">📊 รวมทั้งหมด</td>
+        ${renderGrandCells(grandTotal.prev, 'col-prev')}
+        ${renderGrandCells(grandTotal.in, 'col-in')}
+        ${renderGrandCells(grandTotal.out, 'col-out')}
+        ${renderGrandCells(grandTotal.bal, 'col-bal')}
       </tr>
     `;
     
@@ -1817,6 +1890,32 @@ async function loadDetailPivot() {
         });
       });
     });
+    
+    // Wire expand-all controls
+    const btnAll = $('#pivot-expand-all');
+    const btnTypes = $('#pivot-expand-types');
+    const btnCollapse = $('#pivot-collapse-all');
+    if (btnAll) btnAll.onclick = () => {
+      $$('.pivot-row-supplier').forEach(el => el.classList.add('expanded'));
+      $$('.pivot-row-type').forEach(el => { 
+        el.classList.add('expanded'); el.style.display = 'table-row'; 
+      });
+      $$('.pivot-row-width').forEach(el => el.style.display = 'table-row');
+    };
+    if (btnTypes) btnTypes.onclick = () => {
+      $$('.pivot-row-supplier').forEach(el => el.classList.add('expanded'));
+      $$('.pivot-row-type').forEach(el => { 
+        el.classList.remove('expanded'); el.style.display = 'table-row'; 
+      });
+      $$('.pivot-row-width').forEach(el => el.style.display = 'none');
+    };
+    if (btnCollapse) btnCollapse.onclick = () => {
+      $$('.pivot-row-supplier').forEach(el => el.classList.remove('expanded'));
+      $$('.pivot-row-type').forEach(el => { 
+        el.classList.remove('expanded'); el.style.display = 'none'; 
+      });
+      $$('.pivot-row-width').forEach(el => el.style.display = 'none');
+    };
     
   } catch (err) {
     wrap.innerHTML = `<div class="loading-state" style="color:var(--danger);">❌ ${escapeHtml(err.message)}</div>`;
