@@ -45,7 +45,7 @@ body {
 }
 .nav-link:hover { background: var(--panel); border-color: var(--accent); }
 
-.container { max-width: 1500px; margin: 0 auto; padding: 16px 24px; }
+.container { max-width: 1800px; margin: 0 auto; padding: 16px 24px; }
 
 .login-overlay {
   position: fixed; inset: 0; background: rgba(15, 23, 42, 0.85);
@@ -276,20 +276,24 @@ body {
 }
 
 .pivot-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; }
-.pivot-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 1500px; }
+.pivot-table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 1500px; }
 .pivot-table th, .pivot-table td {
-  padding: 8px 10px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border);
+  padding: 10px 12px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border);
 }
 .pivot-table thead th {
   background: var(--panel-2); font-weight: 700; text-align: center;
-  font-size: 12px; position: sticky; top: 0; z-index: 10;
+  font-size: 13px; position: sticky; top: 0; z-index: 10;
 }
 .pivot-table thead th.month-prev { background: #fef3c7; color: #78350f; }
 .pivot-table thead th.month-in { background: #dbeafe; color: #1e3a8a; }
 .pivot-table thead th.month-out { background: #fee2e2; color: #7f1d1d; }
 .pivot-table thead th.month-balance { background: #d1fae5; color: #065f46; }
 .pivot-table th.left, .pivot-table td.left { text-align: left; }
-.pivot-table th.right, .pivot-table td.right { text-align: right; font-family: var(--mono); }
+.pivot-table th.right, .pivot-table td.right { text-align: right; font-family: var(--mono); font-size: 14px; }
+/* คอลัมน์แรก (Supplier/ประเภท/หน้ากว้าง) บีบให้แคบลง */
+.pivot-table th:first-child, .pivot-table td:first-child {
+  min-width: 180px; max-width: 220px;
+}
 
 .pivot-row-supplier { background: #fef3c7; cursor: pointer; font-weight: 700; }
 .pivot-row-supplier:hover { background: #fde68a; }
@@ -541,20 +545,37 @@ body {
   .invoice-header { background: #f1f5f9 !important; -webkit-print-color-adjust: exact; }
   
   /* ===== WIDE TABLES: shrink to fit (Detail Stock pivot, Filter, Heatmap) ===== */
+  .pivot-wrap { overflow: visible !important; border: none !important; }
+  
   .pivot-table, .heatmap-table, .flt-result-table {
-    font-size: 9px !important;
+    font-size: 11px !important;
     width: 100% !important;
+    min-width: 0 !important;     /* ⭐ KEY FIX: ยกเลิก min-width 1500px */
     table-layout: auto !important;
   }
   .pivot-table th, .heatmap-table th, .flt-result-table th {
-    font-size: 9px !important;
-    padding: 4px 5px !important;
+    font-size: 10px !important;
+    padding: 4px 4px !important;
     white-space: normal !important;
+    word-break: break-word;
   }
   .pivot-table td, .heatmap-table td, .flt-result-table td {
-    font-size: 9px !important;
-    padding: 3px 5px !important;
+    font-size: 11px !important;
+    padding: 4px 5px !important;
   }
+  
+  /* Compact first column (Supplier/ประเภท/หน้ากว้าง) */
+  .pivot-table th:first-child, .pivot-table td:first-child {
+    font-size: 10px !important;
+    padding: 4px 4px !important;
+    white-space: nowrap;
+    max-width: 100px;
+  }
+  .pivot-row-supplier td { font-size: 11px !important; }
+  .pivot-row-grand td { font-size: 11px !important; padding: 6px 5px !important; }
+  
+  /* Compact column groups in pivot - ปรับน้ำหนัก */
+  .pivot-table thead th { font-size: 10px !important; padding: 4px 3px !important; }
   
   /* Disable sticky positioning ตอนพิมพ์ — ทำให้ตารางแสดงครบ */
   .heatmap-table th, .heatmap-table td,
