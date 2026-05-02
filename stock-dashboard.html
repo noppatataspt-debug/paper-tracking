@@ -374,27 +374,37 @@ body {
 
 /* Filter section + chips (Filter tab) */
 .filter-section {
-  background: var(--panel-2); padding: 16px; border-radius: 10px;
+  background: var(--panel-2); padding: 18px; border-radius: 10px;
   margin-bottom: 16px; border: 1px solid var(--border);
 }
 .filter-row {
-  display: grid; grid-template-columns: 140px 1fr; gap: 14px;
-  padding: 12px 0; border-bottom: 1px dashed var(--border); align-items: start;
+  display: grid; grid-template-columns: 140px 1fr; gap: 16px;
+  padding: 14px 0; border-bottom: 1px dashed var(--border); align-items: start;
 }
 .filter-row:last-child { padding-bottom: 0; }
-.filter-label { font-size: 13px; font-weight: 700; color: var(--text-dim); padding-top: 6px; }
-.chip-group { display: flex; flex-wrap: wrap; gap: 6px; }
+.filter-label { font-size: 14px; font-weight: 700; color: var(--text-dim); padding-top: 8px; }
+.chip-group { display: flex; flex-wrap: wrap; gap: 8px; }
 .chip {
   display: inline-flex; align-items: center; gap: 4px;
-  padding: 6px 12px; border-radius: 999px; cursor: pointer;
-  border: 1px solid var(--border-strong); background: white;
-  font-size: 13px; font-weight: 600; color: var(--text-dim);
+  padding: 9px 16px; border-radius: 999px; cursor: pointer;
+  border: 1.5px solid var(--border-strong); background: white;
+  font-size: 14px; font-weight: 600; color: var(--text-dim);
   transition: all 0.15s; user-select: none;
+  font-family: var(--mono);
 }
-.chip:hover { background: var(--panel-2); border-color: var(--accent); }
-.chip.selected { background: var(--accent); color: white; border-color: var(--accent); }
-.chip.all-chip { font-weight: 700; }
-.chip.all-chip.selected { background: #1e293b; }
+.chip:hover { background: var(--panel-2); border-color: var(--accent); transform: translateY(-1px); }
+.chip.selected { background: var(--accent); color: white; border-color: var(--accent); box-shadow: 0 2px 6px rgba(59,130,246,0.3); }
+.chip.all-chip { font-weight: 700; font-family: 'IBM Plex Sans Thai', sans-serif; }
+.chip.all-chip.selected { background: #1e293b; border-color: #1e293b; }
+
+/* Chip search box */
+.chip-search {
+  width: 100%; max-width: 280px; padding: 8px 12px; margin-bottom: 8px;
+  border: 1px solid var(--border-strong); border-radius: 8px;
+  font-family: inherit; font-size: 13px; background: white;
+}
+.chip-search:focus { outline: 2px solid var(--accent); }
+.chip.hidden { display: none; }
 
 /* Invoice card */
 .invoice-card {
@@ -434,27 +444,30 @@ body {
 
 /* Result table for filter tab */
 .flt-result-table {
-  width: 100%; border-collapse: collapse; font-size: 13px;
+  width: 100%; border-collapse: collapse; font-size: 15px;
 }
 .flt-result-table th {
-  background: var(--panel-2); padding: 10px 12px; text-align: left;
+  background: var(--panel-2); padding: 14px 14px; text-align: left;
   font-weight: 700; color: var(--text); border-bottom: 2px solid var(--border-strong);
-  font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em;
+  font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em;
+  position: sticky; top: 0; z-index: 1;
 }
 .flt-result-table th.right { text-align: right; }
 .flt-result-table th.center { text-align: center; }
 .flt-result-table td {
-  padding: 9px 12px; font-family: var(--mono); font-size: 13px;
+  padding: 12px 14px; font-family: var(--mono); font-size: 15px;
   border-bottom: 1px solid var(--border);
 }
-.flt-result-table td.thai-text { font-family: 'IBM Plex Sans Thai', sans-serif; }
+.flt-result-table td.thai-text { font-family: 'IBM Plex Sans Thai', sans-serif; font-weight: 600; }
 .flt-result-table td.right { text-align: right; }
 .flt-result-table td.center { text-align: center; }
 .flt-result-table tr.subtotal-row td {
   background: #fef3c7; font-weight: 700; border-top: 1px solid #d97706;
+  font-size: 15px;
 }
 .flt-result-table tr.grand-total-row td {
-  background: var(--accent); color: white; font-weight: 800; font-size: 14px;
+  background: var(--accent); color: white; font-weight: 800; font-size: 16px;
+  padding: 14px;
 }
 .flt-result-table tr:hover:not(.subtotal-row):not(.grand-total-row) {
   background: var(--panel-2);
@@ -511,6 +524,46 @@ body {
 .print-header-left h2 { font-size: 18px; margin-bottom: 4px; }
 .print-header-right { text-align: right; font-size: 12px; }
 .print-header-right .doc-no { font-weight: 700; font-size: 14px; }
+
+/* Heatmap (Usage tab) */
+.heatmap-table {
+  width: 100%; border-collapse: separate; border-spacing: 0;
+  font-size: 14px; min-width: auto;
+}
+.heatmap-table th {
+  background: var(--panel-2); padding: 12px 12px; text-align: left;
+  font-weight: 700; color: var(--text); border-bottom: 2px solid var(--border-strong);
+  font-size: 13px; position: sticky; top: 0; z-index: 1; white-space: nowrap;
+}
+.heatmap-table th.right { text-align: right; }
+.heatmap-table td {
+  padding: 11px 12px; font-family: var(--mono); font-size: 14px;
+  border-bottom: 1px solid var(--border); transition: all 0.1s;
+}
+.heatmap-table td.thai-text { font-family: 'IBM Plex Sans Thai', sans-serif; font-weight: 600; }
+.heatmap-table td.right { text-align: right; }
+.heatmap-table td.heat-cell {
+  text-align: right; font-weight: 600; position: relative;
+  border-radius: 4px;
+}
+.heatmap-table td.heat-cell.zero { color: var(--text-muted); }
+.heatmap-table tr.subtotal-row td {
+  background: #fef3c7 !important; font-weight: 700;
+  border-top: 2px solid #d97706;
+}
+.heatmap-table tr.grand-total-row td {
+  background: #1e293b !important; color: white !important;
+  font-weight: 800; font-size: 15px;
+}
+.heatmap-legend {
+  display: flex; align-items: center; gap: 10px;
+  margin-top: 14px; font-size: 12px; color: var(--text-dim);
+}
+.heatmap-legend-bar {
+  display: inline-block; height: 14px; width: 200px;
+  background: linear-gradient(to right, #f0f9ff, #3b82f6, #1e3a8a);
+  border-radius: 4px; border: 1px solid var(--border);
+}
 </style>
 </head>
 <body>
@@ -672,16 +725,22 @@ body {
         </div>
         <div class="filter-row">
           <div class="filter-label">ประเภทกระดาษ</div>
-          <div class="chip-group" id="flt-types"></div>
+          <div>
+            <input type="text" id="flt-types-search" class="chip-search" placeholder="🔎 พิมพ์เพื่อกรอง... เช่น CBA, GB, M4">
+            <div class="chip-group" id="flt-types"></div>
+          </div>
         </div>
         <div class="filter-row">
           <div class="filter-label">หน้ากว้าง (mm)</div>
-          <div class="chip-group" id="flt-widths"></div>
+          <div>
+            <input type="text" id="flt-widths-search" class="chip-search" placeholder="🔎 พิมพ์เพื่อกรอง... เช่น 1610, 2120">
+            <div class="chip-group" id="flt-widths"></div>
+          </div>
         </div>
         <div class="filter-row" style="border:none;">
           <div class="filter-label"></div>
-          <div style="display:flex; gap:8px;">
-            <button class="btn" id="flt-show" style="background:var(--accent);color:white;border-color:var(--accent);">🔍 แสดงผล</button>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button class="btn" id="flt-show" style="background:var(--accent);color:white;border-color:var(--accent);font-size:15px;padding:10px 20px;">🔍 แสดงผล</button>
             <button class="btn" id="flt-clear">🔄 ล้างค่า</button>
             <button class="btn" id="flt-print" style="margin-left:auto;">🖨️ พิมพ์รายงาน</button>
           </div>
@@ -716,7 +775,11 @@ body {
             <option value="rolls">จำนวนม้วน</option>
           </select>
         </div>
-        <div class="filter-group" style="margin-left:auto;">
+        <div class="filter-group" style="flex:1; min-width: 240px;">
+          <label>Supplier:</label>
+          <div class="chip-group" id="usage-suppliers" style="gap:6px;"></div>
+        </div>
+        <div class="filter-group">
           <button class="btn" id="usage-export-csv">📥 Export CSV</button>
         </div>
       </div>
@@ -2067,7 +2130,7 @@ function renderInvoiceList() {
       <div>📋 <b>${groups.size}</b> ใบ Invoice</div>
       <div>📦 <b>${fmtNum(grandRolls)}</b> ม้วน</div>
       <div>⚖️ <b>${fmtKgFull(grandKg)}</b> kg</div>
-      <div>💰 <b>${fmtMoney(grandValue)}</b></div>
+      <div>💰 <b>${fmtMoneyExact(grandValue)}</b></div>
     </div>
   `;
   
@@ -2090,7 +2153,7 @@ function renderInvoiceList() {
         <div class="invoice-totals">
           <div class="invoice-total-item">📦 <b>${fmtNum(invRolls)}</b> ม้วน</div>
           <div class="invoice-total-item">⚖️ <b>${fmtKgFull(invKg)}</b> kg</div>
-          <div class="invoice-total-item">💰 <b>${fmtMoney(invValue)}</b></div>
+          <div class="invoice-total-item">💰 <b>${fmtMoneyExact(invValue)}</b></div>
         </div>
       </div>
       <table class="invoice-rolls-table">
@@ -2117,8 +2180,8 @@ function renderInvoiceList() {
         <td>${escapeHtml(r.paper_type || '-')}</td>
         <td class="right">${r.width_mm ? fmtNum(r.width_mm) : '-'}</td>
         <td class="right">${fmtKgFull(r.weight_kg)}</td>
-        <td class="right">${r.price_per_kg ? fmtMoney(r.price_per_kg) : '-'}</td>
-        <td class="right">${r.price_per_roll ? fmtMoney(r.price_per_roll) : '-'}</td>
+        <td class="right">${r.price_per_kg ? fmtMoneyExact(r.price_per_kg) : '-'}</td>
+        <td class="right">${r.price_per_roll ? fmtMoneyExact(r.price_per_roll) : '-'}</td>
       </tr>`;
     }
     
@@ -2288,6 +2351,21 @@ function clearFilter() {
   _filter.widths.clear();
   $$('.filter-section .chip').forEach(c => c.classList.remove('selected'));
   $('#flt-result-wrap').innerHTML = '';
+  // clear search
+  if ($('#flt-types-search')) $('#flt-types-search').value = '';
+  if ($('#flt-widths-search')) $('#flt-widths-search').value = '';
+  $$('.filter-section .chip').forEach(c => c.classList.remove('hidden'));
+}
+
+function filterChipsByText(groupId, query) {
+  const q = (query || '').trim().toLowerCase();
+  const group = document.getElementById(groupId);
+  if (!group) return;
+  group.querySelectorAll('.chip').forEach(c => {
+    if (c.classList.contains('all-chip')) return; // always show "ทั้งหมด"
+    const val = (c.dataset.val || '').toLowerCase();
+    c.classList.toggle('hidden', q && !val.includes(q));
+  });
 }
 
 function showFilterResult() {
@@ -2425,16 +2503,17 @@ function printFilterTab() {
 
 
 // =================================================================
-// ===== TAB 8: USAGE (ยอดใช้ N เดือน) =====
+// ===== TAB 8: USAGE (ยอดใช้ N เดือน + Heatmap) =====
 // =================================================================
 let _usageCache = null;
 let _usageChart = null;
+let _usageSupplierFilter = new Set();  // ว่าง = แสดงทุก supplier
 
 async function loadUsageTab() {
   if (!_usageCache) {
     $('#usage-table-wrap').innerHTML = '<div class="loading-state"><span class="loading"></span> โหลดข้อมูล...</div>';
     try {
-      // โหลด outflows ที่ไม่ voided + invoice เพื่อ enrich supplier/type
+      // โหลด outflows ที่ไม่ voided
       const outs = await fetchAllRows(() => supabase
         .from('paper_outflows')
         .select('paper_invoice_id, weight_kg, outflow_date, supplier_name, paper_type, voided')
@@ -2445,26 +2524,92 @@ async function loadUsageTab() {
       $('#usage-table-wrap').innerHTML = `<div class="loading-state" style="color:var(--danger);">❌ ${escapeHtml(err.message)}</div>`;
       return;
     }
+    
+    // populate supplier chips
+    const suppliers = [...new Set(_usageCache.map(r => r.supplier_name).filter(Boolean))].sort();
+    const sg = $('#usage-suppliers');
+    sg.innerHTML = `<div class="chip all-chip selected" data-val="__ALL__">ทั้งหมด</div>` + 
+      suppliers.map(s => `<div class="chip selected" data-val="${escapeHtml(s)}">${escapeHtml(s)}</div>`).join('');
+    
+    // default: เลือกทุก supplier
+    _usageSupplierFilter = new Set(suppliers);
+    
+    sg.onclick = (e) => {
+      const chip = e.target.closest('.chip');
+      if (!chip) return;
+      const val = chip.dataset.val;
+      
+      if (val === '__ALL__') {
+        const allChips = [...sg.querySelectorAll('.chip:not(.all-chip)')];
+        if (chip.classList.contains('selected')) {
+          chip.classList.remove('selected');
+          allChips.forEach(c => c.classList.remove('selected'));
+          _usageSupplierFilter.clear();
+        } else {
+          chip.classList.add('selected');
+          allChips.forEach(c => { c.classList.add('selected'); _usageSupplierFilter.add(c.dataset.val); });
+        }
+      } else {
+        if (chip.classList.contains('selected')) {
+          chip.classList.remove('selected');
+          _usageSupplierFilter.delete(val);
+        } else {
+          chip.classList.add('selected');
+          _usageSupplierFilter.add(val);
+        }
+        // sync "ทั้งหมด" chip
+        const allChips = [...sg.querySelectorAll('.chip:not(.all-chip)')];
+        const allSelected = allChips.every(c => c.classList.contains('selected'));
+        sg.querySelector('.all-chip').classList.toggle('selected', allSelected);
+      }
+      renderUsageTable();
+    };
   }
   
   renderUsageTable();
+}
+
+// สร้างสีตามค่า — ใช้ blue gradient (อ่อน → เข้ม)
+function heatColor(intensity) {
+  // intensity 0–1 — return rgba color
+  if (intensity <= 0) return 'transparent';
+  
+  // 3-stop gradient: light → medium → dark blue
+  // 0 → #f0f9ff (very light blue)
+  // 0.5 → #3b82f6 (medium blue)
+  // 1.0 → #1e3a8a (dark blue)
+  let r, g, b;
+  if (intensity < 0.5) {
+    const t = intensity * 2;
+    r = Math.round(240 + (59 - 240) * t);
+    g = Math.round(249 + (130 - 249) * t);
+    b = Math.round(255 + (246 - 255) * t);
+  } else {
+    const t = (intensity - 0.5) * 2;
+    r = Math.round(59 + (30 - 59) * t);
+    g = Math.round(130 + (58 - 130) * t);
+    b = Math.round(246 + (138 - 246) * t);
+  }
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+// คืน text color (ดำ/ขาว) ตามความเข้มของพื้นหลัง
+function heatTextColor(intensity) {
+  return intensity > 0.55 ? 'white' : '#1e293b';
 }
 
 function renderUsageTable() {
   const period = $('#usage-period').value;
   const unit = $('#usage-unit').value;
   
-  // คำนวณ months ที่จะแสดง
+  // คำนวณ months
   const today = new Date();
   const months = [];
   let n = period === '6' ? 6 : period === '12' ? 12 : -1;
   
   if (n === -1) {
-    // YTD
-    const startMonth = today.getFullYear() + '-01';
-    const curr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0');
-    const startMo = parseInt(startMonth.slice(5, 7));
-    const endMo = parseInt(curr.slice(5, 7));
+    const startMo = 1;
+    const endMo = today.getMonth() + 1;
     for (let m = startMo; m <= endMo; m++) {
       months.push(today.getFullYear() + '-' + String(m).padStart(2, '0'));
     }
@@ -2475,9 +2620,13 @@ function renderUsageTable() {
     }
   }
   
-  // pivot: supplier > type > month -> {rolls, kg}
+  // กรอง supplier
+  const filteredData = _usageCache.filter(o => 
+    _usageSupplierFilter.size === 0 || _usageSupplierFilter.has(o.supplier_name));
+  
+  // pivot
   const pivot = new Map();
-  for (const o of _usageCache) {
+  for (const o of filteredData) {
     const m = o.outflow_date.slice(0, 7);
     if (!months.includes(m)) continue;
     
@@ -2493,17 +2642,33 @@ function renderUsageTable() {
     cell[m].kg += Number(o.weight_kg) || 0;
   }
   
-  // build table
+  if (pivot.size === 0) {
+    $('#usage-table-wrap').innerHTML = '<div class="loading-state">ไม่พบข้อมูลในเงื่อนไขที่เลือก</div>';
+    return;
+  }
+  
+  // หา max value (เพื่อทำ heatmap scale)
+  let maxVal = 0;
+  for (const supMap of pivot.values()) {
+    for (const cell of supMap.values()) {
+      for (const m of months) {
+        const v = cell[m] ? (unit === 'kg' ? cell[m].kg : cell[m].rolls) : 0;
+        if (v > maxVal) maxVal = v;
+      }
+    }
+  }
+  
+  // build month labels
   const monthLabels = months.map(m => {
     const [y, mo] = m.split('-');
     const monName = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'][parseInt(mo)-1];
     return `${monName}-${String(parseInt(y) + 543).slice(2)}`;
   });
   
-  let html = '<div style="overflow-x:auto;"><table class="flt-result-table" style="min-width:auto;">';
-  html += '<thead><tr><th>Supplier</th><th>ประเภท</th>';
-  for (const lbl of monthLabels) html += `<th class="right">${lbl}</th>`;
-  html += '<th class="right">Total</th></tr></thead><tbody>';
+  let html = '<div style="overflow-x:auto;"><table class="heatmap-table">';
+  html += '<thead><tr><th style="min-width:90px;">Supplier</th><th style="min-width:120px;">ประเภท</th>';
+  for (const lbl of monthLabels) html += `<th class="right" style="min-width:90px;">${lbl}</th>`;
+  html += '<th class="right" style="min-width:100px;">TOTAL</th></tr></thead><tbody>';
   
   let grandMonths = months.map(() => 0);
   let grandTotal = 0;
@@ -2523,12 +2688,17 @@ function renderUsageTable() {
       
       html += `<tr>
         <td class="thai-text">${firstRow ? escapeHtml(sup) : ''}</td>
-        <td class="thai-text">${escapeHtml(typ)}</td>`;
+        <td>${escapeHtml(typ)}</td>`;
       
       for (let i = 0; i < months.length; i++) {
         const mc = cell[months[i]];
         const v = mc ? (unit === 'kg' ? mc.kg : mc.rolls) : 0;
-        html += `<td class="right">${v ? fmtNum(Math.round(v)) : '-'}</td>`;
+        const intensity = maxVal > 0 ? (v / maxVal) : 0;
+        const bgColor = heatColor(intensity);
+        const textColor = heatTextColor(intensity);
+        const display = v ? fmtNum(Math.round(v)) : '-';
+        
+        html += `<td class="heat-cell ${v === 0 ? 'zero' : ''}" style="background:${bgColor};color:${textColor};">${display}</td>`;
         supMonths[i] += v;
         typTotal += v;
       }
@@ -2542,7 +2712,7 @@ function renderUsageTable() {
     html += `<tr class="subtotal-row">
       <td colspan="2" class="thai-text">${escapeHtml(sup)} Total</td>`;
     for (let i = 0; i < months.length; i++) {
-      html += `<td class="right">${fmtNum(Math.round(supMonths[i]))}</td>`;
+      html += `<td class="right">${supMonths[i] ? fmtNum(Math.round(supMonths[i])) : '-'}</td>`;
       grandMonths[i] += supMonths[i];
     }
     html += `<td class="right">${fmtNum(Math.round(supTotal))}</td></tr>`;
@@ -2557,9 +2727,16 @@ function renderUsageTable() {
   html += `<td class="right">${fmtNum(Math.round(grandTotal))}</td></tr>`;
   
   html += '</tbody></table></div>';
+  
+  // legend
+  html += `<div class="heatmap-legend">
+    <span>น้อย</span>
+    <span class="heatmap-legend-bar"></span>
+    <span>มาก (สูงสุด: <b>${fmtNum(Math.round(maxVal))}</b> ${unit === 'kg' ? 'kg' : 'ม้วน'})</span>
+  </div>`;
+  
   $('#usage-table-wrap').innerHTML = html;
   
-  // render chart
   renderUsageChart(monthLabels, grandMonths, unit);
 }
 
@@ -2639,6 +2816,8 @@ $('#inv-print').addEventListener('click', printInvoiceTab);
 $('#flt-show').addEventListener('click', showFilterResult);
 $('#flt-clear').addEventListener('click', clearFilter);
 $('#flt-print').addEventListener('click', printFilterTab);
+$('#flt-types-search').addEventListener('input', e => filterChipsByText('flt-types', e.target.value));
+$('#flt-widths-search').addEventListener('input', e => filterChipsByText('flt-widths', e.target.value));
 
 // Usage tab
 $('#usage-period').addEventListener('change', renderUsageTable);
