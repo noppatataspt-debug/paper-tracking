@@ -163,6 +163,51 @@ body {
 .category-rolls { font-size: 26px; font-weight: 700; font-family: var(--mono); }
 .category-detail { font-size: 13px; margin-top: 4px; opacity: 0.85; font-family: var(--mono); }
 
+/* Supplier × Category Card grid */
+.supplier-cat-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 14px;
+}
+.supplier-cat-card {
+  background: white; border: 1px solid var(--border); border-radius: 12px;
+  overflow: hidden; transition: box-shadow 0.15s;
+}
+.supplier-cat-card:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+.sc-card-header {
+  background: linear-gradient(135deg, #1e293b, #334155);
+  padding: 14px 16px; color: white;
+  display: flex; justify-content: space-between; align-items: flex-start;
+}
+.sc-card-name {
+  font-family: 'IBM Plex Sans Thai', sans-serif;
+  font-weight: 700; font-size: 18px; color: white;
+}
+.sc-card-totals { text-align: right; font-family: var(--mono); font-size: 12px; }
+.sc-card-rolls { font-size: 16px; }
+.sc-card-rolls b { color: #fbbf24; font-size: 18px; }
+.sc-card-kg { color: #cbd5e1; margin-top: 2px; }
+.sc-card-value { color: #fbbf24; font-weight: 700; margin-top: 2px; }
+.sc-card-body { padding: 8px 0; }
+.sc-cat-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 16px; border-left: 3px solid transparent;
+  border-bottom: 1px solid #f1f5f9;
+}
+.sc-cat-row:last-child { border-bottom: none; }
+.sc-cat-Liner { background: #eff6ff; border-left-color: #1e40af; }
+.sc-cat-Grey-Board { background: #f8fafc; border-left-color: #475569; }
+.sc-cat-Core-Board { background: #fffbeb; border-left-color: #b45309; }
+.sc-cat-empty { background: #fafafa; border-left-color: #e5e7eb; opacity: 0.6; }
+.sc-cat-label { font-size: 13px; font-weight: 700; }
+.sc-cat-Liner .sc-cat-label { color: #1e40af; }
+.sc-cat-Grey-Board .sc-cat-label { color: #475569; }
+.sc-cat-Core-Board .sc-cat-label { color: #b45309; }
+.sc-cat-data { font-family: var(--mono); font-size: 13px; color: var(--text-dim); }
+.sc-cat-data b { color: var(--text); font-size: 14px; }
+.sc-cat-empty .sc-cat-data { color: #cbd5e1; font-size: 16px; }
+
 .data-table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .data-table th {
   background: var(--panel-2); padding: 12px 14px;
@@ -176,8 +221,8 @@ body {
 .data-table td { padding: 11px 14px; border-bottom: 1px solid var(--border); font-family: var(--mono); font-size: 14px; }
 .data-table td.right { text-align: right; }
 .data-table td.thai-text { font-family: 'IBM Plex Sans Thai', sans-serif; }
-.data-table tbody tr:nth-child(even) { background: #f0f9ff; }
-.data-table tbody tr:hover { background: #e0f2fe !important; }
+.data-table tbody tr:nth-child(even):not(.supplier-master-row) { background: #f0f9ff; }
+.data-table tbody tr:hover:not(.supplier-master-row) { background: #e0f2fe !important; }
 
 /* Zebra for filter result table */
 .flt-result-table tbody tr:nth-child(even):not(.subtotal-row):not(.grand-total-row) { background: #f0f9ff; }
@@ -1367,7 +1412,7 @@ async function loadSupplierCategory() {
       .not('paper_category', 'is', null));
     
     // Pivot: supplier × category -> {rolls, kg, value}
-    const pivot = new Map();  // supplier -> { Liner, Grey-Board, Core-Board, total }
+    const pivot = new Map();
     for (const r of (data || [])) {
       const sup = r.supplier || '(ไม่ระบุ)';
       const cat = r.paper_category;
@@ -1404,73 +1449,47 @@ async function loadSupplierCategory() {
     const showMoney = isManager();
     const cats = ['Liner', 'Grey-Board', 'Core-Board'];
     
-    let html = '<div style="overflow-x:auto;"><table class="data-table" style="font-size:13px;">';
-    html += '<thead><tr>';
-    html += '<th class="thai-text">SUPPLIER</th>';
-    for (const c of cats) {
-      html += `<th class="right">${c}</th>`;
-    }
-    html += '<th class="right">TOTAL</th>';
-    html += '</tr></thead><tbody>';
-    
-    // grand totals
-    let grand = { 
-      'Liner': { rolls: 0, kg: 0, value: 0 },
-      'Grey-Board': { rolls: 0, kg: 0, value: 0 },
-      'Core-Board': { rolls: 0, kg: 0, value: 0 },
-      total: { rolls: 0, kg: 0, value: 0 }
-    };
+    // Render เป็น Card Grid (1 card ต่อ supplier)
+    let html = '<div class="supplier-cat-grid">';
     
     for (const [sup, sm] of sorted) {
-      html += `<tr><td class="thai-text"><b>${escapeHtml(sup)}</b></td>`;
+      const moneyTotal = showMoney ? `<div class="sc-card-value">${fmtMoney(sm.total.value)}</div>` : '';
+      
+      let catRows = '';
       for (const c of cats) {
         const cell = sm[c];
         if (cell.rolls === 0) {
-          html += `<td class="right" style="color:#cbd5e1;">—</td>`;
+          catRows += `<div class="sc-cat-row sc-cat-${c} sc-cat-empty">
+            <div class="sc-cat-label">${c}</div>
+            <div class="sc-cat-data">—</div>
+          </div>`;
         } else {
-          const moneyLine = showMoney ? `<div style="font-size:11px;color:var(--text-muted);">${fmtMoney(cell.value)}</div>` : '';
-          html += `<td class="right">
-            <div><b>${fmtNum(cell.rolls)}</b> ม้วน</div>
-            <div style="font-size:11px;color:var(--text-dim);">${fmtNum(Math.round(cell.kg))} kg</div>
-            ${moneyLine}
-          </td>`;
+          const moneyLine = showMoney ? ` · ${fmtMoney(cell.value)}` : '';
+          catRows += `<div class="sc-cat-row sc-cat-${c}">
+            <div class="sc-cat-label">${c}</div>
+            <div class="sc-cat-data">
+              <b>${fmtNum(cell.rolls)}</b> ม้วน · ${fmtNum(Math.round(cell.kg))} kg${moneyLine}
+            </div>
+          </div>`;
         }
-        grand[c].rolls += cell.rolls;
-        grand[c].kg += cell.kg;
-        grand[c].value += cell.value;
       }
-      // total column
-      const moneyLine = showMoney ? `<div style="font-size:11px;color:var(--text-muted);">${fmtMoney(sm.total.value)}</div>` : '';
-      html += `<td class="right" style="background:#fef3c7;">
-        <div><b>${fmtNum(sm.total.rolls)}</b> ม้วน</div>
-        <div style="font-size:11px;color:#78350f;">${fmtNum(Math.round(sm.total.kg))} kg</div>
-        ${moneyLine}
-      </td></tr>`;
-      grand.total.rolls += sm.total.rolls;
-      grand.total.kg += sm.total.kg;
-      grand.total.value += sm.total.value;
+      
+      html += `<div class="supplier-cat-card">
+        <div class="sc-card-header">
+          <div class="sc-card-name">${escapeHtml(sup)}</div>
+          <div class="sc-card-totals">
+            <div class="sc-card-rolls"><b>${fmtNum(sm.total.rolls)}</b> ม้วน</div>
+            <div class="sc-card-kg">${fmtNum(Math.round(sm.total.kg))} kg</div>
+            ${moneyTotal}
+          </div>
+        </div>
+        <div class="sc-card-body">
+          ${catRows}
+        </div>
+      </div>`;
     }
     
-    // grand total row
-    html += `<tr style="background:#1e293b;color:white;font-weight:700;">`;
-    html += `<td class="thai-text" style="color:white;">รวมทั้งหมด</td>`;
-    for (const c of cats) {
-      const cell = grand[c];
-      const moneyLine = showMoney ? `<div style="font-size:11px;color:#cbd5e1;">${fmtMoney(cell.value)}</div>` : '';
-      html += `<td class="right" style="color:white;">
-        <div><b>${fmtNum(cell.rolls)}</b> ม้วน</div>
-        <div style="font-size:11px;color:#cbd5e1;">${fmtNum(Math.round(cell.kg))} kg</div>
-        ${moneyLine}
-      </td>`;
-    }
-    const moneyLine = showMoney ? `<div style="font-size:11px;color:#fbbf24;">${fmtMoney(grand.total.value)}</div>` : '';
-    html += `<td class="right" style="color:#fbbf24;">
-      <div><b>${fmtNum(grand.total.rolls)}</b> ม้วน</div>
-      <div style="font-size:11px;color:#fbbf24;">${fmtNum(Math.round(grand.total.kg))} kg</div>
-      ${moneyLine}
-    </td></tr>`;
-    
-    html += '</tbody></table></div>';
+    html += '</div>';
     wrap.innerHTML = html;
   } catch (err) {
     wrap.innerHTML = `<div class="loading-state" style="color:var(--danger);">❌ ${escapeHtml(err.message)}</div>`;
@@ -3184,25 +3203,71 @@ function renderUsageChart(labels, values, unit) {
     _usageChart = null;
   }
   
+  // ถ้าหน่วย kg → แปลงเป็น tons (หาร 1000)
+  // ถ้าหน่วยม้วน → แสดงตามจริง
+  const isKg = unit === 'kg';
+  const chartValues = isKg ? values.map(v => Math.round(v / 1000 * 100) / 100) : values.map(v => Math.round(v));
+  const labelText = isKg ? 'น้ำหนัก (Tons)' : 'จำนวนม้วน';
+  const unitSuffix = isKg ? ' Tons' : ' ม้วน';
+  
+  // Custom plugin สำหรับวาดเลขบน bar
+  const dataLabelPlugin = {
+    id: 'dataLabel',
+    afterDatasetsDraw(chart) {
+      const { ctx } = chart;
+      ctx.save();
+      ctx.font = 'bold 13px "IBM Plex Sans Thai", sans-serif';
+      ctx.fillStyle = '#1e293b';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      
+      chart.data.datasets.forEach((dataset, i) => {
+        const meta = chart.getDatasetMeta(i);
+        meta.data.forEach((bar, idx) => {
+          const value = dataset.data[idx];
+          if (value > 0) {
+            const display = isKg ? value.toLocaleString('en-US', { maximumFractionDigits: 1 }) : value.toLocaleString();
+            ctx.fillText(display, bar.x, bar.y - 6);
+          }
+        });
+      });
+      ctx.restore();
+    }
+  };
+  
   _usageChart = new Chart(ctx, {
     type: 'bar',
     data: {
       labels: labels,
       datasets: [{
-        label: unit === 'kg' ? 'น้ำหนัก (kg)' : 'จำนวนม้วน',
-        data: values.map(v => Math.round(v)),
-        backgroundColor: '#3b82f6',
-        borderColor: '#1e40af',
+        label: labelText,
+        data: chartValues,
+        backgroundColor: 'rgba(34, 197, 94, 0.7)',
+        borderColor: 'rgb(20, 83, 45)',
         borderWidth: 1
       }]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: true } },
+      layout: { padding: { top: 24 } },  // เผื่อพื้นที่สำหรับ data label ด้านบน
+      plugins: { 
+        legend: { display: true, position: 'top' },
+        tooltip: {
+          callbacks: {
+            label: ctx => `${ctx.dataset.label}: ${ctx.raw.toLocaleString()}${unitSuffix}`
+          }
+        }
+      },
       scales: {
-        y: { beginAtZero: true, ticks: { callback: v => fmtNum(v) } }
+        y: { 
+          beginAtZero: true, 
+          ticks: { 
+            callback: v => v.toLocaleString() + (isKg ? ' T' : '') 
+          } 
+        }
       }
-    }
+    },
+    plugins: [dataLabelPlugin]
   });
 }
 
