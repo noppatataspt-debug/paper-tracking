@@ -163,50 +163,44 @@ body {
 .category-rolls { font-size: 26px; font-weight: 700; font-family: var(--mono); }
 .category-detail { font-size: 13px; margin-top: 4px; opacity: 0.85; font-family: var(--mono); }
 
-/* Supplier × Category Card grid */
+/* Supplier Card grid (กระชับ) */
 .supplier-cat-grid {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 14px;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
 }
-.supplier-cat-card {
-  background: white; border: 1px solid var(--border); border-radius: 12px;
-  overflow: hidden; transition: box-shadow 0.15s;
-}
-.supplier-cat-card:hover {
-  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-}
-.sc-card-header {
+.sup-card {
   background: linear-gradient(135deg, #1e293b, #334155);
-  padding: 14px 16px; color: white;
-  display: flex; justify-content: space-between; align-items: flex-start;
+  color: white;
+  border-radius: 10px;
+  padding: 14px 16px;
+  transition: transform 0.15s, box-shadow 0.15s;
+  border-left: 4px solid #fbbf24;
 }
-.sc-card-name {
+.sup-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.15);
+}
+.sup-card-name {
   font-family: 'IBM Plex Sans Thai', sans-serif;
-  font-weight: 700; font-size: 18px; color: white;
+  font-weight: 700; font-size: 16px; color: white;
+  margin-bottom: 8px;
 }
-.sc-card-totals { text-align: right; font-family: var(--mono); font-size: 12px; }
-.sc-card-rolls { font-size: 16px; }
-.sc-card-rolls b { color: #fbbf24; font-size: 18px; }
-.sc-card-kg { color: #cbd5e1; margin-top: 2px; }
-.sc-card-value { color: #fbbf24; font-weight: 700; margin-top: 2px; }
-.sc-card-body { padding: 8px 0; }
-.sc-cat-row {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 10px 16px; border-left: 3px solid transparent;
-  border-bottom: 1px solid #f1f5f9;
+.sup-card-rolls {
+  font-family: var(--mono);
+  font-size: 14px;
+  color: #cbd5e1;
 }
-.sc-cat-row:last-child { border-bottom: none; }
-.sc-cat-Liner { background: #eff6ff; border-left-color: #1e40af; }
-.sc-cat-Grey-Board { background: #f8fafc; border-left-color: #475569; }
-.sc-cat-Core-Board { background: #fffbeb; border-left-color: #b45309; }
-.sc-cat-empty { background: #fafafa; border-left-color: #e5e7eb; opacity: 0.6; }
-.sc-cat-label { font-size: 13px; font-weight: 700; }
-.sc-cat-Liner .sc-cat-label { color: #1e40af; }
-.sc-cat-Grey-Board .sc-cat-label { color: #475569; }
-.sc-cat-Core-Board .sc-cat-label { color: #b45309; }
-.sc-cat-data { font-family: var(--mono); font-size: 13px; color: var(--text-dim); }
-.sc-cat-data b { color: var(--text); font-size: 14px; }
-.sc-cat-empty .sc-cat-data { color: #cbd5e1; font-size: 16px; }
+.sup-card-rolls b {
+  color: #fbbf24; font-size: 26px; font-weight: 700;
+}
+.sup-card-kg {
+  font-family: var(--mono); font-size: 13px;
+  color: #cbd5e1; margin-top: 2px;
+}
+.sup-card-value {
+  font-family: var(--mono); font-size: 14px;
+  color: #fbbf24; font-weight: 700; margin-top: 4px;
+}
 
 .data-table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .data-table th {
@@ -1411,81 +1405,38 @@ async function loadSupplierCategory() {
       .eq('status', 'in_stock')
       .not('paper_category', 'is', null));
     
-    // Pivot: supplier × category -> {rolls, kg, value}
-    const pivot = new Map();
+    // Aggregate by supplier (รวม ไม่แยกประเภท)
+    const sums = new Map();
     for (const r of (data || [])) {
       const sup = r.supplier || '(ไม่ระบุ)';
-      const cat = r.paper_category;
       const remaining = parseFloat(r.remaining_weight_kg || 0);
       const value = remaining * parseFloat(r.price_per_kg || 0);
       
-      if (!pivot.has(sup)) {
-        pivot.set(sup, {
-          'Liner': { rolls: 0, kg: 0, value: 0 },
-          'Grey-Board': { rolls: 0, kg: 0, value: 0 },
-          'Core-Board': { rolls: 0, kg: 0, value: 0 },
-          total: { rolls: 0, kg: 0, value: 0 }
-        });
-      }
-      const sm = pivot.get(sup);
-      if (sm[cat]) {
-        sm[cat].rolls++;
-        sm[cat].kg += remaining;
-        sm[cat].value += value;
-      }
-      sm.total.rolls++;
-      sm.total.kg += remaining;
-      sm.total.value += value;
+      if (!sums.has(sup)) sums.set(sup, { rolls: 0, kg: 0, value: 0 });
+      const s = sums.get(sup);
+      s.rolls++;
+      s.kg += remaining;
+      s.value += value;
     }
     
-    if (pivot.size === 0) {
+    if (sums.size === 0) {
       wrap.innerHTML = '<div class="loading-state">ไม่มีข้อมูล stock</div>';
       return;
     }
     
-    // Sort suppliers by total kg desc
-    const sorted = [...pivot.entries()].sort((a, b) => b[1].total.kg - a[1].total.kg);
-    
+    // sort by kg desc
+    const sorted = [...sums.entries()].sort((a, b) => b[1].kg - a[1].kg);
     const showMoney = isManager();
-    const cats = ['Liner', 'Grey-Board', 'Core-Board'];
     
-    // Render เป็น Card Grid (1 card ต่อ supplier)
     let html = '<div class="supplier-cat-grid">';
     
-    for (const [sup, sm] of sorted) {
-      const moneyTotal = showMoney ? `<div class="sc-card-value">${fmtMoney(sm.total.value)}</div>` : '';
-      
-      let catRows = '';
-      for (const c of cats) {
-        const cell = sm[c];
-        if (cell.rolls === 0) {
-          catRows += `<div class="sc-cat-row sc-cat-${c} sc-cat-empty">
-            <div class="sc-cat-label">${c}</div>
-            <div class="sc-cat-data">—</div>
-          </div>`;
-        } else {
-          const moneyLine = showMoney ? ` · ${fmtMoney(cell.value)}` : '';
-          catRows += `<div class="sc-cat-row sc-cat-${c}">
-            <div class="sc-cat-label">${c}</div>
-            <div class="sc-cat-data">
-              <b>${fmtNum(cell.rolls)}</b> ม้วน · ${fmtNum(Math.round(cell.kg))} kg${moneyLine}
-            </div>
-          </div>`;
-        }
-      }
-      
-      html += `<div class="supplier-cat-card">
-        <div class="sc-card-header">
-          <div class="sc-card-name">${escapeHtml(sup)}</div>
-          <div class="sc-card-totals">
-            <div class="sc-card-rolls"><b>${fmtNum(sm.total.rolls)}</b> ม้วน</div>
-            <div class="sc-card-kg">${fmtNum(Math.round(sm.total.kg))} kg</div>
-            ${moneyTotal}
-          </div>
-        </div>
-        <div class="sc-card-body">
-          ${catRows}
-        </div>
+    for (const [sup, s] of sorted) {
+      const moneyLine = showMoney ? `<div class="sup-card-value">${fmtMoney(s.value)}</div>` : '';
+      html += `<div class="sup-card">
+        <div class="sup-card-name">${escapeHtml(sup)}</div>
+        <div class="sup-card-rolls"><b>${fmtNum(s.rolls)}</b> ม้วน</div>
+        <div class="sup-card-kg">${fmtNum(Math.round(s.kg))} kg</div>
+        ${moneyLine}
       </div>`;
     }
     
