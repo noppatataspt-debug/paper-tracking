@@ -1537,16 +1537,14 @@ window.voidOutflow = async function(id, lot) {
   if (!confirm(`ยืนยันยกเลิกการตัดออกของ ${lot}?\n\nระบบจะคืน status เป็น in_stock อัตโนมัติ`)) return;
   
   try {
-    const { error } = await supabase
-      .from('paper_outflows')
-      .update({ 
+    await callAdminRPC('admin_update_outflow', {
+      p_outflow_id: id,
+      p_updates: { 
         voided: true, 
         voided_at: new Date().toISOString(), 
         voided_reason: 'แก้ไขข้อมูลผิด'
-      })
-      .eq('id', id);
-    
-    if (error) throw error;
+      }
+    });
     showToast('✓ ยกเลิกสำเร็จ — lot กลับเป็น in_stock', 'success');
     loadOutflows();
     loadTabBadge();
@@ -1982,12 +1980,10 @@ document.getElementById('btnSaveEdit').addEventListener('click', async () => {
       }
     }
     
-    const { error } = await supabase
-      .from('paper_outflows')
-      .update(updatePayload)
-      .eq('id', editingId);
-    
-    if (error) throw error;
+    await callAdminRPC('admin_update_outflow', {
+      p_outflow_id: editingId,
+      p_updates: updatePayload
+    });
     
     showToast('✓ บันทึกการแก้ไขสำเร็จ', 'success');
     window.closeEditModal();
@@ -2040,18 +2036,19 @@ document.getElementById('btnDoDelete').addEventListener('click', async () => {
   
   try {
     // ก่อนลบ → set voided=true ก่อน เพื่อ trigger คืน status
-    await supabase
-      .from('paper_outflows')
-      .update({ voided: true, voided_at: new Date().toISOString(), voided_reason: 'ลบถาวรโดย admin: ' + (currentAdmin.username || '') })
-      .eq('id', deletingId);
+    await callAdminRPC('admin_update_outflow', {
+      p_outflow_id: deletingId,
+      p_updates: { 
+        voided: true, 
+        voided_at: new Date().toISOString(), 
+        voided_reason: 'ลบถาวรโดย admin: ' + (currentAdmin.username || '')
+      }
+    });
     
     // จากนั้นลบจริง
-    const { error } = await supabase
-      .from('paper_outflows')
-      .delete()
-      .eq('id', deletingId);
-    
-    if (error) throw error;
+    await callAdminRPC('admin_delete_outflow', {
+      p_outflow_id: deletingId
+    });
     
     showToast('✓ ลบรายการถาวรแล้ว', 'success');
     window.closeDeleteModal();

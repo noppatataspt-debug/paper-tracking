@@ -2968,12 +2968,10 @@ async function saveEditRoll() {
   };
   
   try {
-    const { error } = await supabase
-      .from('paper_invoices')
-      .update(payload)
-      .eq('id', editingRollId);
-    
-    if (error) throw error;
+    await callAdminRPC('admin_update_invoice', {
+      p_invoice_id: editingRollId,
+      p_updates: payload
+    });
     
     window.closeEditModal();
     loadList();
@@ -3026,12 +3024,9 @@ async function doDeleteRoll() {
   btn.textContent = 'กำลังลบ...';
   
   try {
-    const { error } = await supabase
-      .from('paper_invoices')
-      .delete()
-      .eq('id', deletingRollId);
-    
-    if (error) throw error;
+    await callAdminRPC('admin_delete_invoice', {
+      p_invoice_id: deletingRollId
+    });
     
     window.closeDeleteModal();
     loadList();
@@ -3102,16 +3097,14 @@ async function saveSinglePrice() {
   const weight = row ? parseFloat(row.weight_kg) : 0;
   
   try {
-    const { error } = await supabase
-      .from('paper_invoices')
-      .update({
+    await callAdminRPC('admin_update_invoice', {
+      p_invoice_id: singlePriceId,
+      p_updates: {
         price_per_kg: price,
         price_per_roll: weight ? Number((price * weight).toFixed(2)) : null,
         updated_at: new Date().toISOString()
-      })
-      .eq('id', singlePriceId);
-    
-    if (error) throw error;
+      }
+    });
     
     window.closeSinglePrice();
     loadList();
@@ -3270,20 +3263,20 @@ async function saveBulkPrice() {
   btn.textContent = `กำลังบันทึก ${updates.length} ม้วน...`;
   
   try {
-    // Batch update
+    // Batch update via RPC
     const promises = updates.map(u => 
-      supabase
-        .from('paper_invoices')
-        .update({
+      callAdminRPC('admin_update_invoice', {
+        p_invoice_id: u.id,
+        p_updates: {
           price_per_kg: u.price,
           price_per_roll: u.weight ? Number((u.price * u.weight).toFixed(2)) : null,
           updated_at: new Date().toISOString()
-        })
-        .eq('id', u.id)
+        }
+      }).then(() => ({ ok: true })).catch(err => ({ ok: false, error: err }))
     );
     
     const results = await Promise.all(promises);
-    const errors = results.filter(r => r.error).map(r => r.error.message);
+    const errors = results.filter(r => !r.ok).map(r => r.error.message);
     
     if (errors.length) {
       throw new Error(`${errors.length}/${updates.length} ม้วนล้มเหลว: ${errors[0]}`);
@@ -3450,12 +3443,19 @@ async function doDeleteBatch() {
   try {
     const ids = deleteBatchContext.rolls.map(r => r.id);
     
-    const { error } = await supabase
-      .from('paper_invoices')
-      .delete()
-      .in('id', ids);
+    // Delete each invoice via RPC (loop)
+    const results = await Promise.all(
+      ids.map(id => 
+        callAdminRPC('admin_delete_invoice', { p_invoice_id: id })
+          .then(() => ({ ok: true }))
+          .catch(err => ({ ok: false, error: err }))
+      )
+    );
+    const errors = results.filter(r => !r.ok).map(r => r.error.message);
     
-    if (error) throw error;
+    if (errors.length) {
+      throw new Error(`${errors.length}/${ids.length} ม้วนล้มเหลว: ${errors[0]}`);
+    }
     
     window.closeDeleteBatch();
     loadList();
