@@ -415,7 +415,19 @@ body {
   background: var(--panel-2); padding: 12px 16px;
   display: flex; gap: 14px; align-items: center; flex-wrap: wrap;
   border-bottom: 1px solid var(--border);
+  cursor: pointer; transition: background 0.15s;
+  user-select: none;
 }
+.invoice-header:hover { background: #e0f2fe; }
+.invoice-header .toggle-icon {
+  font-size: 14px; color: var(--text-dim); transition: transform 0.2s;
+  margin-right: 4px;
+}
+.invoice-card.expanded .invoice-header .toggle-icon { transform: rotate(90deg); }
+.invoice-rolls-wrap { display: none; }
+.invoice-card.expanded .invoice-rolls-wrap { display: block; }
+.invoice-card.expanded .invoice-header { border-bottom: 1px solid var(--border); }
+.invoice-card:not(.expanded) .invoice-header { border-bottom: none; }
 .invoice-no { font-weight: 700; font-family: var(--mono); font-size: 15px; color: var(--accent); }
 .invoice-date { color: var(--text-dim); font-size: 13px; }
 .invoice-totals { margin-left: auto; display: flex; gap: 18px; font-size: 13px; }
@@ -478,28 +490,51 @@ body {
 
 /* Print styles */
 @media print {
+  /* Default: hide everything */
   body * { visibility: hidden; }
-  .container, .container * { visibility: visible; }
-  .no-print, .no-print * { visibility: hidden !important; display: none !important; }
-  .header, .nav-links, .dashboard-toolbar, .tabs { display: none !important; }
+  
+  /* Show only elements marked data-print-include="1" */
+  [data-print-include] { visibility: visible; }
+  [data-print-include] * { visibility: visible; }
+  
+  /* Always hide tools/UI */
+  .no-print, .no-print *,
+  .header, .nav-links, .dashboard-toolbar, .tabs,
+  .filter-section, #print-modal,
+  #inv-supplier, #inv-month, .invoice-filter-bar,
+  .usage-toolbar, .heatmap-legend {
+    display: none !important;
+    visibility: hidden !important;
+  }
+  
+  /* Make container fit page */
+  .container { padding: 0 !important; max-width: none !important; }
+  .section { 
+    border: none !important; box-shadow: none !important; 
+    padding: 0 !important; margin: 0 0 12px 0 !important;
+    page-break-inside: avoid;
+  }
+  
+  /* Print header always visible */
+  .print-header { display: flex !important; visibility: visible !important; margin-bottom: 14px; }
+  .print-header * { visibility: visible !important; }
+  
+  /* Tabs reset */
   .tab-content { display: none !important; }
   .tab-content.active { display: block !important; }
-  .container { padding: 0; max-width: none; }
-  .section { 
-    border: none !important; box-shadow: none !important; padding: 0 !important; 
-    margin: 0 !important; page-break-inside: avoid;
-  }
-  .print-header { display: block !important; visibility: visible; margin-bottom: 14px; }
-  .print-header * { visibility: visible; }
   
-  /* Invoice tab — print layout */
+  /* Invoice cards: always expanded when printing */
+  .invoice-card .invoice-rolls-wrap { display: block !important; visibility: visible !important; }
+  .invoice-card .invoice-rolls-wrap * { visibility: visible !important; }
+  .invoice-card .toggle-icon { display: none !important; }
+  
   .invoice-card { 
     page-break-inside: avoid; margin-bottom: 10px; 
     border: 1px solid #94a3b8 !important;
   }
   .invoice-header { background: #f1f5f9 !important; -webkit-print-color-adjust: exact; }
   
-  /* Filter tab — print table */
+  /* Filter result table colors */
   .flt-result-table { font-size: 11px; }
   .flt-result-table th { 
     background: #fef3c7 !important; -webkit-print-color-adjust: exact; 
@@ -513,7 +548,13 @@ body {
     -webkit-print-color-adjust: exact;
   }
   
-  @page { size: A4; margin: 1.5cm 1cm; }
+  /* Heatmap colors */
+  .heatmap-table td.heat-cell { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .heatmap-table tr.subtotal-row td { -webkit-print-color-adjust: exact; }
+  .heatmap-table tr.grand-total-row td { -webkit-print-color-adjust: exact; }
+  
+  /* Ensure charts visible */
+  canvas { max-width: 100% !important; height: auto !important; }
 }
 
 .print-header {
@@ -561,7 +602,7 @@ body {
 }
 .heatmap-legend-bar {
   display: inline-block; height: 14px; width: 200px;
-  background: linear-gradient(to right, #f0f9ff, #3b82f6, #1e3a8a);
+  background: linear-gradient(to right, #f0fdf4, #22c55e, #14532d);
   border-radius: 4px; border: 1px solid var(--border);
 }
 </style>
@@ -595,6 +636,46 @@ body {
   </div>
 </div>
 
+<!-- ===== Universal Print Modal ===== -->
+<div id="print-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center;">
+  <div style="background:white; border-radius:12px; padding:24px; max-width:480px; width:90%; box-shadow:0 10px 40px rgba(0,0,0,0.3);">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+      <div style="font-size:18px; font-weight:700;">🖨️ พิมพ์รายงาน</div>
+      <button id="print-modal-close" style="background:none; border:none; font-size:22px; cursor:pointer; color:#64748b;">✕</button>
+    </div>
+    
+    <div style="background:#f8fafc; padding:10px 14px; border-radius:8px; margin-bottom:16px; font-size:13px;">
+      <span style="color:#64748b;">Tab ปัจจุบัน:</span>
+      <b id="print-tab-name" style="color:#1e293b;">-</b>
+    </div>
+    
+    <div style="margin-bottom:16px;">
+      <label style="display:block; font-weight:700; font-size:13px; margin-bottom:8px;">📐 แนวกระดาษ:</label>
+      <div style="display:flex; gap:10px;">
+        <label style="flex:1; padding:10px; border:2px solid #e5e7eb; border-radius:8px; cursor:pointer; display:flex; gap:8px; align-items:center;" id="print-orient-portrait-label">
+          <input type="radio" name="print-orient" value="portrait" id="print-orient-portrait">
+          <span>📄 แนวตั้ง (Portrait)</span>
+        </label>
+        <label style="flex:1; padding:10px; border:2px solid #e5e7eb; border-radius:8px; cursor:pointer; display:flex; gap:8px; align-items:center;" id="print-orient-landscape-label">
+          <input type="radio" name="print-orient" value="landscape" id="print-orient-landscape">
+          <span>📃 แนวนอน (Landscape)</span>
+        </label>
+      </div>
+      <div style="font-size:12px; color:#64748b; margin-top:6px;" id="print-orient-hint"></div>
+    </div>
+    
+    <div style="margin-bottom:18px;" id="print-sections-wrap">
+      <label style="display:block; font-weight:700; font-size:13px; margin-bottom:8px;">📑 เลือกส่วนที่จะพิมพ์:</label>
+      <div id="print-sections" style="display:flex; flex-direction:column; gap:8px;"></div>
+    </div>
+    
+    <div style="display:flex; gap:10px;">
+      <button class="btn" id="print-modal-cancel" style="flex:1;">ยกเลิก</button>
+      <button class="btn" id="print-modal-do" style="flex:2; background:#3b82f6; color:white; border-color:#3b82f6;">🖨️ พิมพ์</button>
+    </div>
+  </div>
+</div>
+
 <div class="container" id="mainContainer" style="display:none;">
 
   <div class="dashboard-toolbar">
@@ -604,6 +685,7 @@ body {
       <span id="userBadge"></span>
     </div>
     <div class="toolbar-right">
+      <button class="btn" id="btnPrint" style="background:#0ea5e9;color:white;border-color:#0ea5e9;">🖨️ พิมพ์</button>
       <button class="btn" id="btnRefresh">🔄 Refresh</button>
       <button class="btn" id="btnLogout">🚪 ออก</button>
     </div>
@@ -701,7 +783,6 @@ body {
         </div>
         <div class="filter-group" style="margin-left:auto; display:flex; gap:8px;">
           <button class="btn" id="inv-export-csv">📥 Export CSV</button>
-          <button class="btn" id="inv-print" style="background:var(--accent);color:white;border-color:var(--accent);">🖨️ พิมพ์</button>
         </div>
       </div>
       
@@ -742,7 +823,6 @@ body {
           <div style="display:flex; gap:8px; flex-wrap:wrap;">
             <button class="btn" id="flt-show" style="background:var(--accent);color:white;border-color:var(--accent);font-size:15px;padding:10px 20px;">🔍 แสดงผล</button>
             <button class="btn" id="flt-clear">🔄 ล้างค่า</button>
-            <button class="btn" id="flt-print" style="margin-left:auto;">🖨️ พิมพ์รายงาน</button>
           </div>
         </div>
       </div>
@@ -2135,7 +2215,10 @@ function renderInvoiceList() {
   `;
   
   // render invoice cards
-  let html = '';
+  let html = `<div style="margin-bottom:10px; display:flex; gap:8px;">
+    <button class="btn" id="inv-expand-all" style="font-size:13px;">▽ ขยายทั้งหมด</button>
+    <button class="btn" id="inv-collapse-all" style="font-size:13px;">▷ ปิดทั้งหมด</button>
+  </div>`;
   for (const g of sortedGroups) {
     let invRolls = 0, invKg = 0, invValue = 0;
     for (const r of g.rolls) {
@@ -2146,8 +2229,9 @@ function renderInvoiceList() {
     
     const dateThai = g.date ? formatDateTH(g.date) : '-';
     
-    html += `<div class="invoice-card">
+    html += `<div class="invoice-card" data-inv="${escapeHtml(g.invoice_no)}">
       <div class="invoice-header">
+        <span class="toggle-icon">▶</span>
         <div class="invoice-no">📄 ${escapeHtml(g.invoice_no)}</div>
         <div class="invoice-date">📅 ${dateThai}</div>
         <div class="invoice-totals">
@@ -2156,6 +2240,7 @@ function renderInvoiceList() {
           <div class="invoice-total-item">💰 <b>${fmtMoneyExact(invValue)}</b></div>
         </div>
       </div>
+      <div class="invoice-rolls-wrap">
       <table class="invoice-rolls-table">
         <thead><tr>
           <th>Lot</th>
@@ -2185,10 +2270,25 @@ function renderInvoiceList() {
       </tr>`;
     }
     
-    html += `</tbody></table></div>`;
+    html += `</tbody></table></div></div>`;
   }
   
   listDiv.innerHTML = html;
+  
+  // Wire toggle (each card)
+  listDiv.querySelectorAll('.invoice-header').forEach(h => {
+    h.addEventListener('click', () => {
+      h.parentElement.classList.toggle('expanded');
+    });
+  });
+  
+  // Wire expand/collapse all
+  const exAll = $('#inv-expand-all');
+  const coAll = $('#inv-collapse-all');
+  if (exAll) exAll.addEventListener('click', () => 
+    listDiv.querySelectorAll('.invoice-card').forEach(c => c.classList.add('expanded')));
+  if (coAll) coAll.addEventListener('click', () => 
+    listDiv.querySelectorAll('.invoice-card').forEach(c => c.classList.remove('expanded')));
 }
 
 function formatDateTH(d) {
@@ -2233,18 +2333,10 @@ function exportInvoiceCSV() {
   URL.revokeObjectURL(url);
 }
 
-function printInvoiceTab() {
-  // เพิ่ม print header ก่อนพิมพ์
+function buildInvoicePrintHeader() {
   const supplier = $('#inv-supplier').value;
   const monthLabel = $('#inv-month').selectedOptions[0]?.text || '';
-  const tab = $('#tab-invoice');
-  
-  // ลบ print header เก่า ถ้ามี
-  tab.querySelectorAll('.print-header').forEach(el => el.remove());
-  
-  const ph = document.createElement('div');
-  ph.className = 'print-header';
-  ph.innerHTML = `
+  return `
     <div class="print-header-left">
       <h2>รายงานใบ Invoice</h2>
       <div>Supplier: <b>${escapeHtml(supplier)}</b> · เดือน: <b>${escapeHtml(monthLabel)}</b></div>
@@ -2254,9 +2346,6 @@ function printInvoiceTab() {
       <div>วันที่พิมพ์: ${formatDateTH(new Date().toISOString().slice(0, 10))}</div>
     </div>
   `;
-  tab.insertBefore(ph, tab.firstChild);
-  
-  setTimeout(() => window.print(), 100);
 }
 
 
@@ -2466,22 +2555,11 @@ function showFilterResult() {
   wrap.innerHTML = html;
 }
 
-function printFilterTab() {
-  if (!$('#flt-result-wrap').innerHTML.trim()) {
-    return alert('กรุณากดแสดงผลก่อน');
-  }
-  
-  const tab = $('#tab-filter');
-  tab.querySelectorAll('.print-header').forEach(el => el.remove());
-  
-  // สร้าง summary ของ filter
+function buildFilterPrintHeader() {
   const supList = _filter.suppliers.size > 0 ? [..._filter.suppliers].join(', ') : 'ทั้งหมด';
   const typList = _filter.types.size > 0 ? [..._filter.types].join(', ') : 'ทั้งหมด';
   const widList = _filter.widths.size > 0 ? [..._filter.widths].join(', ') + ' mm' : 'ทั้งหมด';
-  
-  const ph = document.createElement('div');
-  ph.className = 'print-header';
-  ph.innerHTML = `
+  return `
     <div class="print-header-left">
       <h2>รายงาน Stock คงเหลือ</h2>
       <div style="font-size:12px;color:#475569;">บริษัท เอเชียเปเปอร์ทิ้ว จำกัด · Asia Paper Tube Co., Ltd.</div>
@@ -2496,9 +2574,6 @@ function printFilterTab() {
       <div>วันที่พิมพ์: ${formatDateTH(new Date().toISOString().slice(0, 10))}</div>
     </div>
   `;
-  tab.insertBefore(ph, tab.firstChild);
-  
-  setTimeout(() => window.print(), 100);
 }
 
 
@@ -2569,33 +2644,33 @@ async function loadUsageTab() {
   renderUsageTable();
 }
 
-// สร้างสีตามค่า — ใช้ blue gradient (อ่อน → เข้ม)
+// สร้างสีตามค่า — ใช้ green gradient (อ่อน → เข้ม)
 function heatColor(intensity) {
-  // intensity 0–1 — return rgba color
+  // intensity 0–1 — return rgb color
   if (intensity <= 0) return 'transparent';
   
-  // 3-stop gradient: light → medium → dark blue
-  // 0 → #f0f9ff (very light blue)
-  // 0.5 → #3b82f6 (medium blue)
-  // 1.0 → #1e3a8a (dark blue)
+  // 3-stop gradient: light → medium → dark green
+  // 0 → #f0fdf4 (very light green)
+  // 0.5 → #22c55e (medium green)
+  // 1.0 → #14532d (dark green)
   let r, g, b;
   if (intensity < 0.5) {
     const t = intensity * 2;
-    r = Math.round(240 + (59 - 240) * t);
-    g = Math.round(249 + (130 - 249) * t);
-    b = Math.round(255 + (246 - 255) * t);
+    r = Math.round(240 + (34 - 240) * t);
+    g = Math.round(253 + (197 - 253) * t);
+    b = Math.round(244 + (94 - 244) * t);
   } else {
     const t = (intensity - 0.5) * 2;
-    r = Math.round(59 + (30 - 59) * t);
-    g = Math.round(130 + (58 - 130) * t);
-    b = Math.round(246 + (138 - 246) * t);
+    r = Math.round(34 + (20 - 34) * t);
+    g = Math.round(197 + (83 - 197) * t);
+    b = Math.round(94 + (45 - 94) * t);
   }
   return `rgb(${r}, ${g}, ${b})`;
 }
 
 // คืน text color (ดำ/ขาว) ตามความเข้มของพื้นหลัง
 function heatTextColor(intensity) {
-  return intensity > 0.55 ? 'white' : '#1e293b';
+  return intensity > 0.5 ? 'white' : '#14532d';
 }
 
 function renderUsageTable() {
@@ -2647,14 +2722,16 @@ function renderUsageTable() {
     return;
   }
   
-  // หา max value (เพื่อทำ heatmap scale)
-  let maxVal = 0;
-  for (const supMap of pivot.values()) {
-    for (const cell of supMap.values()) {
+  // หา max value ต่อ row (paper_type) สำหรับ row-based heatmap
+  const rowMaxMap = new Map();  // key: "supplier::paper_type" -> maxVal
+  for (const [sup, supMap] of pivot) {
+    for (const [typ, cell] of supMap) {
+      let rowMax = 0;
       for (const m of months) {
         const v = cell[m] ? (unit === 'kg' ? cell[m].kg : cell[m].rolls) : 0;
-        if (v > maxVal) maxVal = v;
+        if (v > rowMax) rowMax = v;
       }
+      rowMaxMap.set(`${sup}::${typ}`, rowMax);
     }
   }
   
@@ -2685,6 +2762,7 @@ function renderUsageTable() {
     for (const typ of typKeys) {
       const cell = supMap.get(typ);
       let typTotal = 0;
+      const rowMax = rowMaxMap.get(`${sup}::${typ}`) || 0;
       
       html += `<tr>
         <td class="thai-text">${firstRow ? escapeHtml(sup) : ''}</td>
@@ -2693,7 +2771,8 @@ function renderUsageTable() {
       for (let i = 0; i < months.length; i++) {
         const mc = cell[months[i]];
         const v = mc ? (unit === 'kg' ? mc.kg : mc.rolls) : 0;
-        const intensity = maxVal > 0 ? (v / maxVal) : 0;
+        // row-based intensity (0..1 per row)
+        const intensity = rowMax > 0 ? (v / rowMax) : 0;
         const bgColor = heatColor(intensity);
         const textColor = heatTextColor(intensity);
         const display = v ? fmtNum(Math.round(v)) : '-';
@@ -2730,9 +2809,10 @@ function renderUsageTable() {
   
   // legend
   html += `<div class="heatmap-legend">
-    <span>น้อย</span>
+    <span>💡 Heatmap แต่ละแถว (เทียบเดือนภายในประเภทเดียวกัน):</span>
+    <span>เดือนที่ใช้น้อย</span>
     <span class="heatmap-legend-bar"></span>
-    <span>มาก (สูงสุด: <b>${fmtNum(Math.round(maxVal))}</b> ${unit === 'kg' ? 'kg' : 'ม้วน'})</span>
+    <span>เดือนที่ใช้มาก</span>
   </div>`;
   
   $('#usage-table-wrap').innerHTML = html;
@@ -2797,25 +2877,233 @@ function exportUsageCSV() {
   URL.revokeObjectURL(url);
 }
 
+// =================================================================
+// ===== UNIVERSAL PRINT SYSTEM =====
+// =================================================================
+
+// แต่ละ tab มี config ว่าจะพิมพ์ section อะไรได้บ้าง + แนวกระดาษที่แนะนำ
+const PRINT_CONFIG = {
+  overview: {
+    name: '📈 ภาพรวม',
+    orientation: 'portrait',
+    sections: [
+      { id: 'kpiGrid', label: 'KPI หลัก', default: true },
+      { id: 'movementGrid', label: 'การเคลื่อนไหวของเดือน', default: true },
+      { id: 'categoryGrid', label: 'Stock แยกตามชนิด', default: true }
+    ]
+  },
+  detail: {
+    name: '📋 รายละเอียด Stock',
+    orientation: 'landscape',
+    sections: [
+      { id: 'pivotTableWrap', label: 'ตาราง Pivot (เดือนก่อน/รับเข้า/จ่ายออก/Balance)', default: true }
+    ]
+  },
+  aging: {
+    name: '⏰ Aging',
+    orientation: 'portrait',
+    sections: [
+      { id: 'agingBuckets', label: 'Aging Buckets (รวม)', default: true },
+      { id: 'agingTable', label: 'Top 20 ม้วนค้างนานสุด', default: true }
+    ]
+  },
+  trend: {
+    name: '📊 Trend',
+    orientation: 'landscape',
+    sections: [
+      { id: 'trendChart', label: 'กราฟ Trend รับเข้า-จ่ายออก', default: true },
+      { id: 'cumulativeChart', label: 'กราฟ Net stock สะสม', default: true }
+    ]
+  },
+  value: {
+    name: '💰 มูลค่า',
+    orientation: 'portrait',
+    sections: [
+      { id: 'projectTable', label: 'Stock แยกตามโครงการ', default: true },
+      { id: 'supplierValueTable', label: 'มูลค่าแยกตาม Supplier', default: true },
+      { id: 'priceCompareWrap', label: 'เปรียบเทียบราคา Supplier', default: true }
+    ]
+  },
+  invoice: {
+    name: '📥 ใบ Invoice',
+    orientation: 'portrait',
+    sections: [
+      { id: 'invoice-summary', label: 'สรุปยอดรวม', default: true },
+      { id: 'invoice-list', label: 'รายการ Invoice', default: true }
+    ],
+    headerBuilder: 'invoice'
+  },
+  filter: {
+    name: '🔍 ค้นหา & พิมพ์',
+    orientation: 'portrait',
+    sections: [
+      { id: 'flt-result-wrap', label: 'ผลการค้นหา', default: true }
+    ],
+    headerBuilder: 'filter'
+  },
+  usage: {
+    name: '📅 ยอดใช้',
+    orientation: 'landscape',
+    sections: [
+      { id: 'usage-table-wrap', label: 'ตาราง Heatmap', default: true },
+      { id: 'usageChart', label: 'กราฟเปรียบเทียบเดือน', default: false }
+    ]
+  }
+};
+
+function openPrintModal() {
+  const cfg = PRINT_CONFIG[activeTab];
+  if (!cfg) return alert('ไม่รองรับการพิมพ์สำหรับ tab นี้');
+  
+  $('#print-tab-name').textContent = cfg.name;
+  
+  // set orientation default
+  $('#print-orient-portrait').checked = (cfg.orientation === 'portrait');
+  $('#print-orient-landscape').checked = (cfg.orientation === 'landscape');
+  updateOrientLabels();
+  
+  $('#print-orient-hint').textContent = 
+    cfg.orientation === 'landscape' ? '💡 แนะนำ: แนวนอน (ข้อมูลมีหลายคอลัมน์)' : '💡 แนะนำ: แนวตั้ง';
+  
+  // sections checkboxes
+  const wrap = $('#print-sections');
+  if (cfg.sections.length <= 1) {
+    $('#print-sections-wrap').style.display = 'none';
+  } else {
+    $('#print-sections-wrap').style.display = 'block';
+    wrap.innerHTML = cfg.sections.map((s, i) => `
+      <label style="display:flex; align-items:center; gap:8px; padding:8px 12px; border:1px solid #e5e7eb; border-radius:6px; cursor:pointer;">
+        <input type="checkbox" data-section-id="${s.id}" ${s.default ? 'checked' : ''}>
+        <span>${s.label}</span>
+      </label>
+    `).join('');
+  }
+  
+  $('#print-modal').style.display = 'flex';
+}
+
+function updateOrientLabels() {
+  const portrait = $('#print-orient-portrait').checked;
+  $('#print-orient-portrait-label').style.borderColor = portrait ? '#3b82f6' : '#e5e7eb';
+  $('#print-orient-portrait-label').style.background = portrait ? '#eff6ff' : 'white';
+  $('#print-orient-landscape-label').style.borderColor = !portrait ? '#3b82f6' : '#e5e7eb';
+  $('#print-orient-landscape-label').style.background = !portrait ? '#eff6ff' : 'white';
+}
+
+function closePrintModal() {
+  $('#print-modal').style.display = 'none';
+}
+
+function doPrintFromModal() {
+  const cfg = PRINT_CONFIG[activeTab];
+  if (!cfg) return;
+  
+  const orientation = $('#print-orient-landscape').checked ? 'landscape' : 'portrait';
+  
+  // เลือก sections ที่ checked
+  let selectedIds;
+  if (cfg.sections.length <= 1) {
+    selectedIds = cfg.sections.map(s => s.id);
+  } else {
+    selectedIds = [...$('#print-sections').querySelectorAll('input[type=checkbox]:checked')]
+      .map(cb => cb.dataset.sectionId);
+    if (selectedIds.length === 0) return alert('กรุณาเลือกส่วนที่จะพิมพ์อย่างน้อย 1 ส่วน');
+  }
+  
+  // 1. set orientation via dynamic <style>
+  let oldStyle = document.getElementById('dynamic-print-style');
+  if (oldStyle) oldStyle.remove();
+  const styleEl = document.createElement('style');
+  styleEl.id = 'dynamic-print-style';
+  styleEl.textContent = `@page { size: A4 ${orientation}; margin: 1cm; }`;
+  document.head.appendChild(styleEl);
+  
+  // 2. mark sections to hide/show
+  const tab = document.getElementById('tab-' + activeTab);
+  if (!tab) { closePrintModal(); return alert('ไม่พบ tab ที่จะพิมพ์'); }
+  
+  // Hide all sections (we'll unhide selected)
+  tab.querySelectorAll('[data-print-include]').forEach(el => el.removeAttribute('data-print-include'));
+  
+  for (const id of selectedIds) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    // mark this element + all parents up to .container as include
+    let cur = el;
+    while (cur && cur !== document.body) {
+      cur.setAttribute('data-print-include', '1');
+      cur = cur.parentElement;
+    }
+  }
+  
+  // 3. build print header (if applicable)
+  tab.querySelectorAll('.print-header').forEach(el => el.remove());
+  
+  let headerHtml = '';
+  if (cfg.headerBuilder === 'invoice') {
+    headerHtml = buildInvoicePrintHeader();
+  } else if (cfg.headerBuilder === 'filter') {
+    headerHtml = buildFilterPrintHeader();
+  } else {
+    headerHtml = `
+      <div class="print-header-left">
+        <h2>${escapeHtml(cfg.name)}</h2>
+        <div style="font-size:12px;color:#475569;">บริษัท เอเชียเปเปอร์ทิ้ว จำกัด · Asia Paper Tube Co., Ltd.</div>
+      </div>
+      <div class="print-header-right">
+        <div>วันที่พิมพ์: ${formatDateTH(new Date().toISOString().slice(0, 10))}</div>
+      </div>
+    `;
+  }
+  
+  const ph = document.createElement('div');
+  ph.className = 'print-header';
+  ph.setAttribute('data-print-include', '1');
+  ph.innerHTML = headerHtml;
+  tab.insertBefore(ph, tab.firstChild);
+  
+  closePrintModal();
+  
+  setTimeout(() => {
+    window.print();
+    // cleanup หลังพิมพ์
+    setTimeout(() => {
+      if (oldStyle) oldStyle.remove();
+      const newStyle = document.getElementById('dynamic-print-style');
+      if (newStyle) newStyle.remove();
+      tab.querySelectorAll('[data-print-include]').forEach(el => el.removeAttribute('data-print-include'));
+    }, 500);
+  }, 200);
+}
+
 // ===== Wire Events =====
 $('#btnDoLogin').addEventListener('click', doLogin);
 $('#loginPassword').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
 $('#btnLogout').addEventListener('click', logout);
 $('#btnRefresh').addEventListener('click', loadActiveTab);
+$('#btnPrint').addEventListener('click', openPrintModal);
 $('#monthPicker').addEventListener('change', e => { currentMonth = e.target.value; loadActiveTab(); });
 $$('.tab-btn').forEach(btn => btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
+
+// Print modal events
+$('#print-modal-close').addEventListener('click', closePrintModal);
+$('#print-modal-cancel').addEventListener('click', closePrintModal);
+$('#print-modal-do').addEventListener('click', doPrintFromModal);
+$('#print-orient-portrait').addEventListener('change', updateOrientLabels);
+$('#print-orient-landscape').addEventListener('change', updateOrientLabels);
+$('#print-modal').addEventListener('click', e => {
+  if (e.target.id === 'print-modal') closePrintModal();
+});
 
 // ===== New tab events =====
 // Invoice tab
 $('#inv-supplier').addEventListener('change', renderInvoiceList);
 $('#inv-month').addEventListener('change', renderInvoiceList);
 $('#inv-export-csv').addEventListener('click', exportInvoiceCSV);
-$('#inv-print').addEventListener('click', printInvoiceTab);
 
 // Filter tab
 $('#flt-show').addEventListener('click', showFilterResult);
 $('#flt-clear').addEventListener('click', clearFilter);
-$('#flt-print').addEventListener('click', printFilterTab);
 $('#flt-types-search').addEventListener('input', e => filterChipsByText('flt-types', e.target.value));
 $('#flt-widths-search').addEventListener('input', e => filterChipsByText('flt-widths', e.target.value));
 
