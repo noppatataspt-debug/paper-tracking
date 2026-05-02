@@ -574,7 +574,8 @@ async function doLogin() {
         id: data[0].out_id,
         username: data[0].out_username,
         full_name: data[0].out_full_name,
-        role: data[0].out_role || 'manager'
+        role: data[0].out_role || 'manager',
+        session_token: data[0].out_session_token
       };
       sessionStorage.setItem('paper_admin', JSON.stringify(currentUser));
       showDashboard();
@@ -591,8 +592,13 @@ async function doLogin() {
   }
 }
 
-function logout() {
+async function logout() {
   if (!confirm('ต้องการออกจากระบบ?')) return;
+  if (currentUser && currentUser.session_token) {
+    try {
+      await supabase.rpc('admin_logout', { p_token: currentUser.session_token });
+    } catch (e) { /* ignore */ }
+  }
   sessionStorage.removeItem('paper_admin');
   currentUser = null;
   if (trendChart) { trendChart.destroy(); trendChart = null; }

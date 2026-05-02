@@ -1836,6 +1836,28 @@ if (savedAdmin) {
   try { currentAdmin = JSON.parse(savedAdmin); } catch(e) {}
 }
 
+// ====== Helper: เรียก admin RPC + ส่ง session token ======
+async function callAdminRPC(funcName, params) {
+  if (!currentAdmin || !currentAdmin.session_token) {
+    throw new Error('กรุณา login ก่อน');
+  }
+  const { data, error } = await supabase.rpc(funcName, {
+    p_token: currentAdmin.session_token,
+    ...params
+  });
+  if (error) {
+    if (error.message && (error.message.includes('Session expired') || error.message.includes('invalid'))) {
+      sessionStorage.removeItem('paper_admin');
+      currentAdmin = null;
+      alert('Session หมดอายุ กรุณา login ใหม่');
+      location.reload();
+      throw error;
+    }
+    throw error;
+  }
+  return data;
+}
+
 function today() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -2794,7 +2816,12 @@ window.closeAdminLogin = function() {
   $('#modalAdminLogin').classList.remove('show');
 };
 
-window.adminLogout = function() {
+window.adminLogout = async function() {
+  if (currentAdmin && currentAdmin.session_token) {
+    try {
+      await supabase.rpc('admin_logout', { p_token: currentAdmin.session_token });
+    } catch (e) { /* ignore */ }
+  }
   currentAdmin = null;
   sessionStorage.removeItem('paper_admin');
   renderAdminBar();
@@ -2827,7 +2854,9 @@ async function doLogin() {
       currentAdmin = {
         id: data[0].out_id,
         username: data[0].out_username,
-        full_name: data[0].out_full_name
+        full_name: data[0].out_full_name,
+        role: data[0].out_role,
+        session_token: data[0].out_session_token
       };
       sessionStorage.setItem('paper_admin', JSON.stringify(currentAdmin));
       $('#modalAdminLogin').classList.remove('show');
