@@ -176,7 +176,16 @@ body {
 .data-table td { padding: 11px 14px; border-bottom: 1px solid var(--border); font-family: var(--mono); font-size: 14px; }
 .data-table td.right { text-align: right; }
 .data-table td.thai-text { font-family: 'IBM Plex Sans Thai', sans-serif; }
-.data-table tr:hover { background: var(--panel-2); }
+.data-table tbody tr:nth-child(even) { background: #f0f9ff; }
+.data-table tbody tr:hover { background: #e0f2fe !important; }
+
+/* Zebra for filter result table */
+.flt-result-table tbody tr:nth-child(even):not(.subtotal-row):not(.grand-total-row) { background: #f0f9ff; }
+.flt-result-table tbody tr:hover:not(.subtotal-row):not(.grand-total-row) { background: #e0f2fe !important; }
+
+/* Zebra for invoice rolls table */
+.invoice-rolls-table tbody tr:nth-child(even) { background: #f0f9ff; }
+.invoice-rolls-table tbody tr:hover { background: #e0f2fe !important; }
 
 .project-badge {
   display: inline-block; padding: 3px 10px; border-radius: 4px;
@@ -802,6 +811,10 @@ body {
       <div class="movement-grid" id="movementGrid"><div class="loading-state"><span class="loading"></span></div></div>
     </div>
     <div class="section">
+      <div class="section-title">📦 Stock แยกตาม Supplier × ชนิด (สินค้าคงเหลือปัจจุบัน)</div>
+      <div id="supplierCategoryWrap"><div class="loading-state"><span class="loading"></span></div></div>
+    </div>
+    <div class="section">
       <div class="section-title">🏷️ Stock แยกตามชนิด (สินค้าคงเหลือปัจจุบัน)</div>
       <div class="category-grid" id="categoryGrid"><div class="loading-state"><span class="loading"></span></div></div>
     </div>
@@ -893,6 +906,23 @@ body {
       </div>
       
       <div class="filter-section">
+        <div class="filter-row" style="background:#fef9c3; padding:14px; border-radius:8px; border:1px solid #fbbf24; margin-bottom:14px; display:block;">
+          <div style="font-weight:700; font-size:14px; margin-bottom:8px; color:#78350f;">
+            🏷️ ค้นหาด้วย Paper Lot (ใส่ได้สูงสุด 5 lots)
+          </div>
+          <div style="font-size:12px; color:#92400e; margin-bottom:8px;">
+            💡 ใส่ Paper Lot คั่นด้วยจุลภาค (,) หรือ Enter (ขึ้นบรรทัดใหม่) — ระบบจะแสดง invoice + ข้อมูลทั้งหมดของแต่ละ lot
+          </div>
+          <textarea id="flt-paper-lots" rows="3" placeholder="เช่น 776A19375H, 776A19382H, 776A19372H" 
+            style="width:100%; padding:10px 12px; border:1.5px solid #fbbf24; border-radius:8px; font-family:var(--mono); font-size:14px; resize:vertical; box-sizing:border-box;"></textarea>
+          <div style="display:flex; gap:8px; margin-top:10px;">
+            <button class="btn" id="flt-lot-search" style="background:#d97706; color:white; border-color:#d97706; font-weight:700;">🔍 ค้นหาตาม Paper Lot</button>
+            <button class="btn" id="flt-lot-clear">🔄 ล้าง</button>
+          </div>
+        </div>
+        
+        <div style="text-align:center; margin:10px 0; color:var(--text-muted); font-size:13px;">— หรือ ใช้ filter ด้านล่าง —</div>
+        
         <div class="filter-row">
           <div class="filter-label">Supplier</div>
           <div class="chip-group" id="flt-suppliers"></div>
@@ -1208,7 +1238,7 @@ function loadActiveTab() {
 
 // ===== TAB 1: OVERVIEW =====
 async function loadOverview() {
-  await Promise.all([loadKPI(), loadMovement(), loadCategory()]);
+  await Promise.all([loadKPI(), loadMovement(), loadSupplierCategory(), loadCategory()]);
 }
 
 async function loadKPI() {
@@ -1321,6 +1351,127 @@ async function loadMovement() {
         <div class="movement-sub">${inKg - outKg >= 0 ? '+' : ''}${fmtNum(inKg - outKg)} kg</div>
       </div>
     `;
+  } catch (err) {
+    wrap.innerHTML = `<div class="loading-state" style="color:var(--danger);">❌ ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+async function loadSupplierCategory() {
+  const wrap = $('#supplierCategoryWrap');
+  wrap.innerHTML = '<div class="loading-state"><span class="loading"></span></div>';
+  try {
+    const data = await fetchAllRows(() => supabase
+      .from('paper_invoices')
+      .select('supplier, paper_category, weight_kg, remaining_weight_kg, price_per_kg')
+      .eq('status', 'in_stock')
+      .not('paper_category', 'is', null));
+    
+    // Pivot: supplier × category -> {rolls, kg, value}
+    const pivot = new Map();  // supplier -> { Liner, Grey-Board, Core-Board, total }
+    for (const r of (data || [])) {
+      const sup = r.supplier || '(ไม่ระบุ)';
+      const cat = r.paper_category;
+      const remaining = parseFloat(r.remaining_weight_kg || 0);
+      const value = remaining * parseFloat(r.price_per_kg || 0);
+      
+      if (!pivot.has(sup)) {
+        pivot.set(sup, {
+          'Liner': { rolls: 0, kg: 0, value: 0 },
+          'Grey-Board': { rolls: 0, kg: 0, value: 0 },
+          'Core-Board': { rolls: 0, kg: 0, value: 0 },
+          total: { rolls: 0, kg: 0, value: 0 }
+        });
+      }
+      const sm = pivot.get(sup);
+      if (sm[cat]) {
+        sm[cat].rolls++;
+        sm[cat].kg += remaining;
+        sm[cat].value += value;
+      }
+      sm.total.rolls++;
+      sm.total.kg += remaining;
+      sm.total.value += value;
+    }
+    
+    if (pivot.size === 0) {
+      wrap.innerHTML = '<div class="loading-state">ไม่มีข้อมูล stock</div>';
+      return;
+    }
+    
+    // Sort suppliers by total kg desc
+    const sorted = [...pivot.entries()].sort((a, b) => b[1].total.kg - a[1].total.kg);
+    
+    const showMoney = isManager();
+    const cats = ['Liner', 'Grey-Board', 'Core-Board'];
+    
+    let html = '<div style="overflow-x:auto;"><table class="data-table" style="font-size:13px;">';
+    html += '<thead><tr>';
+    html += '<th class="thai-text">SUPPLIER</th>';
+    for (const c of cats) {
+      html += `<th class="right">${c}</th>`;
+    }
+    html += '<th class="right">TOTAL</th>';
+    html += '</tr></thead><tbody>';
+    
+    // grand totals
+    let grand = { 
+      'Liner': { rolls: 0, kg: 0, value: 0 },
+      'Grey-Board': { rolls: 0, kg: 0, value: 0 },
+      'Core-Board': { rolls: 0, kg: 0, value: 0 },
+      total: { rolls: 0, kg: 0, value: 0 }
+    };
+    
+    for (const [sup, sm] of sorted) {
+      html += `<tr><td class="thai-text"><b>${escapeHtml(sup)}</b></td>`;
+      for (const c of cats) {
+        const cell = sm[c];
+        if (cell.rolls === 0) {
+          html += `<td class="right" style="color:#cbd5e1;">—</td>`;
+        } else {
+          const moneyLine = showMoney ? `<div style="font-size:11px;color:var(--text-muted);">${fmtMoney(cell.value)}</div>` : '';
+          html += `<td class="right">
+            <div><b>${fmtNum(cell.rolls)}</b> ม้วน</div>
+            <div style="font-size:11px;color:var(--text-dim);">${fmtNum(Math.round(cell.kg))} kg</div>
+            ${moneyLine}
+          </td>`;
+        }
+        grand[c].rolls += cell.rolls;
+        grand[c].kg += cell.kg;
+        grand[c].value += cell.value;
+      }
+      // total column
+      const moneyLine = showMoney ? `<div style="font-size:11px;color:var(--text-muted);">${fmtMoney(sm.total.value)}</div>` : '';
+      html += `<td class="right" style="background:#fef3c7;">
+        <div><b>${fmtNum(sm.total.rolls)}</b> ม้วน</div>
+        <div style="font-size:11px;color:#78350f;">${fmtNum(Math.round(sm.total.kg))} kg</div>
+        ${moneyLine}
+      </td></tr>`;
+      grand.total.rolls += sm.total.rolls;
+      grand.total.kg += sm.total.kg;
+      grand.total.value += sm.total.value;
+    }
+    
+    // grand total row
+    html += `<tr style="background:#1e293b;color:white;font-weight:700;">`;
+    html += `<td class="thai-text" style="color:white;">รวมทั้งหมด</td>`;
+    for (const c of cats) {
+      const cell = grand[c];
+      const moneyLine = showMoney ? `<div style="font-size:11px;color:#cbd5e1;">${fmtMoney(cell.value)}</div>` : '';
+      html += `<td class="right" style="color:white;">
+        <div><b>${fmtNum(cell.rolls)}</b> ม้วน</div>
+        <div style="font-size:11px;color:#cbd5e1;">${fmtNum(Math.round(cell.kg))} kg</div>
+        ${moneyLine}
+      </td>`;
+    }
+    const moneyLine = showMoney ? `<div style="font-size:11px;color:#fbbf24;">${fmtMoney(grand.total.value)}</div>` : '';
+    html += `<td class="right" style="color:#fbbf24;">
+      <div><b>${fmtNum(grand.total.rolls)}</b> ม้วน</div>
+      <div style="font-size:11px;color:#fbbf24;">${fmtNum(Math.round(grand.total.kg))} kg</div>
+      ${moneyLine}
+    </td></tr>`;
+    
+    html += '</tbody></table></div>';
+    wrap.innerHTML = html;
   } catch (err) {
     wrap.innerHTML = `<div class="loading-state" style="color:var(--danger);">❌ ${escapeHtml(err.message)}</div>`;
   }
@@ -2539,6 +2690,111 @@ function clearFilter() {
   $$('.filter-section .chip').forEach(c => c.classList.remove('hidden'));
 }
 
+function clearLotSearch() {
+  $('#flt-paper-lots').value = '';
+  $('#flt-result-wrap').innerHTML = '';
+}
+
+async function searchByPaperLot() {
+  const wrap = $('#flt-result-wrap');
+  const inputVal = $('#flt-paper-lots').value.trim();
+  if (!inputVal) {
+    return alert('กรุณากรอก Paper Lot อย่างน้อย 1 lot');
+  }
+  
+  // parse: split by comma + newline + whitespace
+  const lots = inputVal.split(/[,\n\r\s]+/).map(s => s.trim()).filter(Boolean);
+  
+  if (lots.length === 0) return alert('ไม่พบ Paper Lot ที่ถูกต้อง');
+  if (lots.length > 5) {
+    return alert(`ใส่ได้สูงสุด 5 paper lots ครับ (ตอนนี้ใส่ ${lots.length} lots)\n\nกรุณาลบบาง lot ออก`);
+  }
+  
+  wrap.innerHTML = '<div class="section"><div class="loading-state"><span class="loading"></span> กำลังค้นหา...</div></div>';
+  
+  try {
+    // ค้นหาทั้ง paper_lot และ paper_lot_normalized (uppercase, no dash)
+    const upperLots = lots.map(l => l.toUpperCase().replace(/-/g, ''));
+    
+    const data = await fetchAllRows(() => supabase
+      .from('paper_invoices')
+      .select('id, paper_lot, paper_lot_normalized, supplier, invoice_no, paper_type, paper_category, width_mm, weight_kg, remaining_weight_kg, price_per_kg, price_per_roll, status, invoice_date, receive_date')
+      .or(`paper_lot.in.(${lots.map(l => `"${l}"`).join(',')}),paper_lot_normalized.in.(${upperLots.map(l => `"${l}"`).join(',')})`));
+    
+    const found = data || [];
+    
+    let html = '<div class="section">';
+    html += `<div class="section-title">🏷️ ผลการค้นหา Paper Lot</div>`;
+    html += `<div style="font-size:13px; color:var(--text-dim); margin-bottom:14px;">
+      ค้นหา: <b>${lots.map(l => escapeHtml(l)).join(', ')}</b> · พบ <b>${found.length}</b> ม้วน
+    </div>`;
+    
+    if (found.length === 0) {
+      html += '<div class="loading-state">ไม่พบ Paper Lot ที่ค้นหา · ลองตรวจการสะกดอีกครั้ง</div></div>';
+      wrap.innerHTML = html;
+      return;
+    }
+    
+    // build table - แสดงรายละเอียดทั้งหมด
+    const showMoney = isManager();
+    html += '<div style="overflow-x:auto;"><table class="data-table" style="font-size:14px;">';
+    html += `<thead><tr>
+      <th>Paper Lot</th>
+      <th>Supplier</th>
+      <th>Invoice No</th>
+      <th>ประเภท</th>
+      <th class="right">หน้ากว้าง</th>
+      <th class="right">น้ำหนัก (kg)</th>
+      <th class="right">คงเหลือ (kg)</th>
+      ${showMoney ? '<th class="right">ราคา/kg</th><th class="right">มูลค่ารวม</th>' : ''}
+      <th class="center">สถานะ</th>
+      <th>วันที่รับ</th>
+    </tr></thead><tbody>`;
+    
+    // sort by lot
+    const sorted = [...found].sort((a, b) => (a.paper_lot || '').localeCompare(b.paper_lot || ''));
+    
+    for (const r of sorted) {
+      const statusBadge = r.status === 'in_stock' 
+        ? '<span style="display:inline-block;padding:3px 10px;background:#dcfce7;color:#15803d;border-radius:999px;font-size:11px;font-weight:700;">in_stock</span>'
+        : `<span style="display:inline-block;padding:3px 10px;background:#fee2e2;color:#991b1b;border-radius:999px;font-size:11px;font-weight:700;">${escapeHtml(r.status || '-')}</span>`;
+      
+      html += `<tr>
+        <td><b>${escapeHtml(r.paper_lot)}</b></td>
+        <td class="thai-text">${escapeHtml(r.supplier || '-')}</td>
+        <td>${escapeHtml(r.invoice_no || '-')}</td>
+        <td>${escapeHtml(r.paper_type || '-')}</td>
+        <td class="right">${r.width_mm ? fmtNum(r.width_mm) : '-'}</td>
+        <td class="right">${fmtKgFull(r.weight_kg)}</td>
+        <td class="right">${fmtKgFull(r.remaining_weight_kg)}</td>
+        ${showMoney ? `<td class="right">${r.price_per_kg ? fmtMoneyExact(r.price_per_kg) : '-'}</td><td class="right">${r.price_per_roll ? fmtMoneyExact(r.price_per_roll) : '-'}</td>` : ''}
+        <td class="center">${statusBadge}</td>
+        <td>${r.receive_date ? formatDateTH(r.receive_date) : '-'}</td>
+      </tr>`;
+    }
+    
+    // summary
+    const totalRolls = found.length;
+    const totalKg = found.reduce((s, r) => s + (Number(r.weight_kg) || 0), 0);
+    const remainingKg = found.reduce((s, r) => s + (Number(r.remaining_weight_kg) || 0), 0);
+    const totalValue = found.reduce((s, r) => s + (Number(r.price_per_roll) || 0), 0);
+    
+    html += `<tr style="background:#1e293b;color:white;font-weight:700;">
+      <td colspan="${showMoney ? 5 : 4}" style="color:white;">รวมทั้งหมด</td>
+      <td class="right" style="color:white;">${fmtKgFull(totalKg)}</td>
+      <td class="right" style="color:white;">${fmtKgFull(remainingKg)}</td>
+      ${showMoney ? `<td colspan="2" class="right" style="color:#fbbf24;">${fmtMoneyExact(totalValue)}</td>` : ''}
+      <td colspan="2" style="color:white;">${totalRolls} ม้วน</td>
+    </tr>`;
+    
+    html += '</tbody></table></div></div>';
+    wrap.innerHTML = html;
+    
+  } catch (err) {
+    wrap.innerHTML = `<div class="section"><div class="loading-state" style="color:var(--danger);">❌ ${escapeHtml(err.message)}</div></div>`;
+  }
+}
+
 function filterChipsByText(groupId, query) {
   const q = (query || '').trim().toLowerCase();
   const group = document.getElementById(groupId);
@@ -2988,6 +3244,7 @@ const PRINT_CONFIG = {
     sections: [
       { id: 'kpiGrid', label: 'KPI หลัก', default: true },
       { id: 'movementGrid', label: 'การเคลื่อนไหวของเดือน', default: true },
+      { id: 'supplierCategoryWrap', label: 'Stock แยกตาม Supplier × ชนิด', default: true },
       { id: 'categoryGrid', label: 'Stock แยกตามชนิด', default: true }
     ]
   },
@@ -3207,6 +3464,14 @@ $('#flt-show').addEventListener('click', showFilterResult);
 $('#flt-clear').addEventListener('click', clearFilter);
 $('#flt-types-search').addEventListener('input', e => filterChipsByText('flt-types', e.target.value));
 $('#flt-widths-search').addEventListener('input', e => filterChipsByText('flt-widths', e.target.value));
+$('#flt-lot-search').addEventListener('click', searchByPaperLot);
+$('#flt-lot-clear').addEventListener('click', clearLotSearch);
+$('#flt-paper-lots').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+    e.preventDefault();
+    searchByPaperLot();
+  }
+});
 
 // Usage tab
 $('#usage-period').addEventListener('change', renderUsageTable);
