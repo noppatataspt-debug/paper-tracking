@@ -619,8 +619,26 @@ body {
     white-space: nowrap;
     max-width: 100px;
   }
-  .pivot-row-supplier td { font-size: 11px !important; }
-  .pivot-row-grand td { font-size: 11px !important; padding: 6px 5px !important; }
+  .pivot-row-supplier td { 
+    font-size: 11px !important; 
+    background: #fef3c7 !important; 
+    color: #78350f !important;
+    font-weight: 700 !important;
+    -webkit-print-color-adjust: exact !important; 
+    print-color-adjust: exact !important;
+  }
+  .pivot-row-type td { 
+    background: #f8fafc !important;
+    -webkit-print-color-adjust: exact !important; 
+    print-color-adjust: exact !important;
+  }
+  .pivot-row-grand td { 
+    font-size: 11px !important; padding: 6px 5px !important; 
+    background: #1e293b !important; color: white !important;
+    -webkit-print-color-adjust: exact !important; 
+    print-color-adjust: exact !important;
+  }
+  .pivot-row-grand .pivot-zero { color: #94a3b8 !important; }
   
   /* Compact column groups in pivot - ปรับน้ำหนัก */
   .pivot-table thead th { font-size: 10px !important; padding: 4px 3px !important; }
@@ -639,27 +657,66 @@ body {
   
   /* Filter result table colors */
   .flt-result-table th { 
-    background: #fef3c7 !important; -webkit-print-color-adjust: exact; 
+    background: #fef3c7 !important; 
+    -webkit-print-color-adjust: exact !important; 
+    print-color-adjust: exact !important;
     color: #78350f !important;
   }
   .flt-result-table tr.subtotal-row td {
-    background: #fef9c3 !important; -webkit-print-color-adjust: exact;
+    background: #fef9c3 !important; 
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
   .flt-result-table tr.grand-total-row td {
     background: #1e293b !important; color: white !important;
-    -webkit-print-color-adjust: exact;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
   
   /* Heatmap colors */
-  .heatmap-table td.heat-cell { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .heatmap-table tr.subtotal-row td { -webkit-print-color-adjust: exact; }
-  .heatmap-table tr.grand-total-row td { -webkit-print-color-adjust: exact; }
+  .heatmap-table td.heat-cell { 
+    -webkit-print-color-adjust: exact !important; 
+    print-color-adjust: exact !important; 
+  }
+  .heatmap-table tr.subtotal-row td { 
+    background: #fef3c7 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .heatmap-table tr.grand-total-row td { 
+    background: #1e293b !important; color: white !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
   
-  /* Pivot table colors */
-  .pivot-table thead th.month-prev { background: #fef3c7 !important; -webkit-print-color-adjust: exact; }
-  .pivot-table thead th.month-in { background: #dbeafe !important; -webkit-print-color-adjust: exact; }
-  .pivot-table thead th.month-out { background: #fee2e2 !important; -webkit-print-color-adjust: exact; }
-  .pivot-table thead th.month-balance { background: #d1fae5 !important; -webkit-print-color-adjust: exact; }
+  /* Pivot table header colors */
+  .pivot-table thead th.month-prev { 
+    background: #fef3c7 !important; 
+    -webkit-print-color-adjust: exact !important; 
+    print-color-adjust: exact !important;
+  }
+  .pivot-table thead th.month-in { 
+    background: #dbeafe !important; 
+    -webkit-print-color-adjust: exact !important; 
+    print-color-adjust: exact !important;
+  }
+  .pivot-table thead th.month-out { 
+    background: #fee2e2 !important; 
+    -webkit-print-color-adjust: exact !important; 
+    print-color-adjust: exact !important;
+  }
+  .pivot-table thead th.month-balance { 
+    background: #d1fae5 !important; 
+    -webkit-print-color-adjust: exact !important; 
+    print-color-adjust: exact !important;
+  }
+  
+  /* Force browser to print all backgrounds */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
   
   /* Ensure charts visible */
   canvas { max-width: 100% !important; height: auto !important; }
