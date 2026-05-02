@@ -1660,28 +1660,30 @@ async function doAdminLogin() {
   errorDiv.style.display = 'none';
   
   try {
-    const { data, error } = await supabase.rpc('verify_admin_login', {
-      p_username: username,
-      p_password: password
-    });
+    const { data, error } = await supabase
+      .rpc('verify_admin_login', { p_username: username, p_password: password });
     
     if (error) throw error;
-    if (!data || !data.success) {
-      throw new Error(data?.message || 'Username หรือ Password ไม่ถูกต้อง');
+    
+    if (data && data.length > 0) {
+      currentAdmin = {
+        id: data[0].out_id,
+        username: data[0].out_username,
+        full_name: data[0].out_full_name,
+        role: data[0].out_role,
+        session_token: data[0].out_session_token
+      };
+      sessionStorage.setItem('paper_admin', JSON.stringify(currentAdmin));
+      
+      document.getElementById('admin-login-modal').style.display = 'none';
+      renderAdminBar();
+      
+      if (_adminLoginCallback?.onSuccess) _adminLoginCallback.onSuccess();
+      _adminLoginCallback = null;
+    } else {
+      errorDiv.textContent = '❌ Username หรือ Password ไม่ถูกต้อง';
+      errorDiv.style.display = 'block';
     }
-    
-    currentAdmin = {
-      username: data.username || username,
-      session_token: data.session_token,
-      session_expires_at: data.session_expires_at
-    };
-    sessionStorage.setItem('paper_admin', JSON.stringify(currentAdmin));
-    
-    document.getElementById('admin-login-modal').style.display = 'none';
-    renderAdminBar();
-    
-    if (_adminLoginCallback?.onSuccess) _adminLoginCallback.onSuccess();
-    _adminLoginCallback = null;
   } catch (err) {
     errorDiv.textContent = '❌ ' + err.message;
     errorDiv.style.display = 'block';
