@@ -595,9 +595,21 @@ async function doLogin() {
 async function logout() {
   if (!confirm('ต้องการออกจากระบบ?')) return;
   if (currentUser && currentUser.session_token) {
+    console.log('🔍 [LOGOUT] Token ที่จะส่งไป:', currentUser.session_token);
     try {
-      await supabase.rpc('admin_logout', { p_token: currentUser.session_token });
-    } catch (e) { /* ignore */ }
+      const { data, error } = await supabase.rpc('admin_logout', { 
+        p_token: currentUser.session_token 
+      });
+      if (error) {
+        console.error('❌ [LOGOUT] RPC error:', error);
+      } else {
+        console.log('✅ [LOGOUT] RPC response (true=clear สำเร็จ, false=ไม่เจอ token):', data);
+      }
+    } catch (e) {
+      console.error('❌ [LOGOUT] Exception:', e);
+    }
+  } else {
+    console.warn('⚠️ [LOGOUT] ไม่มี currentUser หรือ session_token');
   }
   sessionStorage.removeItem('paper_admin');
   currentUser = null;

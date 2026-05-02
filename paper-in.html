@@ -2818,9 +2818,21 @@ window.closeAdminLogin = function() {
 
 window.adminLogout = async function() {
   if (currentAdmin && currentAdmin.session_token) {
+    console.log('🔍 [LOGOUT] Token ที่จะส่งไป:', currentAdmin.session_token);
     try {
-      await supabase.rpc('admin_logout', { p_token: currentAdmin.session_token });
-    } catch (e) { /* ignore */ }
+      const { data, error } = await supabase.rpc('admin_logout', { 
+        p_token: currentAdmin.session_token 
+      });
+      if (error) {
+        console.error('❌ [LOGOUT] RPC error:', error);
+      } else {
+        console.log('✅ [LOGOUT] RPC response (true=clear สำเร็จ, false=ไม่เจอ token):', data);
+      }
+    } catch (e) {
+      console.error('❌ [LOGOUT] Exception:', e);
+    }
+  } else {
+    console.warn('⚠️ [LOGOUT] ไม่มี currentAdmin หรือ session_token');
   }
   currentAdmin = null;
   sessionStorage.removeItem('paper_admin');
