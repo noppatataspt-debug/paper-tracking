@@ -855,19 +855,33 @@ body {
 .heatmap-table td.right { text-align: right; }
 .heatmap-table td.heat-cell {
   text-align: right; font-weight: 600; position: relative;
-  border-radius: 4px;
+}
+/* ⭐ เส้นหนาระหว่างเดือน */
+.heatmap-table th.heat-cell + th.heat-cell,
+.heatmap-table td.heat-cell + td.heat-cell {
+  border-left: 2px solid #cbd5e1;
 }
 .heatmap-table td.heat-cell.zero { color: var(--text-muted); }
 .heatmap-table td.current-month-col { 
-  border-left: 2px solid #fbbf24; border-right: 2px solid #fbbf24;
+  border-left: 2.5px solid #f59e0b !important; 
+  border-right: 2.5px solid #f59e0b !important;
 }
 .heatmap-table tr.subtotal-row td {
   background: #fef3c7 !important; font-weight: 700;
   border-top: 2px solid #d97706;
 }
+.heatmap-table tr.subtotal-row td.heat-cell + td.heat-cell {
+  border-left: 2px solid #d97706 !important;
+}
 .heatmap-table tr.grand-total-row td {
-  background: #1e293b !important; color: white !important;
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 50%, #fbbf24 100%) !important; 
+  color: #78350f !important;
   font-weight: 800; font-size: 15px;
+  border-top: 2.5px solid #d97706 !important;
+  border-bottom: 2.5px solid #d97706 !important;
+}
+.heatmap-table tr.grand-total-row td.heat-cell + td.heat-cell {
+  border-left: 2px solid #d97706 !important;
 }
 
 /* Sticky first 2 columns (Supplier + Type) */
@@ -894,7 +908,8 @@ body {
 }
 .heatmap-table tr.grand-total-row td:nth-child(1),
 .heatmap-table tr.grand-total-row td:nth-child(2) {
-  background: #1e293b !important;
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%) !important;
+  color: #78350f !important;
 }
 .heatmap-legend {
   display: flex; align-items: center; gap: 10px;
@@ -902,7 +917,7 @@ body {
 }
 .heatmap-legend-bar {
   display: inline-block; height: 14px; width: 200px;
-  background: linear-gradient(to right, #f7fef9, #a7e8c5, #4ea584);
+  background: linear-gradient(to right, #f0fdfa, #5eead4, #0d9488);
   border-radius: 4px; border: 1px solid var(--border);
 }
 </style>
@@ -3104,34 +3119,33 @@ async function loadUsageTab() {
   renderUsageTable();
 }
 
-// สร้างสีตามค่า — ใช้ sage/mint green (อ่อน → กลาง — ไม่เข้มจัด)
+// สร้างสีตามค่า — ใช้ TEAL palette (อ่อน → กลาง — สะอาด สบายตา)
 function heatColor(intensity) {
   // intensity 0–1 — return rgb color
   if (intensity <= 0) return 'transparent';
   
-  // 3-stop gradient: very light → soft sage → medium teal-green
-  // 0   → #f7fef9 (almost white-green)
-  // 0.5 → #a7e8c5 (soft mint)
-  // 1.0 → #4ea584 (medium sage — ไม่เข้มจัด ข้อความดำอ่านได้)
+  // 3-stop teal gradient — modern dashboard look
+  // 0   → #f0fdfa (mint white)
+  // 0.5 → #5eead4 (turquoise)
+  // 1.0 → #0d9488 (deep teal)
   let r, g, b;
   if (intensity < 0.5) {
     const t = intensity * 2;
-    r = Math.round(247 + (167 - 247) * t);
-    g = Math.round(254 + (232 - 254) * t);
-    b = Math.round(249 + (197 - 249) * t);
+    r = Math.round(240 + (94 - 240) * t);
+    g = Math.round(253 + (234 - 253) * t);
+    b = Math.round(250 + (212 - 250) * t);
   } else {
     const t = (intensity - 0.5) * 2;
-    r = Math.round(167 + (78 - 167) * t);
-    g = Math.round(232 + (165 - 232) * t);
-    b = Math.round(197 + (132 - 197) * t);
+    r = Math.round(94 + (13 - 94) * t);
+    g = Math.round(234 + (148 - 234) * t);
+    b = Math.round(212 + (136 - 212) * t);
   }
   return `rgb(${r}, ${g}, ${b})`;
 }
 
-// คืน text color (ดำเสมอ — เพราะ BG ไม่เข้มแล้ว)
+// คืน text color ตามความเข้ม
 function heatTextColor(intensity) {
-  // BG อ่อนมาก ใช้ข้อความเข้มได้ทั้งหมด
-  return intensity > 0.7 ? '#0f3d2e' : '#14532d';
+  return intensity > 0.65 ? '#042f2e' : '#134e4a';
 }
 
 function renderUsageTable() {
