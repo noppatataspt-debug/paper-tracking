@@ -385,7 +385,7 @@ body {
 }
 /* Grand total ก็ใช้เส้นเข้มบน */
 .pivot-table tr.pivot-row-grand td {
-  border-top: 3px solid #1e293b !important;
+  border-top: 3px solid #d97706 !important;
 }
 
 .pivot-row-supplier { background: #fef3c7; cursor: pointer; font-weight: 700; }
@@ -421,14 +421,25 @@ body {
 .pivot-zero { color: var(--text-muted); font-style: italic; }
 
 .pivot-row-grand {
-  background: #1e293b !important;
-  color: white !important;
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 50%, #fbbf24 100%) !important;
+  color: #78350f !important;
   font-weight: 700;
-  border-top: 2px solid #0f172a;
+  border-top: 2.5px solid #d97706;
 }
-.pivot-row-grand td { color: white !important; padding: 12px 10px; font-size: 14px; }
-.pivot-row-grand td:first-child { font-family: 'IBM Plex Sans Thai', sans-serif !important; }
-.pivot-row-grand .pivot-zero { color: #94a3b8 !important; }
+.pivot-row-grand td { 
+  color: #78350f !important; 
+  padding: 14px 10px; 
+  font-size: 14px;
+  border-bottom: 2.5px solid #d97706 !important;
+}
+.pivot-row-grand td:first-child { 
+  font-family: 'IBM Plex Sans Thai', sans-serif !important; 
+  font-size: 15px;
+  font-weight: 800;
+  color: #92400e !important;
+  letter-spacing: 0.3px;
+}
+.pivot-row-grand .pivot-zero { color: #b45309 !important; opacity: 0.5; }
 
 .aging-buckets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
 .aging-bucket { padding: 16px; border-radius: 10px; text-align: center; }
@@ -694,12 +705,19 @@ body {
     print-color-adjust: exact !important;
   }
   .pivot-row-grand td { 
-    font-size: 11px !important; padding: 6px 5px !important; 
-    background: #1e293b !important; color: white !important;
+    font-size: 11px !important; padding: 8px 5px !important; 
+    background: #fde68a !important; color: #78350f !important;
+    font-weight: 700 !important;
+    border-top: 2.5px solid #d97706 !important;
+    border-bottom: 2.5px solid #d97706 !important;
     -webkit-print-color-adjust: exact !important; 
     print-color-adjust: exact !important;
   }
-  .pivot-row-grand .pivot-zero { color: #94a3b8 !important; }
+  .pivot-row-grand td:first-child {
+    font-weight: 800 !important;
+    color: #92400e !important;
+  }
+  .pivot-row-grand .pivot-zero { color: #b45309 !important; opacity: 0.5; }
   
   /* Compact column groups in pivot - ปรับน้ำหนัก */
   .pivot-table thead th { font-size: 10px !important; padding: 4px 3px !important; }
