@@ -885,43 +885,73 @@ body {
 }
 
 /* ⭐ Usage row expand styles */
-.usage-row-type:hover { background: #f0f9ff !important; }
-.usage-row-type.expanded { background: #eff6ff !important; }
+.usage-row-type {
+  border-top: 3px solid #cbd5e1 !important;
+  background: white;
+}
+.usage-row-type td {
+  font-weight: 600;
+}
+.usage-row-type td:nth-child(2) {
+  font-weight: 700;
+  color: #1e293b;
+  letter-spacing: 0.2px;
+}
+.usage-row-type:hover { background: #f8fafc !important; }
+.usage-row-type.expanded { 
+  background: #eff6ff !important; 
+  border-bottom: 1.5px solid #bfdbfe !important;
+}
+.usage-row-type.expanded td:nth-child(2) {
+  color: #1e40af;
+}
 .usage-toggle {
   display: inline-block;
-  width: 14px;
-  font-size: 10px;
-  color: var(--text-dim);
-  margin-right: 4px;
-  transition: transform 0.15s;
+  width: 16px;
+  font-size: 11px;
+  color: #64748b;
+  margin-right: 6px;
   user-select: none;
 }
+.usage-row-type.expanded .usage-toggle { color: #2563eb; }
 .usage-width-count {
   font-size: 11px;
   color: var(--text-dim);
-  font-weight: normal;
-  margin-left: 4px;
+  font-weight: 500;
+  margin-left: 6px;
+  background: #f1f5f9;
+  padding: 1px 7px;
+  border-radius: 10px;
+}
+.usage-row-type.expanded .usage-width-count {
+  background: #dbeafe;
+  color: #1e40af;
 }
 .usage-row-width {
-  background: #fafbfc;
+  background: #f8fafc !important;
 }
-.usage-row-width:hover { background: #f0f9ff; }
+.usage-row-width:hover { background: #eff6ff !important; }
 .usage-row-width td {
   font-size: 12.5px;
-  padding: 8px 10px;
-  color: var(--text-dim);
+  padding: 7px 10px;
+  color: #475569;
+  border-bottom: 1px solid #e2e8f0;
 }
 .usage-row-width td.heat-cell {
   color: var(--text);
 }
+.usage-row-width:last-of-type td {
+  border-bottom: 1.5px solid #cbd5e1;
+}
 .usage-width-label {
-  padding-left: 30px !important;
+  padding-left: 38px !important;
   font-family: var(--mono);
   font-size: 12.5px !important;
   color: #475569;
+  font-weight: 500;
 }
 .usage-row-width td.heat-cell + td.heat-cell {
-  border-left: 1.5px dashed #cbd5e1 !important;
+  border-left: 1px dashed #e2e8f0 !important;
 }
 
 /* Sticky first 2 columns (Supplier + Type) */
