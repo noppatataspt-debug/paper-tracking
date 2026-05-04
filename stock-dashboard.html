@@ -884,6 +884,46 @@ body {
   border-left: 2px solid #d97706 !important;
 }
 
+/* ⭐ Usage row expand styles */
+.usage-row-type:hover { background: #f0f9ff !important; }
+.usage-row-type.expanded { background: #eff6ff !important; }
+.usage-toggle {
+  display: inline-block;
+  width: 14px;
+  font-size: 10px;
+  color: var(--text-dim);
+  margin-right: 4px;
+  transition: transform 0.15s;
+  user-select: none;
+}
+.usage-width-count {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-weight: normal;
+  margin-left: 4px;
+}
+.usage-row-width {
+  background: #fafbfc;
+}
+.usage-row-width:hover { background: #f0f9ff; }
+.usage-row-width td {
+  font-size: 12.5px;
+  padding: 8px 10px;
+  color: var(--text-dim);
+}
+.usage-row-width td.heat-cell {
+  color: var(--text);
+}
+.usage-width-label {
+  padding-left: 30px !important;
+  font-family: var(--mono);
+  font-size: 12.5px !important;
+  color: #475569;
+}
+.usage-row-width td.heat-cell + td.heat-cell {
+  border-left: 1.5px dashed #cbd5e1 !important;
+}
+
 /* Sticky first 2 columns (Supplier + Type) */
 .heatmap-table th:nth-child(1),
 .heatmap-table td:nth-child(1) {
@@ -1200,8 +1240,14 @@ body {
           <div class="chip-group" id="usage-suppliers" style="gap:6px;"></div>
         </div>
         <div class="filter-group">
+          <button class="btn" id="usage-expand-all" style="font-size:13px;">▽ ขยายทั้งหมด</button>
+          <button class="btn" id="usage-collapse-all" style="font-size:13px;">▷ ปิดทั้งหมด</button>
           <button class="btn" id="usage-export-csv">📥 Export CSV</button>
         </div>
+      </div>
+      
+      <div style="font-size:13px;color:var(--text-dim);margin-bottom:10px;">
+        💡 คลิกที่ประเภทกระดาษเพื่อขยายดูแยกตามหน้ากว้าง
       </div>
       
       <div id="usage-table-wrap"><div class="loading-state"><span class="loading"></span></div></div>
@@ -3174,7 +3220,7 @@ function renderUsageTable() {
   const filteredData = _usageCache.filter(o => 
     _usageSupplierFilter.size === 0 || _usageSupplierFilter.has(o.supplier_name));
   
-  // pivot
+  // pivot — supplier × type × width × month
   const pivot = new Map();
   for (const o of filteredData) {
     const m = o.outflow_date.slice(0, 7);
@@ -3182,11 +3228,14 @@ function renderUsageTable() {
     
     const sup = o.supplier_name || '(ไม่ระบุ)';
     const typ = o.paper_type || '(ไม่ระบุ)';
+    const wid = o.width_mm ? `${o.width_mm}` : '(ไม่ระบุ)';
     
     if (!pivot.has(sup)) pivot.set(sup, new Map());
     const supMap = pivot.get(sup);
-    if (!supMap.has(typ)) supMap.set(typ, {});
-    const cell = supMap.get(typ);
+    if (!supMap.has(typ)) supMap.set(typ, new Map());
+    const typMap = supMap.get(typ);
+    if (!typMap.has(wid)) typMap.set(wid, {});
+    const cell = typMap.get(wid);
     if (!cell[m]) cell[m] = { rolls: 0, kg: 0 };
     cell[m].rolls++;
     cell[m].kg += Number(o.weight_kg) || 0;
@@ -3197,16 +3246,31 @@ function renderUsageTable() {
     return;
   }
   
-  // หา max value ต่อ row (paper_type) สำหรับ row-based heatmap
-  const rowMaxMap = new Map();  // key: "supplier::paper_type" -> maxVal
+  // หา max value ต่อ row สำหรับ row-based heatmap (ทั้ง type level และ width level)
+  const rowMaxMap = new Map();  // key: "supplier::type" หรือ "supplier::type::width" -> maxVal
   for (const [sup, supMap] of pivot) {
-    for (const [typ, cell] of supMap) {
-      let rowMax = 0;
-      for (const m of months) {
-        const v = cell[m] ? (unit === 'kg' ? cell[m].kg : cell[m].rolls) : 0;
-        if (v > rowMax) rowMax = v;
+    for (const [typ, typMap] of supMap) {
+      // type-level totals (sum widths per month)
+      const typTotalsByMonth = {};
+      for (const [wid, cell] of typMap) {
+        for (const m of months) {
+          const v = cell[m] ? (unit === 'kg' ? cell[m].kg : cell[m].rolls) : 0;
+          typTotalsByMonth[m] = (typTotalsByMonth[m] || 0) + v;
+        }
+        // width-level max
+        let widMax = 0;
+        for (const m of months) {
+          const v = cell[m] ? (unit === 'kg' ? cell[m].kg : cell[m].rolls) : 0;
+          if (v > widMax) widMax = v;
+        }
+        rowMaxMap.set(`${sup}::${typ}::${wid}`, widMax);
       }
-      rowMaxMap.set(`${sup}::${typ}`, rowMax);
+      // type-level max
+      let typMax = 0;
+      for (const m of months) {
+        if (typTotalsByMonth[m] > typMax) typMax = typTotalsByMonth[m];
+      }
+      rowMaxMap.set(`${sup}::${typ}`, typMax);
     }
   }
   
@@ -3220,15 +3284,16 @@ function renderUsageTable() {
   const currentMonthIdx = months.indexOf(currentMonth);
   
   let html = '<div style="overflow-x:auto;"><table class="heatmap-table">';
-  html += '<thead><tr><th style="min-width:90px;">Supplier</th><th style="min-width:120px;">ประเภท</th>';
+  html += '<thead><tr><th style="min-width:90px;">Supplier</th><th style="min-width:140px;">ประเภท / หน้ากว้าง</th>';
   for (let i = 0; i < monthLabels.length; i++) {
     const isCurrent = i === currentMonthIdx;
-    html += `<th class="right ${isCurrent ? 'current-month' : ''}" style="min-width:90px;">${monthLabels[i]}${isCurrent ? ' 📍' : ''}</th>`;
+    html += `<th class="heat-cell right ${isCurrent ? 'current-month' : ''}" style="min-width:90px;">${monthLabels[i]}${isCurrent ? ' 📍' : ''}</th>`;
   }
   html += '<th class="right" style="min-width:100px;">TOTAL</th></tr></thead><tbody>';
   
   let grandMonths = months.map(() => 0);
   let grandTotal = 0;
+  let typeIdCounter = 0;
   
   const supKeys = [...pivot.keys()].sort();
   for (const sup of supKeys) {
@@ -3240,30 +3305,66 @@ function renderUsageTable() {
     
     let firstRow = true;
     for (const typ of typKeys) {
-      const cell = supMap.get(typ);
-      let typTotal = 0;
-      const rowMax = rowMaxMap.get(`${sup}::${typ}`) || 0;
+      const typMap = supMap.get(typ);
+      const widKeys = [...typMap.keys()].sort((a, b) => (parseFloat(a)||0) - (parseFloat(b)||0));
+      const typeId = `usg-t-${typeIdCounter++}`;
       
-      html += `<tr>
+      // Type-level row (clickable expand)
+      // Sum widths per month
+      const typeMonthVals = months.map(m => {
+        let total = 0;
+        for (const [wid, cell] of typMap) {
+          if (cell[m]) total += (unit === 'kg' ? cell[m].kg : cell[m].rolls);
+        }
+        return total;
+      });
+      const typeRowMax = rowMaxMap.get(`${sup}::${typ}`) || 0;
+      let typTotal = typeMonthVals.reduce((a, b) => a + b, 0);
+      const hasWidths = widKeys.length > 1;
+      
+      html += `<tr class="usage-row-type" data-target="${typeId}" ${hasWidths ? 'style="cursor:pointer;"' : ''}>
         <td class="thai-text">${firstRow ? escapeHtml(sup) : ''}</td>
-        <td>${escapeHtml(typ)}</td>`;
+        <td><span class="usage-toggle" ${hasWidths ? '' : 'style="visibility:hidden;"'}>▶</span> ${escapeHtml(typ)}${hasWidths ? ` <span class="usage-width-count">(${widKeys.length} ขนาด)</span>` : ''}</td>`;
       
       for (let i = 0; i < months.length; i++) {
-        const mc = cell[months[i]];
-        const v = mc ? (unit === 'kg' ? mc.kg : mc.rolls) : 0;
-        // row-based intensity (0..1 per row)
-        const intensity = rowMax > 0 ? (v / rowMax) : 0;
+        const v = typeMonthVals[i];
+        const intensity = typeRowMax > 0 ? (v / typeRowMax) : 0;
         const bgColor = heatColor(intensity);
         const textColor = heatTextColor(intensity);
         const display = v ? fmtNum(Math.round(v)) : '-';
         const isCurrent = i === currentMonthIdx;
-        
         html += `<td class="heat-cell ${v === 0 ? 'zero' : ''} ${isCurrent ? 'current-month-col' : ''}" style="background:${bgColor};color:${textColor};">${display}</td>`;
         supMonths[i] += v;
-        typTotal += v;
       }
       
       html += `<td class="right"><b>${fmtNum(Math.round(typTotal))}</b></td></tr>`;
+      
+      // Width rows (default hidden, expandable)
+      if (hasWidths) {
+        for (const wid of widKeys) {
+          const cell = typMap.get(wid);
+          const widRowMax = rowMaxMap.get(`${sup}::${typ}::${wid}`) || 0;
+          let widTotal = 0;
+          
+          html += `<tr class="usage-row-width" data-parent="${typeId}" style="display:none;">
+            <td></td>
+            <td class="usage-width-label">└ ${escapeHtml(wid)} mm</td>`;
+          
+          for (let i = 0; i < months.length; i++) {
+            const mc = cell[months[i]];
+            const v = mc ? (unit === 'kg' ? mc.kg : mc.rolls) : 0;
+            const intensity = widRowMax > 0 ? (v / widRowMax) : 0;
+            const bgColor = heatColor(intensity);
+            const textColor = heatTextColor(intensity);
+            const display = v ? fmtNum(Math.round(v)) : '-';
+            const isCurrent = i === currentMonthIdx;
+            html += `<td class="heat-cell ${v === 0 ? 'zero' : ''} ${isCurrent ? 'current-month-col' : ''}" style="background:${bgColor};color:${textColor};">${display}</td>`;
+            widTotal += v;
+          }
+          html += `<td class="right">${fmtNum(Math.round(widTotal))}</td></tr>`;
+        }
+      }
+      
       supTotal += typTotal;
       firstRow = false;
     }
@@ -3297,6 +3398,45 @@ function renderUsageTable() {
   </div>`;
   
   $('#usage-table-wrap').innerHTML = html;
+  
+  // Wire expand/collapse for type rows
+  $$('.usage-row-type').forEach(row => {
+    const target = row.dataset.target;
+    if (!target) return;
+    const widthRows = $$(`.usage-row-width[data-parent="${target}"]`);
+    if (widthRows.length === 0) return;
+    
+    row.addEventListener('click', () => {
+      const willExpand = !row.classList.contains('expanded');
+      row.classList.toggle('expanded', willExpand);
+      const toggle = row.querySelector('.usage-toggle');
+      if (toggle) toggle.textContent = willExpand ? '▼' : '▶';
+      widthRows.forEach(w => w.style.display = willExpand ? 'table-row' : 'none');
+    });
+  });
+  
+  // Wire global expand/collapse buttons
+  const expandAll = $('#usage-expand-all');
+  const collapseAll = $('#usage-collapse-all');
+  if (expandAll) expandAll.onclick = () => {
+    $$('.usage-row-type').forEach(row => {
+      if (!row.dataset.target) return;
+      const widthRows = $$(`.usage-row-width[data-parent="${row.dataset.target}"]`);
+      if (widthRows.length === 0) return;
+      row.classList.add('expanded');
+      const toggle = row.querySelector('.usage-toggle');
+      if (toggle) toggle.textContent = '▼';
+      widthRows.forEach(w => w.style.display = 'table-row');
+    });
+  };
+  if (collapseAll) collapseAll.onclick = () => {
+    $$('.usage-row-type').forEach(row => {
+      row.classList.remove('expanded');
+      const toggle = row.querySelector('.usage-toggle');
+      if (toggle) toggle.textContent = '▶';
+    });
+    $$('.usage-row-width').forEach(w => w.style.display = 'none');
+  };
   
   renderUsageChart(monthLabels, grandMonths, unit);
 }
