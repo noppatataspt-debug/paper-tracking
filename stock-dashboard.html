@@ -399,8 +399,17 @@ body {
 .pivot-row-type td:first-child { padding-left: 24px; }
 .pivot-row-type td { font-weight: 600; }
 
-.pivot-row-width td:first-child { padding-left: 48px; color: var(--text-dim); }
-.pivot-row-width td { color: var(--text-dim); }
+.pivot-row-width td:first-child { padding-left: 32px; }
+.pivot-row-width td { color: var(--text); }
+.pivot-row-width:hover { background: #f0f9ff; }
+.pw-type { 
+  display: inline-block; font-weight: 700; color: #1e40af; 
+  font-family: var(--mono); font-size: 13px;
+  background: #dbeafe; padding: 2px 8px; border-radius: 4px;
+  margin-right: 8px;
+}
+.pw-sep { color: var(--text-muted); margin: 0 6px; }
+.pw-width { color: var(--text); font-family: var(--mono); font-size: 13px; }
 
 .pivot-zero { color: var(--text-muted); font-style: italic; }
 
@@ -988,11 +997,10 @@ body {
     <div class="section">
       <div class="section-title">📋 รายละเอียด Stock — เดือนก่อน / รับเข้า / จ่ายออก / Balance</div>
       <div style="font-size:13px;color:var(--text-dim);margin-bottom:10px;">
-        💡 คลิกที่ Supplier เพื่อขยาย/ย่อ · คลิกประเภทเพื่อดูแยกตามหน้ากว้าง
+        💡 คลิกที่ Supplier เพื่อขยาย/ย่อ ดูรายละเอียดประเภทกระดาษและหน้ากว้าง
       </div>
       <div style="display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
-        <button class="btn" id="pivot-expand-all" style="font-size:13px;">▽ ขยายทุกระดับ</button>
-        <button class="btn" id="pivot-expand-types" style="font-size:13px;">▽ ขยายเฉพาะประเภท</button>
+        <button class="btn" id="pivot-expand-all" style="font-size:13px;">▽ ขยายทั้งหมด</button>
         <button class="btn" id="pivot-collapse-all" style="font-size:13px;">▷ ปิดทั้งหมด</button>
       </div>
       <div id="pivotTableWrap"><div class="loading-state"><span class="loading"></span> กำลังโหลด...</div></div>
@@ -1785,36 +1793,11 @@ async function loadDetailPivot() {
       const typeArr = Array.from(tMap.entries()).sort((a, b) => a[0].localeCompare(b[0], 'en'));
       let tIdx = 0;
       for (const [type, wMap] of typeArr) {
-        const typeId = `s-${supIdx}-t-${tIdx}`;
-        
-        const tTotal = {
-          prev: { rolls: 0, kg: 0, value: 0 }, in: { rolls: 0, kg: 0, value: 0 },
-          out: { rolls: 0, kg: 0, value: 0 }, bal: { rolls: 0, kg: 0, value: 0 }
-        };
-        for (const [_, c] of wMap) {
-          ['prev','in','out','bal'].forEach(k => {
-            tTotal[k].rolls += c[k].rolls;
-            tTotal[k].kg += c[k].kg;
-            tTotal[k].value += c[k].value;
-          });
-        }
-        
-        html += `
-          <tr class="pivot-row-type" data-parent="${supId}" data-target="${typeId}" 
-              style="display:${expanded ? 'table-row' : 'none'};">
-            <td class="left col-first">${escapeHtml(type)}</td>
-            ${renderCells(tTotal.prev, 'col-prev')}
-            ${renderCells(tTotal.in, 'col-in')}
-            ${renderCells(tTotal.out, 'col-out')}
-            ${renderCells(tTotal.bal, 'col-bal')}
-          </tr>
-        `;
-        
         const widthArr = Array.from(wMap.entries()).sort((a, b) => (parseFloat(a[0])||0) - (parseFloat(b[0])||0));
         for (const [width, c] of widthArr) {
           html += `
-            <tr class="pivot-row-width" data-parent="${typeId}" style="display:none;">
-              <td class="left col-first">${escapeHtml(width)} mm</td>
+            <tr class="pivot-row-width" data-parent="${supId}" style="display:${expanded ? 'table-row' : 'none'};">
+              <td class="left col-first"><span class="pw-type">${escapeHtml(type)}</span><span class="pw-sep">·</span><span class="pw-width">${escapeHtml(width)} mm</span></td>
               ${renderCells(c.prev, 'col-prev')}
               ${renderCells(c.in, 'col-in')}
               ${renderCells(c.out, 'col-out')}
@@ -1869,22 +1852,6 @@ async function loadDetailPivot() {
         const target = el.dataset.target;
         const willExpand = !el.classList.contains('expanded');
         el.classList.toggle('expanded', willExpand);
-        $$(`.pivot-row-type[data-parent="${target}"]`).forEach(t => {
-          t.style.display = willExpand ? 'table-row' : 'none';
-          if (!willExpand) {
-            const tId = t.dataset.target;
-            t.classList.remove('expanded');
-            $$(`.pivot-row-width[data-parent="${tId}"]`).forEach(w => w.style.display = 'none');
-          }
-        });
-      });
-    });
-    
-    $$('.pivot-row-type').forEach(el => {
-      el.addEventListener('click', () => {
-        const target = el.dataset.target;
-        const willExpand = !el.classList.contains('expanded');
-        el.classList.toggle('expanded', willExpand);
         $$(`.pivot-row-width[data-parent="${target}"]`).forEach(w => {
           w.style.display = willExpand ? 'table-row' : 'none';
         });
@@ -1893,27 +1860,13 @@ async function loadDetailPivot() {
     
     // Wire expand-all controls
     const btnAll = $('#pivot-expand-all');
-    const btnTypes = $('#pivot-expand-types');
     const btnCollapse = $('#pivot-collapse-all');
     if (btnAll) btnAll.onclick = () => {
       $$('.pivot-row-supplier').forEach(el => el.classList.add('expanded'));
-      $$('.pivot-row-type').forEach(el => { 
-        el.classList.add('expanded'); el.style.display = 'table-row'; 
-      });
       $$('.pivot-row-width').forEach(el => el.style.display = 'table-row');
-    };
-    if (btnTypes) btnTypes.onclick = () => {
-      $$('.pivot-row-supplier').forEach(el => el.classList.add('expanded'));
-      $$('.pivot-row-type').forEach(el => { 
-        el.classList.remove('expanded'); el.style.display = 'table-row'; 
-      });
-      $$('.pivot-row-width').forEach(el => el.style.display = 'none');
     };
     if (btnCollapse) btnCollapse.onclick = () => {
       $$('.pivot-row-supplier').forEach(el => el.classList.remove('expanded'));
-      $$('.pivot-row-type').forEach(el => { 
-        el.classList.remove('expanded'); el.style.display = 'none'; 
-      });
       $$('.pivot-row-width').forEach(el => el.style.display = 'none');
     };
     
