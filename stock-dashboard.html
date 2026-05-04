@@ -3112,7 +3112,7 @@ async function loadUsageTab() {
       // โหลด outflows ที่ไม่ voided
       const outs = await fetchAllRows(() => supabase
         .from('paper_outflows')
-        .select('paper_invoice_id, weight_kg, outflow_date, supplier_name, paper_type, voided')
+        .select('paper_invoice_id, weight_kg, outflow_date, supplier_name, paper_type, width_mm, voided')
         .eq('voided', false));
       
       _usageCache = (outs || []).filter(o => o.outflow_date);
