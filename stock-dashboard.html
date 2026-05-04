@@ -954,6 +954,41 @@ body {
   border-left: 1px dashed #e2e8f0 !important;
 }
 
+/* ⭐ Active (selected) row highlight — แถวที่กดล่าสุด */
+.usage-row-active {
+  position: relative;
+  outline: 2px solid #f59e0b !important;
+  outline-offset: -2px;
+  z-index: 1;
+}
+.usage-row-type.usage-row-active {
+  background: #fef3c7 !important;
+  box-shadow: inset 4px 0 0 #d97706;
+}
+.usage-row-type.usage-row-active td:nth-child(2) {
+  color: #78350f;
+  font-weight: 800;
+}
+.usage-row-type.usage-row-active .usage-toggle {
+  color: #d97706;
+}
+.usage-row-type.usage-row-active .usage-width-count {
+  background: #fde68a;
+  color: #78350f;
+}
+.usage-row-width.usage-row-active {
+  background: #fef3c7 !important;
+  box-shadow: inset 4px 0 0 #d97706;
+}
+.usage-row-width.usage-row-active td {
+  color: #78350f;
+  font-weight: 600;
+}
+.usage-row-width.usage-row-active td.heat-cell {
+  /* keep teal heat color but add weight */
+  font-weight: 700;
+}
+
 /* Sticky first 2 columns (Supplier + Type) */
 .heatmap-table th:nth-child(1),
 .heatmap-table td:nth-child(1) {
@@ -3429,19 +3464,37 @@ function renderUsageTable() {
   
   $('#usage-table-wrap').innerHTML = html;
   
-  // Wire expand/collapse for type rows
+  // helper: clear active row state
+  const clearActive = () => {
+    $$('.usage-row-active').forEach(r => r.classList.remove('usage-row-active'));
+  };
+  
+  // Wire expand/collapse + active state for type rows
   $$('.usage-row-type').forEach(row => {
-    const target = row.dataset.target;
-    if (!target) return;
-    const widthRows = $$(`.usage-row-width[data-parent="${target}"]`);
-    if (widthRows.length === 0) return;
-    
     row.addEventListener('click', () => {
+      // ตั้ง active row
+      clearActive();
+      row.classList.add('usage-row-active');
+      
+      const target = row.dataset.target;
+      if (!target) return;
+      const widthRows = $$(`.usage-row-width[data-parent="${target}"]`);
+      if (widthRows.length === 0) return;
+      
       const willExpand = !row.classList.contains('expanded');
       row.classList.toggle('expanded', willExpand);
       const toggle = row.querySelector('.usage-toggle');
       if (toggle) toggle.textContent = willExpand ? '▼' : '▶';
       widthRows.forEach(w => w.style.display = willExpand ? 'table-row' : 'none');
+    });
+  });
+  
+  // Wire active state for width rows
+  $$('.usage-row-width').forEach(row => {
+    row.addEventListener('click', (e) => {
+      e.stopPropagation();
+      clearActive();
+      row.classList.add('usage-row-active');
     });
   });
   
@@ -3460,6 +3513,7 @@ function renderUsageTable() {
     });
   };
   if (collapseAll) collapseAll.onclick = () => {
+    clearActive();
     $$('.usage-row-type').forEach(row => {
       row.classList.remove('expanded');
       const toggle = row.querySelector('.usage-toggle');
