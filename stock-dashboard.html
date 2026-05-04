@@ -902,7 +902,7 @@ body {
 }
 .heatmap-legend-bar {
   display: inline-block; height: 14px; width: 200px;
-  background: linear-gradient(to right, #f0fdf4, #22c55e, #14532d);
+  background: linear-gradient(to right, #f7fef9, #a7e8c5, #4ea584);
   border-radius: 4px; border: 1px solid var(--border);
 }
 </style>
@@ -3104,33 +3104,34 @@ async function loadUsageTab() {
   renderUsageTable();
 }
 
-// สร้างสีตามค่า — ใช้ green gradient (อ่อน → เข้ม)
+// สร้างสีตามค่า — ใช้ sage/mint green (อ่อน → กลาง — ไม่เข้มจัด)
 function heatColor(intensity) {
   // intensity 0–1 — return rgb color
   if (intensity <= 0) return 'transparent';
   
-  // 3-stop gradient: light → medium → dark green
-  // 0 → #f0fdf4 (very light green)
-  // 0.5 → #22c55e (medium green)
-  // 1.0 → #14532d (dark green)
+  // 3-stop gradient: very light → soft sage → medium teal-green
+  // 0   → #f7fef9 (almost white-green)
+  // 0.5 → #a7e8c5 (soft mint)
+  // 1.0 → #4ea584 (medium sage — ไม่เข้มจัด ข้อความดำอ่านได้)
   let r, g, b;
   if (intensity < 0.5) {
     const t = intensity * 2;
-    r = Math.round(240 + (34 - 240) * t);
-    g = Math.round(253 + (197 - 253) * t);
-    b = Math.round(244 + (94 - 244) * t);
+    r = Math.round(247 + (167 - 247) * t);
+    g = Math.round(254 + (232 - 254) * t);
+    b = Math.round(249 + (197 - 249) * t);
   } else {
     const t = (intensity - 0.5) * 2;
-    r = Math.round(34 + (20 - 34) * t);
-    g = Math.round(197 + (83 - 197) * t);
-    b = Math.round(94 + (45 - 94) * t);
+    r = Math.round(167 + (78 - 167) * t);
+    g = Math.round(232 + (165 - 232) * t);
+    b = Math.round(197 + (132 - 197) * t);
   }
   return `rgb(${r}, ${g}, ${b})`;
 }
 
-// คืน text color (ดำ/ขาว) ตามความเข้มของพื้นหลัง
+// คืน text color (ดำเสมอ — เพราะ BG ไม่เข้มแล้ว)
 function heatTextColor(intensity) {
-  return intensity > 0.5 ? 'white' : '#14532d';
+  // BG อ่อนมาก ใช้ข้อความเข้มได้ทั้งหมด
+  return intensity > 0.7 ? '#0f3d2e' : '#14532d';
 }
 
 function renderUsageTable() {
