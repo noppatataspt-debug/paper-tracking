@@ -402,11 +402,18 @@ body {
 .pivot-row-width td:first-child { padding-left: 32px; }
 .pivot-row-width td { color: var(--text); }
 .pivot-row-width:hover { background: #f0f9ff; }
+.pivot-row-width.pw-type-first td { border-top: 1px solid #e2e8f0; }
 .pw-type { 
   display: inline-block; font-weight: 700; color: #1e40af; 
   font-family: var(--mono); font-size: 13px;
   background: #dbeafe; padding: 2px 8px; border-radius: 4px;
   margin-right: 8px;
+  min-width: 70px; text-align: center;
+}
+.pw-type-empty { 
+  background: transparent; 
+  border: none;
+  visibility: hidden;
 }
 .pw-sep { color: var(--text-muted); margin: 0 6px; }
 .pw-width { color: var(--text); font-family: var(--mono); font-size: 13px; }
@@ -1794,16 +1801,23 @@ async function loadDetailPivot() {
       let tIdx = 0;
       for (const [type, wMap] of typeArr) {
         const widthArr = Array.from(wMap.entries()).sort((a, b) => (parseFloat(a[0])||0) - (parseFloat(b[0])||0));
+        let wIdx = 0;
         for (const [width, c] of widthArr) {
+          // แสดง type เฉพาะ row แรกของกลุ่ม — row อื่นเว้นไว้ให้ดูสะอาด
+          const typeCell = wIdx === 0 
+            ? `<span class="pw-type">${escapeHtml(type)}</span>`
+            : `<span class="pw-type pw-type-empty"></span>`;
+          const groupClass = wIdx === 0 ? ' pw-type-first' : '';
           html += `
-            <tr class="pivot-row-width" data-parent="${supId}" style="display:${expanded ? 'table-row' : 'none'};">
-              <td class="left col-first"><span class="pw-type">${escapeHtml(type)}</span><span class="pw-sep">·</span><span class="pw-width">${escapeHtml(width)} mm</span></td>
+            <tr class="pivot-row-width${groupClass}" data-parent="${supId}" style="display:${expanded ? 'table-row' : 'none'};">
+              <td class="left col-first">${typeCell}<span class="pw-sep">·</span><span class="pw-width">${escapeHtml(width)} mm</span></td>
               ${renderCells(c.prev, 'col-prev')}
               ${renderCells(c.in, 'col-in')}
               ${renderCells(c.out, 'col-out')}
               ${renderCells(c.bal, 'col-bal')}
             </tr>
           `;
+          wIdx++;
         }
         
         tIdx++;
