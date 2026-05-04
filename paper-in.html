@@ -2898,6 +2898,7 @@ window.openEditRoll = async function(id) {
   if (!row) return alert('ไม่พบข้อมูล');
   
   editingRollId = id;
+  window._editingRollData = row;  // เก็บไว้ใช้ใน save
   
   $('#editLot').value = row.paper_lot || '';
   
@@ -2967,6 +2968,24 @@ async function saveEditRoll() {
     notes: $('#editNotes').value.trim() || null,
     updated_at: new Date().toISOString()
   };
+  
+  // ⭐ FIX: ถ้าม้วนยัง in_stock อยู่ และน้ำหนักเปลี่ยน
+  // → update remaining_weight_kg ตามด้วย (ม้วนยังไม่ได้ใช้ remaining ควรเท่า weight ใหม่)
+  const oldRow = window._editingRollData;
+  if (oldRow && oldRow.status === 'in_stock') {
+    const oldWeight = parseFloat(oldRow.weight_kg) || 0;
+    const oldRemaining = parseFloat(oldRow.remaining_weight_kg) || 0;
+    
+    // ถ้า remaining = weight เดิม (ยังไม่มีการตัดบางส่วน) → update remaining ใหม่
+    if (Math.abs(oldRemaining - oldWeight) < 0.01) {
+      payload.remaining_weight_kg = weight;
+    } else {
+      // ม้วนถูกตัดบางส่วนไปแล้ว → คำนวณ delta แล้วใส่ใหม่
+      const used = oldWeight - oldRemaining;
+      const newRemaining = Math.max(0, weight - used);
+      payload.remaining_weight_kg = newRemaining;
+    }
+  }
   
   try {
     await callAdminRPC('admin_update_invoice', {
