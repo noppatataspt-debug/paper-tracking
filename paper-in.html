@@ -488,6 +488,60 @@ tr:hover td { background: var(--panel-2); }
 }
 .btn-delete-batch:hover { background: #dc2626; color: white; }
 
+/* Edit batch button per invoice */
+.btn-edit-batch {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: #dbeafe; color: #1e40af;
+  border: 1px solid #60a5fa;
+  padding: 4px 10px; border-radius: 6px;
+  font-size: 12px; font-weight: 700;
+  cursor: pointer; margin-left: 6px;
+  font-family: inherit;
+}
+.btn-edit-batch:hover { background: #2563eb; color: white; }
+
+/* Edit Batch modal field */
+.edit-batch-field {
+  display: flex; flex-direction: column; gap: 6px;
+}
+.edit-batch-toggle {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 13px; font-weight: 600;
+  color: var(--text-dim);
+  cursor: pointer; user-select: none;
+}
+.edit-batch-toggle input[type="checkbox"] {
+  width: 16px; height: 16px; cursor: pointer;
+  accent-color: #2563eb;
+}
+.edit-batch-toggle span { transition: color 0.15s; }
+.edit-batch-field.active .edit-batch-toggle span {
+  color: #1e40af;
+  font-weight: 700;
+}
+.eb-input {
+  width: 100%; padding: 8px 10px;
+  border: 1.5px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px; font-family: inherit;
+  background: #f8fafc;
+  color: var(--text-dim);
+  transition: all 0.15s;
+  box-sizing: border-box;
+}
+.eb-input:disabled { 
+  opacity: 0.55; cursor: not-allowed;
+}
+.edit-batch-field.active .eb-input {
+  background: white;
+  border-color: #2563eb;
+  color: var(--text);
+}
+.edit-batch-field.active .eb-input:focus {
+  outline: 2px solid #93c5fd;
+  outline-offset: 1px;
+}
+
 /* Category badge */
 .category-badge {
   display: inline-block;
@@ -1219,6 +1273,112 @@ tr:hover td { background: var(--panel-2); }
     <div class="modal-actions">
       <button class="btn-mod-cancel" onclick="window.closeDeleteBatch()">ยกเลิก</button>
       <button class="btn-mod-danger" id="btnDoDeleteBatch" disabled>🗑️ ลบทั้ง batch</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Modal: Edit Whole Batch (Admin only) ===== -->
+<div class="modal-overlay" id="modalEditBatch">
+  <div class="modal-box" style="max-width:560px;">
+    <div style="font-size:36px;text-align:center;margin-bottom:8px;">✏️</div>
+    <h3 style="text-align:center;">แก้ไขข้อมูลทั้ง Batch</h3>
+    <div class="invoice-summary-info" id="editBatchInfo"></div>
+    
+    <p style="font-size:13px;color:var(--text-dim);text-align:center;margin:10px 0 14px;">
+      💡 ติ๊ก ☑ เฉพาะฟิลด์ที่ต้องการแก้ — ฟิลด์ที่ไม่ติ๊กจะไม่เปลี่ยน
+    </p>
+    
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+      <!-- Invoice No -->
+      <div class="edit-batch-field">
+        <label class="edit-batch-toggle">
+          <input type="checkbox" data-field="invoice_no" class="eb-check"> 
+          <span>เลขที่ Invoice</span>
+        </label>
+        <input type="text" id="editBatchInvoiceNo" class="eb-input" disabled placeholder="เลขที่ Invoice">
+      </div>
+      
+      <!-- Supplier -->
+      <div class="edit-batch-field">
+        <label class="edit-batch-toggle">
+          <input type="checkbox" data-field="supplier" class="eb-check"> 
+          <span>Supplier</span>
+        </label>
+        <select id="editBatchSupplier" class="eb-input" disabled>
+          <option value="">-- เลือก --</option>
+          <option value="AP">AP</option>
+          <option value="Ching Mei">Ching Mei</option>
+          <option value="MPK">MPK</option>
+          <option value="Muda">Muda</option>
+          <option value="NTPM">NTPM</option>
+          <option value="SCG">SCG</option>
+          <option value="SNP Paper">SNP Paper</option>
+          <option value="TPC">TPC</option>
+          <option value="UTP">UTP</option>
+        </select>
+      </div>
+      
+      <!-- Invoice Date -->
+      <div class="edit-batch-field">
+        <label class="edit-batch-toggle">
+          <input type="checkbox" data-field="invoice_date" class="eb-check"> 
+          <span>วันที่ตามบิล</span>
+        </label>
+        <input type="date" id="editBatchInvoiceDate" class="eb-input" disabled>
+      </div>
+      
+      <!-- Receive Date -->
+      <div class="edit-batch-field">
+        <label class="edit-batch-toggle">
+          <input type="checkbox" data-field="receive_date" class="eb-check"> 
+          <span>วันที่นำเข้าคลัง</span>
+        </label>
+        <input type="date" id="editBatchReceiveDate" class="eb-input" disabled>
+      </div>
+      
+      <!-- Paper Type -->
+      <div class="edit-batch-field">
+        <label class="edit-batch-toggle">
+          <input type="checkbox" data-field="paper_type" class="eb-check"> 
+          <span>ประเภทกระดาษ</span>
+        </label>
+        <input type="text" id="editBatchPaperType" class="eb-input" disabled placeholder="เช่น GB-500">
+      </div>
+      
+      <!-- Price per kg -->
+      <div class="edit-batch-field">
+        <label class="edit-batch-toggle">
+          <input type="checkbox" data-field="price_per_kg" class="eb-check"> 
+          <span>ราคา/kg (บาท)</span>
+        </label>
+        <input type="number" step="0.01" min="0" id="editBatchPriceKg" class="eb-input" disabled placeholder="เช่น 16.50">
+      </div>
+      
+      <!-- Project Code -->
+      <div class="edit-batch-field" style="grid-column: 1 / -1;">
+        <label class="edit-batch-toggle">
+          <input type="checkbox" data-field="project_code" class="eb-check"> 
+          <span>โครงการ</span>
+        </label>
+        <input type="text" id="editBatchProjectCode" class="eb-input" disabled placeholder="เช่น VKPC, SKIC, FREE MKT (เว้นว่างได้)">
+      </div>
+      
+      <!-- Notes -->
+      <div class="edit-batch-field" style="grid-column: 1 / -1;">
+        <label class="edit-batch-toggle">
+          <input type="checkbox" data-field="notes" class="eb-check"> 
+          <span>หมายเหตุ</span>
+        </label>
+        <input type="text" id="editBatchNotes" class="eb-input" disabled placeholder="หมายเหตุ (เว้นว่างได้)">
+      </div>
+    </div>
+    
+    <div id="editBatchPreview" style="margin-top:14px; padding:10px; background:#f0f9ff; border-radius:8px; font-size:13px; display:none;"></div>
+    <div id="editBatchError" style="display:none;color:var(--danger);font-size:13px;text-align:center;margin-top:8px;font-weight:600;"></div>
+    
+    <div class="modal-actions">
+      <button class="btn-mod-cancel" onclick="window.closeEditBatch()">ยกเลิก</button>
+      <button class="btn-mod-confirm" id="btnSaveEditBatch" style="background:#2563eb;border-color:#2563eb;">💾 บันทึกการแก้ไข</button>
     </div>
   </div>
 </div>
@@ -2619,6 +2779,7 @@ function renderGroupedList(rows, totalCount) {
               <span class="group-inv-count">${arr.length} ม้วน</span>
               ${currentAdmin ? `
                 <button class="btn-bulk-price" onclick="event.stopPropagation();window.openBulkPrice('${escapeHtml(supplier)}','${escapeHtml(invoice_no)}','${date}')">💰 ใส่ราคา</button>
+                <button class="btn-edit-batch" onclick="event.stopPropagation();window.openEditBatch('${escapeHtml(supplier)}','${escapeHtml(invoice_no)}','${date}')" title="แก้ไขทั้ง batch">✏️ แก้ batch</button>
                 <button class="btn-delete-batch" onclick="event.stopPropagation();window.openDeleteBatch('${escapeHtml(supplier)}','${escapeHtml(invoice_no)}','${date}')" title="ลบทั้ง batch">🗑️ ลบ batch</button>
               ` : ''}
             </div>
@@ -3483,6 +3644,245 @@ async function doDeleteBatch() {
     alert('❌ ' + err.message);
     btn.disabled = false;
     btn.textContent = '🗑️ ลบทั้ง batch';
+  }
+}
+
+
+// ===== Edit Whole Batch =====
+let editBatchContext = null;
+
+window.openEditBatch = async function(supplier, invoice_no, date) {
+  if (!currentAdmin) return alert('ต้อง login ก่อน');
+  
+  const rolls = state.listData.filter(r => 
+    r.supplier === supplier && 
+    (r.invoice_no || '(ไม่ระบุ)') === invoice_no &&
+    (r.receive_date || '(ไม่ระบุ)') === date
+  );
+  
+  if (!rolls.length) return alert('ไม่พบม้วนใน batch นี้');
+  
+  // กรองเฉพาะม้วน in_stock เพื่อความปลอดภัย
+  const inStockRolls = rolls.filter(r => r.status === 'in_stock');
+  const usedRolls = rolls.filter(r => r.status !== 'in_stock');
+  
+  editBatchContext = { supplier, invoice_no, date, rolls, inStockRolls };
+  
+  // Pre-fill ค่าปัจจุบัน (จาก row แรก — เพราะ batch ควรมีค่าตรงกัน)
+  const sample = rolls[0];
+  $('#editBatchInvoiceNo').value = sample.invoice_no || '';
+  $('#editBatchSupplier').value = sample.supplier || '';
+  $('#editBatchInvoiceDate').value = sample.invoice_date || '';
+  $('#editBatchReceiveDate').value = sample.receive_date || '';
+  $('#editBatchPaperType').value = sample.paper_type || '';
+  $('#editBatchPriceKg').value = sample.price_per_kg || '';
+  $('#editBatchProjectCode').value = sample.project_code || '';
+  $('#editBatchNotes').value = sample.notes || '';
+  
+  // Reset checkbox + state
+  $$('.eb-check').forEach(cb => {
+    cb.checked = false;
+    const field = cb.closest('.edit-batch-field');
+    field.classList.remove('active');
+    const input = field.querySelector('.eb-input');
+    if (input) input.disabled = true;
+  });
+  
+  // Build summary info
+  let warning = '';
+  if (usedRolls.length > 0) {
+    warning = `<div style="margin-top:6px;color:#d97706;font-weight:600;font-size:12.5px;">
+      ⚠️ ${usedRolls.length} ม้วนเป็น USED แล้ว — จะแก้เฉพาะ ${inStockRolls.length} ม้วนที่ in_stock
+    </div>`;
+  }
+  
+  $('#editBatchInfo').innerHTML = `
+    <div>Supplier: <b>${escapeHtml(supplier)}</b></div>
+    <div>Invoice: <b>${escapeHtml(invoice_no)}</b> · วันที่ <b>${escapeHtml(date)}</b></div>
+    <div>จำนวน: <b>${rolls.length} ม้วน</b> (in_stock: ${inStockRolls.length}, used: ${usedRolls.length})</div>
+    ${warning}
+  `;
+  
+  $('#editBatchPreview').style.display = 'none';
+  $('#editBatchError').style.display = 'none';
+  $('#modalEditBatch').classList.add('show');
+};
+
+window.closeEditBatch = function() {
+  $('#modalEditBatch').classList.remove('show');
+  editBatchContext = null;
+};
+
+// Wire checkbox toggle (enable/disable input)
+document.addEventListener('DOMContentLoaded', () => {
+  $$('.eb-check').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const field = cb.closest('.edit-batch-field');
+      const input = field.querySelector('.eb-input');
+      if (cb.checked) {
+        field.classList.add('active');
+        if (input) {
+          input.disabled = false;
+          input.focus();
+        }
+      } else {
+        field.classList.remove('active');
+        if (input) input.disabled = true;
+      }
+      updateEditBatchPreview();
+    });
+  });
+  
+  // Update preview when input changes
+  $$('.eb-input').forEach(inp => {
+    inp.addEventListener('input', updateEditBatchPreview);
+    inp.addEventListener('change', updateEditBatchPreview);
+  });
+  
+  const btnSave = $('#btnSaveEditBatch');
+  if (btnSave) btnSave.addEventListener('click', doEditBatch);
+});
+
+function updateEditBatchPreview() {
+  if (!editBatchContext) return;
+  const checkedFields = $$('.eb-check:checked');
+  const preview = $('#editBatchPreview');
+  
+  if (checkedFields.length === 0) {
+    preview.style.display = 'none';
+    return;
+  }
+  
+  const lines = [`📝 จะแก้ <b>${editBatchContext.inStockRolls.length} ม้วน</b> โดยเปลี่ยน:`];
+  for (const cb of checkedFields) {
+    const field = cb.dataset.field;
+    const fieldNames = {
+      invoice_no: 'เลขที่ Invoice',
+      supplier: 'Supplier',
+      invoice_date: 'วันที่ตามบิล',
+      receive_date: 'วันที่นำเข้าคลัง',
+      paper_type: 'ประเภทกระดาษ',
+      price_per_kg: 'ราคา/kg',
+      project_code: 'โครงการ',
+      notes: 'หมายเหตุ'
+    };
+    const inputId = {
+      invoice_no: '#editBatchInvoiceNo',
+      supplier: '#editBatchSupplier',
+      invoice_date: '#editBatchInvoiceDate',
+      receive_date: '#editBatchReceiveDate',
+      paper_type: '#editBatchPaperType',
+      price_per_kg: '#editBatchPriceKg',
+      project_code: '#editBatchProjectCode',
+      notes: '#editBatchNotes'
+    }[field];
+    const val = $(inputId).value || '<i style="color:#dc2626;">(ค่าว่าง)</i>';
+    lines.push(`&nbsp;&nbsp;• <b>${fieldNames[field]}</b> → ${escapeHtml(val.toString())}`);
+  }
+  
+  preview.innerHTML = lines.join('<br>');
+  preview.style.display = 'block';
+}
+
+async function doEditBatch() {
+  if (!editBatchContext) return;
+  
+  const checkedFields = $$('.eb-check:checked');
+  if (checkedFields.length === 0) {
+    $('#editBatchError').textContent = '❌ กรุณาเลือกอย่างน้อย 1 ฟิลด์ที่ต้องการแก้';
+    $('#editBatchError').style.display = 'block';
+    return;
+  }
+  
+  if (editBatchContext.inStockRolls.length === 0) {
+    $('#editBatchError').textContent = '❌ ไม่มีม้วน in_stock ใน batch นี้ (ทุกม้วนถูกใช้แล้ว)';
+    $('#editBatchError').style.display = 'block';
+    return;
+  }
+  
+  // Build payload
+  const payload = {};
+  for (const cb of checkedFields) {
+    const field = cb.dataset.field;
+    const inputId = {
+      invoice_no: '#editBatchInvoiceNo',
+      supplier: '#editBatchSupplier',
+      invoice_date: '#editBatchInvoiceDate',
+      receive_date: '#editBatchReceiveDate',
+      paper_type: '#editBatchPaperType',
+      price_per_kg: '#editBatchPriceKg',
+      project_code: '#editBatchProjectCode',
+      notes: '#editBatchNotes'
+    }[field];
+    
+    let val = $(inputId).value.trim();
+    
+    // Type-specific handling
+    if (field === 'price_per_kg') {
+      val = val ? parseFloat(val) : null;
+      if (val !== null && (isNaN(val) || val < 0)) {
+        $('#editBatchError').textContent = '❌ ราคา/kg ไม่ถูกต้อง';
+        $('#editBatchError').style.display = 'block';
+        return;
+      }
+    } else if (field === 'invoice_date' || field === 'receive_date') {
+      val = val || null;
+    } else if (field === 'project_code' || field === 'notes') {
+      val = val || null;  // empty string → null
+    }
+    
+    payload[field] = val;
+  }
+  
+  const btn = $('#btnSaveEditBatch');
+  btn.disabled = true;
+  $('#editBatchError').style.display = 'none';
+  
+  try {
+    const inStockRolls = editBatchContext.inStockRolls;
+    btn.textContent = `กำลังบันทึก... (0/${inStockRolls.length})`;
+    
+    let success = 0;
+    const errors = [];
+    
+    // Loop ผ่าน admin_update_invoice
+    for (let i = 0; i < inStockRolls.length; i++) {
+      const r = inStockRolls[i];
+      
+      // ถ้าแก้ price_per_kg → คำนวณ price_per_roll ด้วย
+      const updateForRow = { ...payload };
+      if ('price_per_kg' in payload && payload.price_per_kg !== null && r.weight_kg) {
+        updateForRow.price_per_roll = Number((payload.price_per_kg * r.weight_kg).toFixed(2));
+      } else if ('price_per_kg' in payload && payload.price_per_kg === null) {
+        updateForRow.price_per_roll = null;
+      }
+      
+      try {
+        await callAdminRPC('admin_update_invoice', {
+          p_invoice_id: r.id,
+          p_updates: updateForRow
+        });
+        success++;
+      } catch (err) {
+        errors.push(`${r.paper_lot}: ${err.message}`);
+      }
+      
+      btn.textContent = `กำลังบันทึก... (${i + 1}/${inStockRolls.length})`;
+    }
+    
+    if (errors.length > 0) {
+      throw new Error(`สำเร็จ ${success}/${inStockRolls.length} ม้วน\n\nErrors:\n${errors.slice(0, 3).join('\n')}`);
+    }
+    
+    alert(`✅ แก้สำเร็จ ${success} ม้วน`);
+    window.closeEditBatch();
+    loadList();
+  } catch (err) {
+    $('#editBatchError').textContent = '❌ ' + err.message;
+    $('#editBatchError').style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '💾 บันทึกการแก้ไข';
   }
 }
 
