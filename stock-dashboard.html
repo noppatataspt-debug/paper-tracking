@@ -1230,12 +1230,12 @@ body {
       <div class="filter-section">
         <div class="filter-row" style="background:#fef9c3; padding:14px; border-radius:8px; border:1px solid #fbbf24; margin-bottom:14px; display:block;">
           <div style="font-weight:700; font-size:14px; margin-bottom:8px; color:#78350f;">
-            🏷️ ค้นหาด้วย Paper Lot (ใส่ได้สูงสุด 5 lots)
+            🏷️ ค้นหาด้วย Paper Lot (ใส่ได้สูงสุด 20 lots)
           </div>
           <div style="font-size:12px; color:#92400e; margin-bottom:8px;">
             💡 ใส่ Paper Lot คั่นด้วยจุลภาค (,) หรือ Enter (ขึ้นบรรทัดใหม่) — ระบบจะแสดง invoice + ข้อมูลทั้งหมดของแต่ละ lot
           </div>
-          <textarea id="flt-paper-lots" rows="3" placeholder="เช่น 776A19375H, 776A19382H, 776A19372H" 
+          <textarea id="flt-paper-lots" rows="6" placeholder="เช่น 776A19375H, 776A19382H, 776A19372H" 
             style="width:100%; padding:10px 12px; border:1.5px solid #fbbf24; border-radius:8px; font-family:var(--mono); font-size:14px; resize:vertical; box-sizing:border-box;"></textarea>
           <div style="display:flex; gap:8px; margin-top:10px;">
             <button class="btn" id="flt-lot-search" style="background:#d97706; color:white; border-color:#d97706; font-weight:700;">🔍 ค้นหาตาม Paper Lot</button>
@@ -2943,8 +2943,8 @@ async function searchByPaperLot() {
   const lots = inputVal.split(/[,\n\r\s]+/).map(s => s.trim()).filter(Boolean);
   
   if (lots.length === 0) return alert('ไม่พบ Paper Lot ที่ถูกต้อง');
-  if (lots.length > 5) {
-    return alert(`ใส่ได้สูงสุด 5 paper lots ครับ (ตอนนี้ใส่ ${lots.length} lots)\n\nกรุณาลบบาง lot ออก`);
+  if (lots.length > 20) {
+    return alert(`ใส่ได้สูงสุด 20 paper lots ครับ (ตอนนี้ใส่ ${lots.length} lots)\n\nกรุณาลบบาง lot ออก`);
   }
   
   wrap.innerHTML = '<div class="section"><div class="loading-state"><span class="loading"></span> กำลังค้นหา...</div></div>';
