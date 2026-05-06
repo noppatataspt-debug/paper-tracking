@@ -1363,6 +1363,18 @@ async function fetchAllRows(queryBuilderFn, orderCol = 'id') {
   return all;
 }
 
+// ====== Helper: request token (ป้องกัน race condition) ======
+// ใช้กับทุก loader function ที่มี await — ถ้า user สลับ tab/เปลี่ยน month
+// ระหว่างกำลังโหลด → request เก่าจะถูกทิ้ง ไม่เขียน DOM ทับ
+const _reqTokens = {};
+function newRequestToken(key) {
+  _reqTokens[key] = (_reqTokens[key] || 0) + 1;
+  return _reqTokens[key];
+}
+function isRequestStillCurrent(key, myToken) {
+  return _reqTokens[key] === myToken;
+}
+
 let currentUser = null;
 let currentMonth = null;
 let trendChart = null;
@@ -1595,6 +1607,7 @@ async function loadOverview() {
 }
 
 async function loadKPI() {
+  const myToken = newRequestToken('kpi');
   const grid = $('#kpiGrid');
   grid.innerHTML = '<div class="loading-state"><span class="loading"></span> โหลด...</div>';
   try {
@@ -1602,6 +1615,9 @@ async function loadKPI() {
       .from('paper_invoices')
       .select('id, weight_kg, remaining_weight_kg, price_per_kg, receive_date')
       .eq('status', 'in_stock'));
+    if (!isRequestStillCurrent('kpi', myToken)) return;
+    
+    if (!isRequestStillCurrent('kpi', myToken)) return;
     
     const totalRolls = data.length;
     const totalKg = data.reduce((s, r) => s + parseFloat(r.remaining_weight_kg || 0), 0);
@@ -1637,6 +1653,7 @@ async function loadKPI() {
         <div class="kpi-sub">ม้วน</div>
       </div>
     `;
+    if (!isRequestStillCurrent('kpi', myToken)) return;
     grid.innerHTML = html;
   } catch (err) {
     grid.innerHTML = `<div class="loading-state" style="color:var(--danger);">❌ ${escapeHtml(err.message)}</div>`;
@@ -1644,6 +1661,7 @@ async function loadKPI() {
 }
 
 async function loadMovement() {
+  const myToken = newRequestToken('movement');
   const wrap = $('#movementGrid');
   $('#movementMonthLabel').textContent = `· ${currentMonth}`;
   wrap.innerHTML = '<div class="loading-state"><span class="loading"></span></div>';
@@ -1656,11 +1674,15 @@ async function loadMovement() {
       .select('weight_kg, price_per_kg')
       .gte('receive_date', monthStart).lte('receive_date', monthEnd));
     
+    if (!isRequestStillCurrent('movement', myToken)) return;
+    
     const outs = await fetchAllRows(() => supabase
       .from('paper_outflows')
       .select('weight_kg, paper_invoice_id')
       .gte('outflow_date', monthStart).lte('outflow_date', monthEnd)
       .eq('voided', false));
+    
+    if (!isRequestStillCurrent('movement', myToken)) return;
     
     const inRolls = (ins || []).length;
     const inKg = (ins || []).reduce((s, r) => s + parseFloat(r.weight_kg || 0), 0);
@@ -1687,6 +1709,8 @@ async function loadMovement() {
     const moneyIn = isManager() ? ` · ${fmtMoney(inValue)}` : '';
     const moneyOut = isManager() ? ` · ${fmtMoney(outValue)}` : '';
     
+    if (!isRequestStillCurrent('movement', myToken)) return;
+    
     wrap.innerHTML = `
       <div class="movement-cell">
         <div class="movement-label income">+ รับเข้า</div>
@@ -1710,6 +1734,7 @@ async function loadMovement() {
 }
 
 async function loadSupplierCategory() {
+  const myToken = newRequestToken('supplierCategory');
   const wrap = $('#supplierCategoryWrap');
   wrap.innerHTML = '<div class="loading-state"><span class="loading"></span></div>';
   try {
@@ -1718,6 +1743,7 @@ async function loadSupplierCategory() {
       .select('supplier, paper_category, weight_kg, remaining_weight_kg, price_per_kg')
       .eq('status', 'in_stock')
       .not('paper_category', 'is', null));
+    if (!isRequestStillCurrent('supplierCategory', myToken)) return;
     
     // Aggregate by supplier (รวม ไม่แยกประเภท)
     const sums = new Map();
@@ -1755,6 +1781,7 @@ async function loadSupplierCategory() {
     }
     
     html += '</div>';
+    if (!isRequestStillCurrent('supplierCategory', myToken)) return;
     wrap.innerHTML = html;
   } catch (err) {
     wrap.innerHTML = `<div class="loading-state" style="color:var(--danger);">❌ ${escapeHtml(err.message)}</div>`;
@@ -1762,6 +1789,7 @@ async function loadSupplierCategory() {
 }
 
 async function loadCategory() {
+  const myToken = newRequestToken('category');
   const grid = $('#categoryGrid');
   grid.innerHTML = '<div class="loading-state"><span class="loading"></span></div>';
   try {
@@ -1769,6 +1797,9 @@ async function loadCategory() {
       .from('paper_invoices')
       .select('paper_category, weight_kg, remaining_weight_kg, price_per_kg')
       .eq('status', 'in_stock').not('paper_category', 'is', null));
+    if (!isRequestStillCurrent('category', myToken)) return;
+    
+    if (!isRequestStillCurrent('category', myToken)) return;
     
     const cats = new Map();
     for (const r of (data || [])) {
@@ -1792,6 +1823,7 @@ async function loadCategory() {
         </div>
       `;
     }
+    if (!isRequestStillCurrent('category', myToken)) return;
     grid.innerHTML = html;
   } catch (err) {
     grid.innerHTML = `<div class="loading-state" style="color:var(--danger);">❌ ${escapeHtml(err.message)}</div>`;
@@ -1799,9 +1831,8 @@ async function loadCategory() {
 }
 
 // ===== TAB 2: PIVOT =====
-let _detailPivotToken = 0;  // counter — กันไม่ให้ request เก่าทับ request ใหม่
 async function loadDetailPivot() {
-  const myToken = ++_detailPivotToken;
+  const myToken = newRequestToken('detail');
   const wrap = $('#pivotTableWrap');
   wrap.innerHTML = '<div class="loading-state"><span class="loading"></span> กำลังโหลด...</div>';
   
@@ -1819,7 +1850,7 @@ async function loadDetailPivot() {
         .lte('receive_date', monthEnd));
     } catch (e1) { throw e1; }
     
-    if (myToken !== _detailPivotToken) return;  // user switched away
+    if (!isRequestStillCurrent('detail', myToken)) return;
     
     try {
       allOutflows = await fetchAllRows(() => supabase
@@ -1828,7 +1859,7 @@ async function loadDetailPivot() {
         .eq('voided', false).lte('outflow_date', monthEnd));
     } catch (e2) { throw e2; }
     
-    if (myToken !== _detailPivotToken) return;  // user switched away
+    if (!isRequestStillCurrent('detail', myToken)) return;
     
     const outflowsByInvoice = new Map();
     for (const o of (allOutflows || [])) {
@@ -1899,7 +1930,7 @@ async function loadDetailPivot() {
       }
     }
     
-    if (myToken !== _detailPivotToken) return;  // user switched away
+    if (!isRequestStillCurrent('detail', myToken)) return;
     
     const supArr = Array.from(grouped.entries()).sort((a, b) => a[0].localeCompare(b[0], 'th'));
     if (supArr.length === 0) {
@@ -2036,7 +2067,7 @@ async function loadDetailPivot() {
     `;
     
     html += '</tbody></table></div>';
-    if (myToken !== _detailPivotToken) return;  // user switched away — don't commit
+    if (!isRequestStillCurrent('detail', myToken)) return; // user switched away
     wrap.innerHTML = html;
     
     $$('.pivot-row-supplier').forEach(el => {
@@ -2070,6 +2101,7 @@ async function loadDetailPivot() {
 
 // ===== TAB 3: AGING =====
 async function loadAging() {
+  const myToken = newRequestToken('aging');
   const buckets = $('#agingBuckets');
   const tbl = $('#agingTable');
   buckets.innerHTML = '<div class="loading-state"><span class="loading"></span></div>';
@@ -2080,6 +2112,7 @@ async function loadAging() {
       .from('paper_invoices')
       .select('paper_lot, supplier, paper_type, width_mm, weight_kg, remaining_weight_kg, receive_date, price_per_kg')
       .eq('status', 'in_stock').not('receive_date', 'is', null));
+    if (!isRequestStillCurrent('aging', myToken)) return;
     
     let b0_30 = 0, b31_60 = 0, b61_90 = 0, bOver90 = 0;
     const withDays = [];
@@ -2095,6 +2128,7 @@ async function loadAging() {
     const total = withDays.length;
     const pct = n => total > 0 ? (n / total * 100).toFixed(1) + '%' : '0%';
     
+    if (!isRequestStillCurrent('aging', myToken)) return;
     buckets.innerHTML = `
       <div class="aging-bucket aging-0-30"><div class="aging-label">0–30 วัน</div><div class="aging-count">${fmtNum(b0_30)}</div><div class="aging-pct">${pct(b0_30)}</div></div>
       <div class="aging-bucket aging-31-60"><div class="aging-label">31–60 วัน</div><div class="aging-count">${fmtNum(b31_60)}</div><div class="aging-pct">${pct(b31_60)}</div></div>
@@ -2141,6 +2175,7 @@ async function loadAging() {
       `;
     }
     html += '</tbody></table>';
+    if (!isRequestStillCurrent('aging', myToken)) return;
     tbl.innerHTML = html;
   } catch (err) {
     buckets.innerHTML = `<div class="loading-state" style="color:var(--danger);">❌ ${escapeHtml(err.message)}</div>`;
@@ -2149,6 +2184,7 @@ async function loadAging() {
 
 // ===== TAB 4: TREND =====
 async function loadTrend() {
+  const myToken = newRequestToken('trend');
   const ctx = document.getElementById('trendChart');
   const ctx2 = document.getElementById('cumulativeChart');
   if (!ctx) return;
@@ -2166,9 +2202,12 @@ async function loadTrend() {
     const ins = await fetchAllRows(() => supabase
       .from('paper_invoices').select('weight_kg, receive_date')
       .gte('receive_date', start).lte('receive_date', end));
+    if (!isRequestStillCurrent('trend', myToken)) return;
+    
     const outs = await fetchAllRows(() => supabase
       .from('paper_outflows').select('weight_kg, outflow_date')
       .gte('outflow_date', start).lte('outflow_date', end).eq('voided', false));
+    if (!isRequestStillCurrent('trend', myToken)) return;
     
     // ใช้ Net stock จริงปัจจุบัน เป็นจุดเริ่ม (เป๊ะที่จุดล่าสุด)
     // กราฟจะใช้สูตร: stock_end_of_M = stock_end_of_(M+1) − in_(M+1) + out_(M+1)
@@ -2176,6 +2215,8 @@ async function loadTrend() {
     const stockNow = await fetchAllRows(() => supabase
       .from('paper_invoices').select('remaining_weight_kg')
       .eq('status', 'in_stock'));
+    if (!isRequestStillCurrent('trend', myToken)) return;
+    
     const currentStock = (stockNow || []).reduce((s, r) => s + parseFloat(r.remaining_weight_kg || 0), 0);
     
     const monthMap = new Map();
@@ -2191,6 +2232,8 @@ async function loadTrend() {
     
     const dataIn = months.map(m => Math.round(monthMap.get(m).in));
     const dataOut = months.map(m => Math.round(monthMap.get(m).out));
+    
+    if (!isRequestStillCurrent('trend', myToken)) return;
     
     if (trendChart) trendChart.destroy();
     trendChart = new Chart(ctx, {
@@ -2244,6 +2287,7 @@ async function loadValueTab() {
 }
 
 async function loadProjects() {
+  const myToken = newRequestToken('projects');
   const wrap = $('#projectTable');
   wrap.innerHTML = '<div class="loading-state"><span class="loading"></span></div>';
   try {
@@ -2251,6 +2295,7 @@ async function loadProjects() {
       .from('paper_invoices')
       .select('project_code, paper_type, weight_kg, remaining_weight_kg, price_per_kg')
       .eq('status', 'in_stock').eq('supplier', 'SCG').not('project_code', 'is', null));
+    if (!isRequestStillCurrent('projects', myToken)) return;
     
     const groups = new Map();
     for (const r of (data || [])) {
@@ -2288,6 +2333,7 @@ async function loadProjects() {
       `;
     }
     html += '</tbody></table>';
+    if (!isRequestStillCurrent('projects', myToken)) return;
     wrap.innerHTML = html;
   } catch (err) {
     wrap.innerHTML = `<div class="loading-state" style="color:var(--danger);">❌ ${escapeHtml(err.message)}</div>`;
@@ -2295,6 +2341,7 @@ async function loadProjects() {
 }
 
 async function loadSupplierValue() {
+  const myToken = newRequestToken('supvalue');
   const wrap = $('#supplierValueTable');
   wrap.innerHTML = '<div class="loading-state"><span class="loading"></span></div>';
   try {
@@ -2302,6 +2349,7 @@ async function loadSupplierValue() {
       .from('paper_invoices')
       .select('supplier, paper_type, weight_kg, remaining_weight_kg, price_per_kg')
       .eq('status', 'in_stock'));
+    if (!isRequestStillCurrent('supvalue', myToken)) return;
     
     // Group: supplier > paper_type
     const supMap = new Map();
@@ -2401,6 +2449,7 @@ async function loadSupplierValue() {
       </tr>
     `;
     html += '</tbody></table>';
+    if (!isRequestStillCurrent('supvalue', myToken)) return;
     wrap.innerHTML = html;
     
     // Toggle handlers
@@ -2423,6 +2472,7 @@ async function loadSupplierValue() {
 // PRICE COMPARE — ราคาล่าสุด (เดือนล่าสุดที่รับเข้า)
 // ============================================
 async function loadPriceCompare() {
+  const myToken = newRequestToken('pricecompare');
   const wrap = $('#priceCompareWrap');
   wrap.innerHTML = '<div class="loading-state"><span class="loading"></span></div>';
   
@@ -2439,6 +2489,7 @@ async function loadPriceCompare() {
       .gt('price_per_kg', 0)
       .gt('weight_kg', 0)
       .not('receive_date', 'is', null));
+    if (!isRequestStillCurrent('pricecompare', myToken)) return;
     
     if (!invoiceData || invoiceData.length === 0) {
       wrap.innerHTML = '<div class="empty-msg">ไม่มีข้อมูลราคาสำหรับเปรียบเทียบ</div>';
@@ -2616,6 +2667,7 @@ async function loadPriceCompare() {
     }
     html += '</div>';
     
+    if (!isRequestStillCurrent('pricecompare', myToken)) return;
     wrap.innerHTML = html;
     
   } catch (err) {
@@ -2630,6 +2682,7 @@ async function loadPriceCompare() {
 let _invoiceCache = null;  // cache รายการ invoice ทั้งหมด
 
 async function loadInvoiceTab() {
+  const myToken = newRequestToken('invoice');
   if (!isManager()) {
     $('#invoice-list').innerHTML = '<div class="loading-state">เฉพาะ Manager เท่านั้น</div>';
     return;
@@ -2646,6 +2699,7 @@ async function loadInvoiceTab() {
         .from('paper_invoices')
         .select('id, paper_lot, supplier, invoice_no, paper_type, width_mm, weight_kg, price_per_kg, price_per_roll, invoice_date, receive_date')
         .order('invoice_date', { ascending: false }));
+      if (!isRequestStillCurrent('invoice', myToken)) return;
       _invoiceCache = data || [];
     } catch (err) {
       $('#invoice-list').innerHTML = `<div class="loading-state" style="color:var(--danger);">❌ ${escapeHtml(err.message)}</div>`;
@@ -2788,6 +2842,7 @@ function renderInvoiceList() {
     html += `</tbody></table></div></div>`;
   }
   
+  if (!isRequestStillCurrent('invoice', myToken)) return;
   listDiv.innerHTML = html;
   
   // Wire toggle (each card)
@@ -2871,6 +2926,7 @@ let _stockCache = null;
 let _filter = { suppliers: new Set(), types: new Set(), widths: new Set() };
 
 async function loadFilterTab() {
+  const myToken = newRequestToken('filter');
   // โหลดข้อมูล stock (in_stock เท่านั้น) ครั้งแรก
   if (!_stockCache) {
     $('#flt-result-wrap').innerHTML = '<div class="loading-state"><span class="loading"></span> โหลดข้อมูล...</div>';
@@ -2879,12 +2935,15 @@ async function loadFilterTab() {
         .from('paper_invoices')
         .select('id, paper_lot, supplier, paper_type, paper_category, width_mm, weight_kg, remaining_weight_kg, status, receive_date')
         .eq('status', 'in_stock'));
+      if (!isRequestStillCurrent('filter', myToken)) return;
       _stockCache = data || [];
     } catch (err) {
+      if (!isRequestStillCurrent('filter', myToken)) return;
       $('#flt-result-wrap').innerHTML = `<div class="loading-state" style="color:var(--danger);">❌ ${escapeHtml(err.message)}</div>`;
       return;
     }
     
+    if (!isRequestStillCurrent('filter', myToken)) return;
     renderFilterChips();
   }
   
@@ -3205,6 +3264,7 @@ let _usageChart = null;
 let _usageSupplierFilter = new Set();  // ว่าง = แสดงทุก supplier
 
 async function loadUsageTab() {
+  const myToken = newRequestToken('usage');
   if (!_usageCache) {
     $('#usage-table-wrap').innerHTML = '<div class="loading-state"><span class="loading"></span> โหลดข้อมูล...</div>';
     try {
@@ -3213,6 +3273,7 @@ async function loadUsageTab() {
         .from('paper_outflows')
         .select('paper_invoice_id, weight_kg, outflow_date, supplier_name, paper_type, width_mm, voided')
         .eq('voided', false));
+      if (!isRequestStillCurrent('usage', myToken)) return;
       
       _usageCache = (outs || []).filter(o => o.outflow_date);
     } catch (err) {
