@@ -2140,6 +2140,7 @@ async function runImport() {
   const PARAM_KEYS = Object.keys(PARAMS);
   const records = queue.map(r => {
     const rec = {
+      scope:            'roll',                  // required NOT NULL — ต้องใส่
       paper_invoice_id: r._invoice_id,
       paper_lot:        r.paper_lot,
       supplier:         r._supplier,
