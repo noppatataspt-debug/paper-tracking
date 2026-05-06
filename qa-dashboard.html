@@ -1098,7 +1098,11 @@ async function callRPC(fnName, params = {}) {
     showLogin();
     throw new Error('NOT_LOGGED_IN');
   }
-  const { data, error } = await supabase.rpc(fnName, { p_token: token, ...params });
+  // Some RPCs return rowsets — use .limit() to override PostgREST default max-rows
+  const isListRPC = fnName.startsWith('qa_list_') || fnName === 'verify_session';
+  let q = supabase.rpc(fnName, { p_token: token, ...params });
+  if (isListRPC) q = q.limit(50000);
+  const { data, error } = await q;
   if (error) {
     // Session expired or invalid → kick to login
     if (error.message && /session/i.test(error.message)) {
