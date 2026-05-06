@@ -1098,11 +1098,7 @@ async function callRPC(fnName, params = {}) {
     showLogin();
     throw new Error('NOT_LOGGED_IN');
   }
-  // Some RPCs return rowsets — use .limit() to override PostgREST default max-rows
-  const isListRPC = fnName.startsWith('qa_list_') || fnName === 'verify_session';
-  let q = supabase.rpc(fnName, { p_token: token, ...params });
-  if (isListRPC) q = q.limit(50000);
-  const { data, error } = await q;
+  const { data, error } = await supabase.rpc(fnName, { p_token: token, ...params });
   if (error) {
     // Session expired or invalid → kick to login
     if (error.message && /session/i.test(error.message)) {
@@ -1115,8 +1111,7 @@ async function callRPC(fnName, params = {}) {
   return data;
 }
 
-// fetch ทั้งหมดผ่าน RPC ที่ return SETOF
-// (ไม่ต้อง paginate เหมือน fetchAllRows เพราะ RPC ตั้ง limit ใน param)
+// fetch list — list RPCs return JSONB array (bypass max-rows=1000 limit)
 async function callRPCList(fnName, params = {}) {
   const data = await callRPC(fnName, params);
   return Array.isArray(data) ? data : [];
