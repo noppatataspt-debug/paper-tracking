@@ -1051,12 +1051,15 @@ async function loadSpecs() {
   if (state.specs) return state.specs;
   try {
     const { data } = await supabase.from('paper_type_specs').select('*');
-    const map = {};  // key: `${category}|${paper_type||''}|${parameter}`
+    const map = {};
     for (const s of (data || [])) {
       const key = `${s.paper_category||''}|${s.paper_type||''}|${s.parameter}`;
       map[key] = s;
     }
     state.specs = map;
+    console.log(`[loadSpecs] cached ${Object.keys(map).length} keys:`);
+    console.log('  Sample keys:', Object.keys(map).slice(0, 10));
+    console.log('  All keys:', Object.keys(map));
     return map;
   } catch (e) {
     console.warn('loadSpecs failed:', e);
@@ -2663,7 +2666,7 @@ function parseBulkSpecCSV(text) {
   // simple CSV parser (no quoted commas — spec values are simple)
   const lines = text.trim().split(/\r?\n/);
   if (!lines.length) return [];
-  const headerLine = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/[^a-z0-9_]/g, ''));
+  const headerLine = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/[^a-z0-9]/g, ''));
   const colMap = {
     'papercategory': 'paper_category',
     'category':      'paper_category',
