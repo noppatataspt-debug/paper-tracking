@@ -946,6 +946,8 @@ let currentMode = null;     // 'winder' | 'sheeter'
 let currentSlitter = null;  // '1' | '2' | ... | '6'
 let allOutflows = [];
 let pendingPreStockLot = null;
+let isSubmitting = false;   // กันกดปุ่มซ้ำระหว่าง submit
+let lastSubmitAt = 0;       // throttle หลัง submit สำเร็จ
 
 // คำนวณ machine_id จาก mode + slitter (เช่น 'winder_3')
 function getCurrentMachine() {
@@ -989,6 +991,10 @@ function fmtTime(d) {
 
 // ====== Init ======
 document.getElementById('outflowDate').value = new Date().toISOString().split('T')[0];
+
+// โหลด outflows ของวันนี้เพื่อใช้ตรวจ duplicate ใน submit handler
+// (ไม่ต้องรอ user คลิก tab รายการ — ใช้ default period = "month")
+loadOutflows().catch(err => console.warn('Initial loadOutflows failed:', err));
 
 // ====== Tab switching ======
 document.querySelectorAll('.tab').forEach(btn => {
@@ -1330,6 +1336,19 @@ document.getElementById('btnSubmit').addEventListener('click', async () => {
   const btn = document.getElementById('btnSubmit');
   if (btn.disabled) return;
   
+  // Guard 1: กันกดซ้ำซ้อนระหว่างกำลัง submit
+  if (isSubmitting) {
+    showToast('⏳ กำลังบันทึก... กรุณารอ', 'error');
+    return;
+  }
+  
+  // Guard 2: throttle 1.5 วิ หลัง submit สำเร็จ (กันกดเร็วเกินจน user เผลอกดซ้ำ)
+  const elapsed = Date.now() - lastSubmitAt;
+  if (lastSubmitAt > 0 && elapsed < 1500) {
+    showToast(`⏳ กรุณารอ ${Math.ceil((1500 - elapsed) / 100) / 10} วิ`, 'error');
+    return;
+  }
+  
   const lotRaw = document.getElementById('lotInput').value.trim().toUpperCase();
   if (!lotRaw) {
     showToast('❌ กรุณากรอก Paper Lot', 'error');
@@ -1366,16 +1385,38 @@ document.getElementById('btnSubmit').addEventListener('click', async () => {
     if (!currentLot) return;
   }
   
+  // Guard 3: Pre-check duplicate ใน list ล่าสุด (เฉพาะที่ยังไม่ voided)
+  const date = document.getElementById('outflowDate').value;
+  const machineId = getCurrentMachine();
+  const dupCandidate = (allOutflows || []).find(o =>
+    !o.voided &&
+    (o.paper_lot_normalized || '').toUpperCase() === normLot &&
+    o.machine_id === machineId &&
+    (o.outflow_date || '').slice(0, 10) === date
+  );
+  if (dupCandidate) {
+    const confirmMsg =
+      `⚠️ พบรายการซ้ำ:\n\n` +
+      `   Lot: ${dupCandidate.paper_lot}\n` +
+      `   เครื่อง: ${MACHINE_LABELS[machineId] || machineId}\n` +
+      `   วันที่: ${dupCandidate.outflow_date}\n` +
+      `   เวลา: ${fmtTime(dupCandidate.created_at)}\n\n` +
+      `ต้องการบันทึกซ้ำหรือไม่?`;
+    if (!confirm(confirmMsg)) {
+      return;
+    }
+  }
+  
+  // Set submitting flag — ป้องกันการกดซ้ำตั้งแต่จุดนี้ไปจนถึง finally
+  isSubmitting = true;
   btn.disabled = true;
   btn.innerHTML = '<span class="loading"></span> กำลังบันทึก...';
-  
-  const date = document.getElementById('outflowDate').value;
   
   const payload = {
     paper_lot: lotRaw,
     outflow_date: date,
     outflow_reason: isPreStock ? 'pre_stock' : 'sale',
-    machine_id: getCurrentMachine(),
+    machine_id: machineId,
     source: 'paper-out'
   };
   
@@ -1429,8 +1470,12 @@ document.getElementById('btnSubmit').addEventListener('click', async () => {
     console.error('Insert error:', err);
     showToast('❌ บันทึกไม่สำเร็จ: ' + err.message, 'error');
   } finally {
+    isSubmitting = false;
+    lastSubmitAt = Date.now();
     btn.disabled = false;
     updateSubmitState();
+    // reload outflows ใน background — ครั้งหน้า dup pre-check จะแม่นกว่าเดิม
+    loadOutflows().catch(() => {});
   }
 });
 
