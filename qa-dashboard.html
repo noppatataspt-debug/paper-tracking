@@ -374,7 +374,17 @@
           </select>
         </div>
       </div>
-      <button class="btn" id="t-go">📈 พล็อตกราฟ</button>
+      <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:center; margin-top:8px;">
+        <button class="btn" id="t-go">📈 พล็อตกราฟ</button>
+        <label style="display:flex; align-items:center; gap:6px; font-weight:600; font-size:14px; cursor:pointer;">
+          <input type="checkbox" id="t-show-sigma" checked style="width:auto; cursor:pointer;">
+          แสดง ±2σ / ±3σ (control limits)
+        </label>
+        <label style="display:flex; align-items:center; gap:6px; font-weight:600; font-size:14px; cursor:pointer;">
+          <input type="checkbox" id="t-show-spec" checked style="width:auto; cursor:pointer;">
+          แสดง Min/Max Spec
+        </label>
+      </div>
     </div>
 
     <div id="t-results"></div>
@@ -1011,8 +1021,13 @@ async function loadMonitor() {
 
         <div style="margin-top:18px;">
           <div style="font-weight:700; font-size:14px; margin-bottom:8px;">📈 Trend ของแต่ละ Parameter (เฉลี่ยต่อวัน)</div>
-          <div style="font-size:12px; color:var(--text-dim); margin-bottom:10px;">
-            เส้นน้ำเงิน = ค่าเฉลี่ยของวัน · แถบฟ้าอ่อน = ช่วง min-max · เส้นเขียวประ = mean ทั้งช่วง · เส้นแดงประ = Min/Max Spec (ถ้ามี)
+          <div style="font-size:12px; color:var(--text-dim); margin-bottom:10px; line-height:1.7;">
+            <span style="color:#1d4ed8;">●</span> เส้นน้ำเงิน = ค่าเฉลี่ยของวัน · 
+            <span style="color:#1d4ed8; opacity:0.5;">▒</span> แถบฟ้าอ่อน = ช่วง min-max ของวัน · 
+            <span style="color:#047857;">– – –</span> เขียวประ = mean ทั้งช่วง · 
+            <span style="color:rgba(180,83,9,0.7);">– – –</span> ส้ม = ±2σ (warning) · 
+            <span style="color:rgba(220,38,38,0.7);">- - -</span> แดงจาง = ±3σ (action limit) · 
+            <span style="color:#b91c1c;"><b>= = =</b></span> แดงทึบ = Min/Max Spec
           </div>
           <div id="${chartId}" class="small-multiples"></div>
         </div>
@@ -1031,13 +1046,12 @@ async function loadMonitor() {
       );
       if (!activeParams.length) continue;
       const chartId = `m-chart-${pt.replace(/[^a-zA-Z0-9]/g,'_')}`;
-      // scan ทุก row เพื่อหา category ตัวแรกที่เจอ (row แรกอาจเป็น orphan ไม่มี category)
+      // scan ทุก row เพื่อหา category ตัวแรกที่เจอ
       let cat = null;
       for (const r of rows) {
         cat = r.paper_invoices?.paper_category || r.paper_category;
         if (cat) break;
       }
-      console.log(`[Monitor] ${pt}: category=${cat}, rows=${rows.length}, specsKeys=${Object.keys(specs||{}).length}`);
       renderSmallMultiples(chartId, rows, dateField, activeParams, specs, cat, pt);
     }
   } catch (e) {
@@ -1057,9 +1071,6 @@ async function loadSpecs() {
       map[key] = s;
     }
     state.specs = map;
-    console.log(`[loadSpecs] cached ${Object.keys(map).length} keys:`);
-    console.log('  Sample keys:', Object.keys(map).slice(0, 10));
-    console.log('  All keys:', Object.keys(map));
     return map;
   } catch (e) {
     console.warn('loadSpecs failed:', e);
@@ -1129,27 +1140,25 @@ function renderSmallMultiples(containerId, rows, dateField, activeParams, specs,
     const stats = calcStats(allVals);
     const ucl1 = stats.mean + stats.sd;
     const lcl1 = stats.mean - stats.sd;
+    const ucl2 = stats.mean + 2 * stats.sd;
+    const lcl2 = stats.mean - 2 * stats.sd;
+    const ucl3 = stats.mean + 3 * stats.sd;
+    const lcl3 = stats.mean - 3 * stats.sd;
 
     // หา spec
     const spec = findSpec(specs || {}, category, paperType, key);
     const specMin = spec?.min_value != null ? +spec.min_value : null;
     const specMax = spec?.max_value != null ? +spec.max_value : null;
-    if (spec) {
-      console.log(`  ✓ Found spec for ${paperType}/${key}: min=${specMin}, max=${specMax}`);
-    } else {
-      const lookupKeys = paperType
-        ? [`${category||''}|${paperType}|${key}`, `|${paperType}|${key}`, `${category||''}||${key}`]
-        : [`${category||''}||${key}`];
-      console.log(`  ✗ No spec for ${paperType}/${key} — tried keys:`, lookupKeys);
-    }
 
-    // count violations vs spec
+    // count violations vs spec + control limits
     let belowMin = 0, aboveMax = 0;
-    if (specMin != null || specMax != null) {
-      for (const v of allVals) {
-        if (specMin != null && v < specMin) belowMin++;
-        if (specMax != null && v > specMax) aboveMax++;
-      }
+    let out2sigma = 0, out3sigma = 0;
+    for (const v of allVals) {
+      if (specMin != null && v < specMin) belowMin++;
+      if (specMax != null && v > specMax) aboveMax++;
+      const dev = Math.abs(v - stats.mean);
+      if (dev > 3 * stats.sd) out3sigma++;
+      else if (dev > 2 * stats.sd) out2sigma++;
     }
 
     const wrap = document.createElement('div');
@@ -1157,9 +1166,9 @@ function renderSmallMultiples(containerId, rows, dateField, activeParams, specs,
     wrap.innerHTML = `
       <div class="mini-chart-head">
         <span class="mini-chart-label">${info.label} <span style="color:var(--text-dim); font-weight:500; font-size:12px;">${info.unit}</span></span>
-        <span class="mini-chart-stat">μ ${fmtNum(stats.mean)} · σ ${fmtNum(stats.sd, 2)} · CV ${fmtNum(stats.cv,1)}% · n=${allVals.length} (${dates.length} days)${
+        <span class="mini-chart-stat">μ ${fmtNum(stats.mean)} · σ ${fmtNum(stats.sd, 2)} · CV ${fmtNum(stats.cv,1)}% · n=${allVals.length}${
           spec ? ` · spec ${specMin != null ? '≥' + fmtNum(specMin) : ''}${specMax != null ? ' ≤' + fmtNum(specMax) : ''}` : ''
-        }${belowMin || aboveMax ? ` · <span style="color:var(--danger)">⚠ ${belowMin + aboveMax} หลุด spec</span>` : ''}</span>
+        }${belowMin || aboveMax ? ` · <span style="color:var(--danger)">⚠ ${belowMin + aboveMax} หลุด spec</span>` : ''}${out3sigma ? ` · <span style="color:var(--danger)">${out3sigma} >3σ</span>` : ''}${out2sigma ? ` · <span style="color:var(--warning)">${out2sigma} >2σ</span>` : ''}</span>
       </div>
       <div class="mini-chart-canvas"><canvas></canvas></div>
     `;
@@ -1213,6 +1222,32 @@ function renderSmallMultiples(containerId, rows, dateField, activeParams, specs,
         borderColor: '#047857', borderWidth: 1.5, borderDash: [4,4],
         pointRadius: 0, fill: false,
       },
+      // ±2σ (warning) — เส้นบางสีส้ม
+      {
+        label: '+2σ',
+        data: aggPoints.map(p => ({x: p.x, y: ucl2})),
+        borderColor: 'rgba(180, 83, 9, 0.55)', borderWidth: 1, borderDash: [4,3],
+        pointRadius: 0, fill: false,
+      },
+      {
+        label: '-2σ',
+        data: aggPoints.map(p => ({x: p.x, y: lcl2})),
+        borderColor: 'rgba(180, 83, 9, 0.55)', borderWidth: 1, borderDash: [4,3],
+        pointRadius: 0, fill: false,
+      },
+      // ±3σ (action) — เส้นบางสีแดงประ
+      {
+        label: '+3σ',
+        data: aggPoints.map(p => ({x: p.x, y: ucl3})),
+        borderColor: 'rgba(220, 38, 38, 0.5)', borderWidth: 1, borderDash: [2,2],
+        pointRadius: 0, fill: false,
+      },
+      {
+        label: '-3σ',
+        data: aggPoints.map(p => ({x: p.x, y: lcl3})),
+        borderColor: 'rgba(220, 38, 38, 0.5)', borderWidth: 1, borderDash: [2,2],
+        pointRadius: 0, fill: false,
+      },
     ];
 
     // add spec lines
@@ -1235,14 +1270,15 @@ function renderSmallMultiples(containerId, rows, dateField, activeParams, specs,
 
     const canvas = wrap.querySelector('canvas');
 
-    // คำนวณ y-axis range ให้ครอบคลุม spec lines (ถ้ามี)
+    // คำนวณ y-axis range ให้ครอบคลุม spec line + ±3σ
     const dataMin = Math.min(...aggPoints.map(p => p.min));
     const dataMax = Math.max(...aggPoints.map(p => p.max));
-    let yMin = dataMin, yMax = dataMax;
+    let yMin = Math.min(dataMin, lcl3);
+    let yMax = Math.max(dataMax, ucl3);
     if (specMin != null) yMin = Math.min(yMin, specMin);
     if (specMax != null) yMax = Math.max(yMax, specMax);
     // padding 5% ของ range
-    const pad = (yMax - yMin) * 0.08 || 1;
+    const pad = (yMax - yMin) * 0.05 || 1;
     const yMinFinal = yMin - pad;
     const yMaxFinal = yMax + pad;
 
@@ -1300,6 +1336,8 @@ async function loadTrend() {
   const param     = $('#t-param').value;
   const days      = +$('#t-days').value;
   const dateField = $('#t-datefield').value;
+  const showSigma = $('#t-show-sigma').checked;
+  const showSpec  = $('#t-show-spec').checked;
 
   $('#t-results').innerHTML = '<div class="panel"><div class="loading"><div class="spinner"></div>กำลังโหลด...</div></div>';
 
@@ -1475,50 +1513,56 @@ async function loadTrend() {
         borderColor: '#047857', borderWidth: 1.8, borderDash: [4,4],
         pointRadius: 0, fill: false,
       },
-      // ±2σ
-      {
-        label: '+2σ',
-        data: aggPoints.map(p => ({x: p.x, y: ucl2})),
-        borderColor: '#b45309', borderWidth: 1.5, borderDash: [4,3],
-        pointRadius: 0, fill: false,
-      },
-      {
-        label: '-2σ',
-        data: aggPoints.map(p => ({x: p.x, y: lcl2})),
-        borderColor: '#b45309', borderWidth: 1.5, borderDash: [4,3],
-        pointRadius: 0, fill: false,
-      },
-      // ±3σ
-      {
-        label: '+3σ',
-        data: aggPoints.map(p => ({x: p.x, y: ucl3})),
-        borderColor: '#dc2626', borderWidth: 1.5, borderDash: [2,2],
-        pointRadius: 0, fill: false,
-      },
-      {
-        label: '-3σ',
-        data: aggPoints.map(p => ({x: p.x, y: lcl3})),
-        borderColor: '#dc2626', borderWidth: 1.5, borderDash: [2,2],
-        pointRadius: 0, fill: false,
-      },
     ];
 
-    // spec lines
-    if (specMin != null) {
-      datasets.push({
-        label: 'Min Spec',
-        data: aggPoints.map(p => ({x: p.x, y: specMin})),
-        borderColor: '#b91c1c', borderWidth: 2.5, borderDash: [10,4],
-        pointRadius: 0, fill: false,
-      });
+    // ±2σ + ±3σ (toggleable)
+    if (showSigma) {
+      datasets.push(
+        {
+          label: '+2σ',
+          data: aggPoints.map(p => ({x: p.x, y: ucl2})),
+          borderColor: '#b45309', borderWidth: 1.5, borderDash: [4,3],
+          pointRadius: 0, fill: false,
+        },
+        {
+          label: '-2σ',
+          data: aggPoints.map(p => ({x: p.x, y: lcl2})),
+          borderColor: '#b45309', borderWidth: 1.5, borderDash: [4,3],
+          pointRadius: 0, fill: false,
+        },
+        {
+          label: '+3σ',
+          data: aggPoints.map(p => ({x: p.x, y: ucl3})),
+          borderColor: '#dc2626', borderWidth: 1.5, borderDash: [2,2],
+          pointRadius: 0, fill: false,
+        },
+        {
+          label: '-3σ',
+          data: aggPoints.map(p => ({x: p.x, y: lcl3})),
+          borderColor: '#dc2626', borderWidth: 1.5, borderDash: [2,2],
+          pointRadius: 0, fill: false,
+        }
+      );
     }
-    if (specMax != null) {
-      datasets.push({
-        label: 'Max Spec',
-        data: aggPoints.map(p => ({x: p.x, y: specMax})),
-        borderColor: '#b91c1c', borderWidth: 2.5, borderDash: [10,4],
-        pointRadius: 0, fill: false,
-      });
+
+    // spec lines (toggleable)
+    if (showSpec) {
+      if (specMin != null) {
+        datasets.push({
+          label: 'Min Spec',
+          data: aggPoints.map(p => ({x: p.x, y: specMin})),
+          borderColor: '#b91c1c', borderWidth: 2.5, borderDash: [10,4],
+          pointRadius: 0, fill: false,
+        });
+      }
+      if (specMax != null) {
+        datasets.push({
+          label: 'Max Spec',
+          data: aggPoints.map(p => ({x: p.x, y: specMax})),
+          borderColor: '#b91c1c', borderWidth: 2.5, borderDash: [10,4],
+          pointRadius: 0, fill: false,
+        });
+      }
     }
 
     state.charts.trend = new Chart(ctx, {
@@ -1534,18 +1578,26 @@ async function loadTrend() {
             title: { display: true, text: `${info.label} (${info.unit})` },
             min: (() => {
               const dataMin = Math.min(...aggPoints.map(p => p.min));
-              const candidates = [dataMin, lcl3];
-              if (specMin != null) candidates.push(specMin);
+              const candidates = [dataMin];
+              if (showSigma) candidates.push(lcl3);
+              if (showSpec && specMin != null) candidates.push(specMin);
               const yMin = Math.min(...candidates);
-              const yMax = Math.max(...aggPoints.map(p => p.max), ucl3, specMax ?? -Infinity);
+              const ub = [...aggPoints.map(p => p.max)];
+              if (showSigma) ub.push(ucl3);
+              if (showSpec && specMax != null) ub.push(specMax);
+              const yMax = Math.max(...ub);
               return yMin - (yMax - yMin) * 0.05;
             })(),
             max: (() => {
               const dataMax = Math.max(...aggPoints.map(p => p.max));
-              const candidates = [dataMax, ucl3];
-              if (specMax != null) candidates.push(specMax);
+              const candidates = [dataMax];
+              if (showSigma) candidates.push(ucl3);
+              if (showSpec && specMax != null) candidates.push(specMax);
               const yMax = Math.max(...candidates);
-              const yMin = Math.min(...aggPoints.map(p => p.min), lcl3, specMin ?? Infinity);
+              const lb = [...aggPoints.map(p => p.min)];
+              if (showSigma) lb.push(lcl3);
+              if (showSpec && specMin != null) lb.push(specMin);
+              const yMin = Math.min(...lb);
               return yMax + (yMax - yMin) * 0.05;
             })(),
           },
