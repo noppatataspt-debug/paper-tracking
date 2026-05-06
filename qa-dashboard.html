@@ -671,7 +671,7 @@ async function loadMonitor() {
     // ดึง COA + join paper_invoices ผ่าน paper_invoice_id
     let q = supabase
       .from('quality_tests')
-      .select('id, supplier, production_date, basis_weight, burst, plybond, cobb_top, cobb_bottom, caliper, moisture, paper_invoice_id, paper_invoices(paper_type, paper_lot, gsm)')
+      .select('id, supplier, production_date, basis_weight, burst, plybond, cobb_top, cobb_bottom, caliper, moisture, paper_invoice_id, paper_invoices(paper_type, paper_lot)')
       .order('production_date', { ascending: false });
 
     if (supplier) q = q.eq('supplier', supplier);
@@ -1012,7 +1012,7 @@ function renderLookup(invs, coas, outs, issues, targetId) {
           <div class="lot-lot">${escapeHtml(inv.paper_lot)}</div>
           <div style="color:var(--text-dim); font-size:14px; margin-top:4px;">
             ${escapeHtml(inv.supplier || '—')} · ${escapeHtml(inv.paper_type || '—')}
-            ${inv.gsm ? ' · ' + inv.gsm + ' g/m²' : ''}
+            
             ${inv.width_mm ? ' · ' + inv.width_mm + ' mm' : ''}
           </div>
         </div>
@@ -1133,7 +1133,7 @@ async function fetchLotForIssue() {
         <div class="lot-lot">${escapeHtml(inv.paper_lot)}</div>
         <div style="color:var(--text-dim); font-size:14px; margin-top:4px;">
           ${escapeHtml(inv.supplier || '—')} · ${escapeHtml(inv.paper_type || '—')}
-          ${inv.gsm ? ' · ' + inv.gsm + ' g/m²' : ''}
+          
         </div>
       </div>
       ${coa ? '<span class="badge b-info">📋 มี COA</span>' : '<span class="badge b-warn">⚠ ไม่มี COA</span>'}
