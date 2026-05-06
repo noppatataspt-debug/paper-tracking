@@ -2113,6 +2113,11 @@ const HEADER_MAP = {
 const SKIP_PAPER_TYPES = new Set(['CB-350', 'CB350']);
 // values ที่ถือว่า "ไม่มี paper_type" → จะเป็น orphan
 const NA_VALUES = new Set(['#N/A', '#NA', 'N/A', 'NA', '-', '']);
+// rename map — paper_type ที่ต้องเปลี่ยนชื่อให้ตรงระบบ
+const RENAME_PAPER_TYPE = {
+  'CA': 'CA-150',
+  'SB': 'SB-110',
+};
 
 function normalizeHeader(h) {
   return String(h || '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -2212,7 +2217,12 @@ async function parseCSVFile(file) {
     if (!obj.paper_lot) continue;
 
     // จัดการ paper_type
-    const pt = obj.paper_type;
+    let pt = obj.paper_type;
+    // apply rename map (CA → CA-150, SB → SB-110)
+    if (pt && RENAME_PAPER_TYPE[pt]) {
+      pt = RENAME_PAPER_TYPE[pt];
+      obj.paper_type = pt;
+    }
     if (pt && SKIP_PAPER_TYPES.has(pt)) {
       stats.skippedType++;
       continue;  // skip rows ที่มี paper_type ไม่ valid (CB-350, CB350)
