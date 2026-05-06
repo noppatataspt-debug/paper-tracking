@@ -1,0 +1,1411 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QA Dashboard — สอบกลับคุณภาพกระดาษ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --panel-2: #eef1f6;
+    --border: #c8cfda; --text: #0f172a; --text-dim: #475569;
+    --accent: #c2410c; --accent-bg: #ffedd5;
+    --accent-2: #1d4ed8; --accent-2-bg: #dbeafe;
+    --success: #047857; --success-bg: #d1fae5;
+    --warning: #b45309; --warning-bg: #fef3c7;
+    --danger: #b91c1c; --danger-bg: #fee2e2;
+    --mono: 'JetBrains Mono', monospace;
+  }
+  body {
+    font-family: 'IBM Plex Sans Thai', sans-serif;
+    background: var(--bg); color: var(--text);
+    min-height: 100vh; padding: 24px 16px;
+    line-height: 1.55; font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .container { max-width: 1300px; margin: 0 auto; }
+
+  .header { margin-bottom: 24px; }
+  .header-top {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 8px; flex-wrap: wrap; gap: 12px;
+  }
+  .header h1 { font-size: 28px; font-weight: 800; letter-spacing: -0.02em; }
+  .header h1 span { color: var(--accent); }
+  .header p { color: var(--text-dim); font-size: 15px; font-weight: 500; }
+  .nav-link {
+    padding: 10px 18px; background: var(--panel); color: var(--text);
+    border: 1.5px solid var(--border); border-radius: 10px;
+    font-size: 14px; font-weight: 700; text-decoration: none;
+    transition: all 0.15s; display: inline-block;
+  }
+  .nav-link:hover { background: var(--accent); color: white; border-color: var(--accent); }
+
+  /* Tabs */
+  .tabs {
+    display: flex; gap: 6px; margin-bottom: 20px;
+    border-bottom: 2px solid var(--border); flex-wrap: wrap;
+  }
+  .tab {
+    padding: 14px 22px; background: none; border: none; color: var(--text-dim);
+    font-family: inherit; font-size: 15px; font-weight: 700; cursor: pointer;
+    border-bottom: 3px solid transparent; transition: all 0.2s;
+    margin-bottom: -2px;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  .view { display: none; }
+  .view.active { display: block; animation: fadeIn 0.3s ease; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+  .panel {
+    background: var(--panel); border: 1.5px solid var(--border);
+    border-radius: 14px; padding: 24px; margin-bottom: 16px;
+    box-shadow: 0 2px 8px rgba(15,23,42,0.04);
+  }
+  .panel-title { font-size: 19px; font-weight: 800; margin-bottom: 6px; }
+  .panel-sub { font-size: 14px; color: var(--text-dim); margin-bottom: 20px; font-weight: 500; }
+
+  .filter-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px; margin-bottom: 16px;
+  }
+  label.field-label {
+    display: block; font-size: 12px; font-weight: 700;
+    color: var(--text); margin-bottom: 6px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  input, select, textarea {
+    width: 100%; padding: 11px 13px; background: var(--panel);
+    border: 2px solid var(--border); border-radius: 10px;
+    color: var(--text); font-family: inherit; font-size: 15px;
+    font-weight: 600;
+  }
+  textarea { font-family: inherit; resize: vertical; min-height: 80px; }
+  input:focus, select:focus, textarea:focus {
+    outline: none; border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-bg);
+  }
+
+  .btn {
+    padding: 11px 20px; background: var(--accent); color: white;
+    border: none; border-radius: 10px; font-family: inherit;
+    font-size: 14px; font-weight: 700; cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn:hover { transform: translateY(-1px); filter: brightness(1.1); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+  .btn.outline {
+    background: var(--panel); color: var(--text);
+    border: 1.5px solid var(--border);
+  }
+  .btn.outline:hover { background: var(--panel-2); color: var(--text); transform: none; filter: none; }
+  .btn.danger { background: var(--danger); }
+  .btn.success { background: var(--success); }
+
+  /* KPI cards */
+  .kpi-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px; margin-bottom: 16px;
+  }
+  .kpi {
+    background: var(--panel); border: 1.5px solid var(--border);
+    border-radius: 12px; padding: 16px;
+  }
+  .kpi-label { font-size: 12px; color: var(--text-dim); font-weight: 700;
+               text-transform: uppercase; letter-spacing: 0.5px; }
+  .kpi-value { font-size: 26px; font-weight: 800; margin-top: 4px;
+               font-family: var(--mono); color: var(--accent); }
+  .kpi-sub { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+
+  /* Table */
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { padding: 9px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+  th { background: var(--panel-2); font-weight: 700; font-size: 12px;
+       text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-dim); }
+  tr:hover td { background: var(--panel-2); }
+  td.mono { font-family: var(--mono); font-size: 13px; }
+  td.num { text-align: right; font-family: var(--mono); }
+
+  .badge {
+    display: inline-block; padding: 3px 10px; border-radius: 999px;
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
+  }
+  .b-ok      { background: var(--success-bg); color: var(--success); }
+  .b-warn    { background: var(--warning-bg); color: var(--warning); }
+  .b-bad     { background: var(--danger-bg);  color: var(--danger); }
+  .b-info    { background: var(--accent-2-bg); color: var(--accent-2); }
+  .b-neutral { background: var(--panel-2); color: var(--text-dim); }
+
+  /* Chart container */
+  .chart-wrap {
+    position: relative; width: 100%;
+    height: 380px; margin-top: 12px;
+  }
+  .empty {
+    text-align: center; padding: 60px 20px;
+    color: var(--text-dim); font-weight: 600;
+  }
+
+  /* Lookup result card */
+  .lot-card {
+    background: var(--panel-2); border: 1.5px solid var(--border);
+    border-radius: 12px; padding: 16px; margin-bottom: 12px;
+  }
+  .lot-card-head {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    margin-bottom: 12px; flex-wrap: wrap; gap: 8px;
+  }
+  .lot-lot { font-family: var(--mono); font-size: 18px; font-weight: 700; color: var(--accent); }
+  .info-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 10px;
+  }
+  .info-cell {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 12px;
+  }
+  .info-label { font-size: 11px; color: var(--text-dim); font-weight: 700;
+                text-transform: uppercase; letter-spacing: 0.4px; }
+  .info-value { font-size: 14px; font-weight: 600; margin-top: 2px;
+                font-family: var(--mono); }
+
+  /* Issue form */
+  .form-grid-2 {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+  }
+  .form-grid-2.full { grid-template-columns: 1fr; }
+  .span-2 { grid-column: span 2; }
+
+  /* Toast */
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    padding: 14px 22px; border-radius: 12px;
+    font-weight: 700; font-size: 15px; z-index: 1000;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+    opacity: 0; transition: opacity 0.3s, transform 0.3s;
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(-6px); }
+  .toast.success { background: var(--success); color: white; }
+  .toast.error { background: var(--danger); color: white; }
+  .toast.info { background: var(--accent-2); color: white; }
+
+  /* Loading */
+  .loading {
+    display: flex; align-items: center; justify-content: center;
+    padding: 40px; color: var(--text-dim);
+  }
+  .spinner {
+    width: 22px; height: 22px;
+    border: 3px solid var(--panel-2);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-right: 10px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Auto-fill highlight */
+  .auto-filled { background: var(--success-bg) !important; border-color: var(--success) !important; }
+
+  @media (max-width: 700px) {
+    body { padding: 16px 10px; }
+    .header h1 { font-size: 22px; }
+    .panel { padding: 16px; }
+    .tab { padding: 10px 14px; font-size: 13px; }
+    .kpi-value { font-size: 22px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <div class="header">
+    <div class="header-top">
+      <div>
+        <h1>🧪 QA <span>Dashboard</span></h1>
+        <p>Monitor คุณภาพกระดาษ + สอบกลับ lot ที่พบปัญหา</p>
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <a href="./" class="nav-link">🏠 Home</a>
+        <a href="paper-in.html" class="nav-link">📥 Paper-In</a>
+        <a href="dashboard.html" class="nav-link">📊 Trace</a>
+        <a href="stock-dashboard.html" class="nav-link">📦 Stock</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-view="monitor">📊 Monitor by Supplier</button>
+    <button class="tab" data-view="trend">📈 Parameter Trend</button>
+    <button class="tab" data-view="lookup">🔍 Lot Lookup</button>
+    <button class="tab" data-view="issue">⚠️ บันทึกปัญหา</button>
+    <button class="tab" data-view="issues-list">📋 รายการปัญหา</button>
+  </div>
+
+  <!-- ============ TAB 1: MONITOR ============ -->
+  <div class="view active" id="v-monitor">
+    <div class="panel">
+      <div class="panel-title">📊 Monitor คุณภาพกระดาษ</div>
+      <div class="panel-sub">เลือก supplier และประเภทกระดาษเพื่อดูสรุปคุณภาพ</div>
+
+      <div class="filter-grid">
+        <div>
+          <label class="field-label">Supplier</label>
+          <select id="m-supplier"><option value="">— ทั้งหมด —</option></select>
+        </div>
+        <div>
+          <label class="field-label">Paper Type</label>
+          <select id="m-type"><option value="">— ทั้งหมด —</option></select>
+        </div>
+        <div>
+          <label class="field-label">ตั้งแต่วันที่ (Production Date)</label>
+          <input type="date" id="m-from">
+        </div>
+        <div>
+          <label class="field-label">ถึง</label>
+          <input type="date" id="m-to">
+        </div>
+      </div>
+      <button class="btn" id="m-go">📊 แสดงข้อมูล</button>
+    </div>
+
+    <div id="m-results"></div>
+  </div>
+
+  <!-- ============ TAB 2: TREND ============ -->
+  <div class="view" id="v-trend">
+    <div class="panel">
+      <div class="panel-title">📈 Parameter Trend</div>
+      <div class="panel-sub">กราฟค่าเวลา + control limit (mean ± 2σ, ±3σ)</div>
+
+      <div class="filter-grid">
+        <div>
+          <label class="field-label">Supplier</label>
+          <select id="t-supplier"><option value="">— ทั้งหมด —</option></select>
+        </div>
+        <div>
+          <label class="field-label">Paper Type</label>
+          <select id="t-type"><option value="">— ทั้งหมด —</option></select>
+        </div>
+        <div>
+          <label class="field-label">Parameter</label>
+          <select id="t-param">
+            <option value="basis_weight">Basis Weight (g/m²)</option>
+            <option value="burst">Burst (kPa)</option>
+            <option value="plybond">Plybond (J/m²)</option>
+            <option value="cobb_top">Cobb's Top (g/m²)</option>
+            <option value="cobb_bottom">Cobb's Bottom (g/m²)</option>
+            <option value="caliper">Caliper (μm)</option>
+            <option value="moisture">Moisture (%)</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label">ย้อนหลัง (วัน)</label>
+          <select id="t-days">
+            <option value="30">30 วัน</option>
+            <option value="60">60 วัน</option>
+            <option value="90" selected>90 วัน</option>
+            <option value="180">180 วัน</option>
+            <option value="365">365 วัน</option>
+            <option value="0">ทั้งหมด</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn" id="t-go">📈 พล็อตกราฟ</button>
+    </div>
+
+    <div id="t-results"></div>
+  </div>
+
+  <!-- ============ TAB 3: LOT LOOKUP ============ -->
+  <div class="view" id="v-lookup">
+    <div class="panel">
+      <div class="panel-title">🔍 Lot Lookup — ค้นหาข้อมูล lot</div>
+      <div class="panel-sub">ใส่ paper lot เพื่อดูข้อมูล COA + invoice + การใช้งาน</div>
+
+      <div class="filter-grid">
+        <div style="grid-column: span 2;">
+          <label class="field-label">Paper Lot</label>
+          <input type="text" id="l-lot" placeholder="เช่น 776A27501I">
+        </div>
+        <div>
+          <label class="field-label">&nbsp;</label>
+          <button class="btn" id="l-go" style="width:100%">🔍 ค้นหา</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="l-results"></div>
+  </div>
+
+  <!-- ============ TAB 4: ISSUE FORM ============ -->
+  <div class="view" id="v-issue">
+    <div class="panel">
+      <div class="panel-title">⚠️ บันทึกปัญหาคุณภาพกระดาษ</div>
+      <div class="panel-sub">ป้อน Paper Lot ที่พบปัญหา → ระบบจะดึงข้อมูล COA อัตโนมัติ</div>
+
+      <div class="filter-grid">
+        <div style="grid-column: span 2;">
+          <label class="field-label">Paper Lot ที่พบปัญหา <span style="color:var(--danger)">*</span></label>
+          <input type="text" id="i-lot" placeholder="เช่น 776A27501I">
+        </div>
+        <div>
+          <label class="field-label">&nbsp;</label>
+          <button class="btn outline" id="i-fetch" style="width:100%">🔍 ดึงข้อมูล lot</button>
+        </div>
+      </div>
+
+      <div id="i-lot-info" style="display:none; margin-bottom:16px;"></div>
+
+      <div class="form-grid-2">
+        <div>
+          <label class="field-label">วันที่พบปัญหา</label>
+          <input type="date" id="i-date">
+        </div>
+        <div>
+          <label class="field-label">ผู้รายงาน</label>
+          <input type="text" id="i-by" placeholder="ชื่อ-นามสกุล">
+        </div>
+        <div>
+          <label class="field-label">ฝ่าย/หน่วยงาน</label>
+          <select id="i-dept">
+            <option value="">— เลือก —</option>
+            <option value="WIN">WIN — Winder</option>
+            <option value="SHE">SHE — Sheeter</option>
+            <option value="QA">QA</option>
+            <option value="WAREHOUSE">คลัง</option>
+            <option value="OTHER">อื่นๆ</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label">ระดับความรุนแรง</label>
+          <select id="i-sev">
+            <option value="low">🟢 Low — เล็กน้อย</option>
+            <option value="medium" selected>🟡 Medium — ปานกลาง</option>
+            <option value="high">🟠 High — ผลกระทบใหญ่</option>
+            <option value="critical">🔴 Critical — หยุดผลิต</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label">ประเภทปัญหา</label>
+          <select id="i-type">
+            <option value="">— เลือก —</option>
+            <option value="basis_weight">น้ำหนักผิดสเปก</option>
+            <option value="burst">ความแข็งแรงต่ำ (Burst)</option>
+            <option value="plybond">การยึดเกาะระหว่างชั้น (Plybond)</option>
+            <option value="cobb">การดูดน้ำผิดปกติ (Cobb)</option>
+            <option value="caliper">ความหนาผิดสเปก</option>
+            <option value="moisture">ความชื้นผิดปกติ</option>
+            <option value="surface">ผิวกระดาษเสีย/มีรอย</option>
+            <option value="break">ขาด/แตก ระหว่างผลิต</option>
+            <option value="dimension">ขนาดผิด (กว้าง/ยาว)</option>
+            <option value="other">อื่นๆ</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label">Batch ที่ใช้กระดาษ (อ้างอิง)</label>
+          <input type="text" id="i-batch" placeholder="เช่น Batch ID 1234 หรือ วันที่+เครื่อง">
+        </div>
+        <div class="span-2" style="grid-column: 1 / -1;">
+          <label class="field-label">รายละเอียดปัญหา <span style="color:var(--danger)">*</span></label>
+          <textarea id="i-desc" placeholder="อธิบายปัญหาที่พบโดยละเอียด..."></textarea>
+        </div>
+        <div class="span-2" style="grid-column: 1 / -1;">
+          <label class="field-label">อาการที่พบ (Symptoms)</label>
+          <textarea id="i-symp" placeholder="เช่น น้ำหนักลดลง 5% จากสเปก, แตกที่ม้วนที่ 3..."></textarea>
+        </div>
+      </div>
+
+      <div style="margin-top:16px; display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="btn success" id="i-save">💾 บันทึกปัญหา</button>
+        <button class="btn outline" id="i-clear">🗑 ล้าง</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ TAB 5: ISSUES LIST ============ -->
+  <div class="view" id="v-issues-list">
+    <div class="panel">
+      <div class="panel-title">📋 รายการปัญหาคุณภาพ</div>
+      <div class="panel-sub">ดูปัญหาทั้งหมด กดเพื่อ update status</div>
+
+      <div class="filter-grid">
+        <div>
+          <label class="field-label">สถานะ</label>
+          <select id="il-status">
+            <option value="">— ทั้งหมด —</option>
+            <option value="open">Open</option>
+            <option value="investigating">Investigating</option>
+            <option value="resolved">Resolved</option>
+            <option value="closed">Closed</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label">ความรุนแรง</label>
+          <select id="il-sev">
+            <option value="">— ทั้งหมด —</option>
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+            <option value="critical">Critical</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label">Supplier</label>
+          <select id="il-supplier"><option value="">— ทั้งหมด —</option></select>
+        </div>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button class="btn" id="il-go">🔄 โหลดรายการ</button>
+      </div>
+    </div>
+    <div id="il-results"></div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<!-- date adapter for time scale -->
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+
+<script type="module">
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+
+// ============================================================
+// Config — ใช้ key เดียวกับระบบเดิม
+// ============================================================
+const SUPABASE_URL = 'https://lfrwghrlxaordpxrqyij.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxmcndnaHJseGFvcmRweHJxeWlqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MzQ5MjgsImV4cCI6MjA5MjQxMDkyOH0.M13hI5TUqEL8iVmGM3pWcjbyULSx_n7VPgI2TcHnNZA';
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ============================================================
+// Param config — label, unit, spec ranges (default for Liner-class)
+// (สามารถปรับ spec ตามแต่ละ paper_type ได้ทีหลัง)
+// ============================================================
+const PARAMS = {
+  basis_weight: { label: 'Basis Weight', unit: 'g/m²' },
+  burst:        { label: 'Burst',        unit: 'kPa' },
+  plybond:      { label: 'Plybond',      unit: 'J/m²' },
+  cobb_top:     { label: "Cobb's Top",   unit: 'g/m²' },
+  cobb_bottom:  { label: "Cobb's Bottom",unit: 'g/m²' },
+  caliper:      { label: 'Caliper',      unit: 'μm' },
+  moisture:     { label: 'Moisture',     unit: '%'  },
+};
+
+// ============================================================
+// Utilities
+// ============================================================
+const $  = (s, root=document) => root.querySelector(s);
+const $$ = (s, root=document) => Array.from(root.querySelectorAll(s));
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function fmtNum(v, dp=2) {
+  if (v == null || v === '' || isNaN(+v)) return '—';
+  return Number(v).toLocaleString('en-US', {minimumFractionDigits:dp, maximumFractionDigits:dp});
+}
+function fmtDate(d) {
+  if (!d) return '—';
+  const dt = new Date(d);
+  if (isNaN(dt)) return '—';
+  return dt.toLocaleDateString('th-TH', {year:'numeric', month:'short', day:'numeric'});
+}
+function normalizeLot(s) {
+  return String(s || '').trim().toUpperCase().replace(/[\s\-_]/g, '');
+}
+function showToast(msg, type='info') {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + type;
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+function calcStats(arr) {
+  const vals = arr.filter(v => v != null && !isNaN(+v)).map(v => +v);
+  if (!vals.length) return null;
+  const n = vals.length;
+  const min = Math.min(...vals);
+  const max = Math.max(...vals);
+  const sum = vals.reduce((a,b) => a+b, 0);
+  const mean = sum / n;
+  const sd = Math.sqrt(vals.reduce((a,v) => a + (v-mean)**2, 0) / n);
+  const cv = (sd / mean) * 100;
+  return { n, min, max, mean, sd, cv };
+}
+
+// fetchAllRows — page through Supabase (default limit=1000)
+async function fetchAllRows(query, pageSize=1000) {
+  let all = [];
+  let from = 0;
+  while (true) {
+    const { data, error } = await query.range(from, from + pageSize - 1);
+    if (error) throw error;
+    if (!data || !data.length) break;
+    all = all.concat(data);
+    if (data.length < pageSize) break;
+    from += pageSize;
+  }
+  return all;
+}
+
+// ============================================================
+// State + initial load
+// ============================================================
+const state = {
+  suppliers: [],
+  paperTypes: [],
+  cachedSupplierTypes: {}, // supplier -> [paper_types]
+  charts: {},
+  currentLot: null,        // lot info for issue form auto-fill
+};
+
+async function init() {
+  // โหลด suppliers + paper types ที่มี COA
+  let distinct;
+  try {
+    distinct = await fetchAllRows(
+      supabase.from('quality_tests').select('supplier, paper_invoice_id')
+    );
+  } catch (error) {
+    console.error(error);
+    showToast('โหลด suppliers ไม่สำเร็จ — ดู console', 'error');
+    return;
+  }
+  // get unique suppliers
+  const supSet = new Set(distinct.map(d => d.supplier).filter(Boolean));
+  state.suppliers = [...supSet].sort();
+
+  // โหลด paper_types ที่มี COA — ต้อง join กับ paper_invoices
+  const invIds = [...new Set(distinct.map(d => d.paper_invoice_id).filter(Boolean))];
+  if (invIds.length) {
+    // page through
+    const allPt = [];
+    for (let i = 0; i < invIds.length; i += 500) {
+      const slice = invIds.slice(i, i+500);
+      const { data: invs } = await supabase
+        .from('paper_invoices')
+        .select('id, supplier, paper_type')
+        .in('id', slice);
+      if (invs) allPt.push(...invs);
+    }
+    // build supplier -> paper_types map
+    const map = {};
+    for (const r of allPt) {
+      if (!r.supplier || !r.paper_type) continue;
+      map[r.supplier] = map[r.supplier] || new Set();
+      map[r.supplier].add(r.paper_type);
+    }
+    for (const s of Object.keys(map)) map[s] = [...map[s]].sort();
+    state.cachedSupplierTypes = map;
+    state.paperTypes = [...new Set(allPt.map(r => r.paper_type).filter(Boolean))].sort();
+  }
+
+  // populate selects
+  populateSupplierSelects();
+  populateTypeSelects();
+
+  // default issue date = today
+  $('#i-date').value = new Date().toISOString().slice(0,10);
+}
+
+function populateSupplierSelects() {
+  const opts = state.suppliers.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
+  for (const id of ['#m-supplier', '#t-supplier', '#il-supplier']) {
+    const el = $(id);
+    el.innerHTML = '<option value="">— ทั้งหมด —</option>' + opts;
+  }
+}
+function populateTypeSelects(supplier='') {
+  const types = supplier ? (state.cachedSupplierTypes[supplier] || []) : state.paperTypes;
+  const opts = types.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+  for (const id of ['#m-type', '#t-type']) {
+    const el = $(id);
+    const cur = el.value;
+    el.innerHTML = '<option value="">— ทั้งหมด —</option>' + opts;
+    if (types.includes(cur)) el.value = cur;
+  }
+}
+
+// supplier change → re-populate types
+$('#m-supplier').addEventListener('change', e => populateTypeSelects(e.target.value));
+$('#t-supplier').addEventListener('change', e => populateTypeSelects(e.target.value));
+
+// ============================================================
+// Tabs
+// ============================================================
+$$('.tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    $$('.tab').forEach(b => b.classList.remove('active'));
+    $$('.view').forEach(v => v.classList.remove('active'));
+    btn.classList.add('active');
+    $('#v-' + btn.dataset.view).classList.add('active');
+  });
+});
+
+// ============================================================
+// TAB 1: MONITOR
+// ============================================================
+$('#m-go').addEventListener('click', loadMonitor);
+
+async function loadMonitor() {
+  const supplier = $('#m-supplier').value;
+  const type     = $('#m-type').value;
+  const from     = $('#m-from').value;
+  const to       = $('#m-to').value;
+
+  $('#m-results').innerHTML = '<div class="panel"><div class="loading"><div class="spinner"></div>กำลังโหลด...</div></div>';
+
+  try {
+    // ดึง COA + join paper_invoices ผ่าน paper_invoice_id
+    let q = supabase
+      .from('quality_tests')
+      .select('id, supplier, production_date, basis_weight, burst, plybond, cobb_top, cobb_bottom, caliper, moisture, paper_invoice_id, paper_invoices(paper_type, paper_lot, gsm)')
+      .order('production_date', { ascending: false });
+
+    if (supplier) q = q.eq('supplier', supplier);
+    if (from)     q = q.gte('production_date', from);
+    if (to)       q = q.lte('production_date', to);
+
+    const data = await fetchAllRows(q);
+
+    // filter by paper_type (client-side after join)
+    const filtered = type
+      ? data.filter(r => r.paper_invoices?.paper_type === type)
+      : data;
+
+    if (!filtered.length) {
+      $('#m-results').innerHTML = '<div class="panel"><div class="empty">ไม่พบข้อมูล COA ตาม filter</div></div>';
+      return;
+    }
+
+    // KPI
+    const totalLots = filtered.length;
+    const supplierCount = new Set(filtered.map(r => r.supplier)).size;
+    const typeCount = new Set(filtered.map(r => r.paper_invoices?.paper_type).filter(Boolean)).size;
+    const dateMin = filtered.map(r => r.production_date).filter(Boolean).sort()[0];
+    const dateMax = filtered.map(r => r.production_date).filter(Boolean).sort().slice(-1)[0];
+
+    // group by paper_type → calc stats per parameter
+    const byType = {};
+    for (const r of filtered) {
+      const pt = r.paper_invoices?.paper_type || '—';
+      byType[pt] = byType[pt] || [];
+      byType[pt].push(r);
+    }
+
+    let html = `
+      <div class="kpi-grid">
+        <div class="kpi"><div class="kpi-label">จำนวน Lot ที่ทดสอบ</div>
+          <div class="kpi-value">${totalLots.toLocaleString()}</div></div>
+        <div class="kpi"><div class="kpi-label">Suppliers</div>
+          <div class="kpi-value">${supplierCount}</div></div>
+        <div class="kpi"><div class="kpi-label">Paper Types</div>
+          <div class="kpi-value">${typeCount}</div></div>
+        <div class="kpi"><div class="kpi-label">ช่วงวันที่ผลิต</div>
+          <div class="kpi-value" style="font-size:14px">${fmtDate(dateMin)}<br>${fmtDate(dateMax)}</div></div>
+      </div>
+    `;
+
+    // table per paper_type
+    for (const [pt, rows] of Object.entries(byType)) {
+      html += `<div class="panel">
+        <div class="panel-title">${escapeHtml(pt)} <span style="color:var(--text-dim); font-size:14px; font-weight:500;">(${rows.length} lots)</span></div>
+        <div style="overflow-x:auto"><table>
+          <thead><tr>
+            <th>Parameter</th><th class="num">N</th><th class="num">Min</th>
+            <th class="num">Max</th><th class="num">Mean</th><th class="num">Std Dev</th>
+            <th class="num">CV (%)</th>
+          </tr></thead><tbody>`;
+      for (const [key, info] of Object.entries(PARAMS)) {
+        const stats = calcStats(rows.map(r => r[key]));
+        if (!stats) {
+          html += `<tr><td><b>${info.label}</b> <span style="color:var(--text-dim)">${info.unit}</span></td>
+                   <td colspan="6" style="color:var(--text-dim)">—</td></tr>`;
+          continue;
+        }
+        html += `<tr>
+          <td><b>${info.label}</b> <span style="color:var(--text-dim); font-size:12px;">${info.unit}</span></td>
+          <td class="num">${stats.n}</td>
+          <td class="num">${fmtNum(stats.min)}</td>
+          <td class="num">${fmtNum(stats.max)}</td>
+          <td class="num"><b>${fmtNum(stats.mean)}</b></td>
+          <td class="num">${fmtNum(stats.sd, 2)}</td>
+          <td class="num">${fmtNum(stats.cv, 2)}</td>
+        </tr>`;
+      }
+      html += `</tbody></table></div></div>`;
+    }
+
+    $('#m-results').innerHTML = html;
+  } catch (e) {
+    console.error(e);
+    $('#m-results').innerHTML = `<div class="panel"><div class="empty" style="color:var(--danger)">Error: ${escapeHtml(e.message || e)}</div></div>`;
+  }
+}
+
+// ============================================================
+// TAB 2: TREND CHART
+// ============================================================
+$('#t-go').addEventListener('click', loadTrend);
+
+async function loadTrend() {
+  const supplier = $('#t-supplier').value;
+  const type     = $('#t-type').value;
+  const param    = $('#t-param').value;
+  const days     = +$('#t-days').value;
+
+  $('#t-results').innerHTML = '<div class="panel"><div class="loading"><div class="spinner"></div>กำลังโหลด...</div></div>';
+
+  try {
+    let q = supabase
+      .from('quality_tests')
+      .select(`id, supplier, production_date, ${param}, paper_invoices(paper_type, paper_lot)`)
+      .not('production_date', 'is', null)
+      .not(param, 'is', null)
+      .order('production_date', { ascending: true });
+
+    if (supplier) q = q.eq('supplier', supplier);
+    if (days > 0) {
+      const d = new Date();
+      d.setDate(d.getDate() - days);
+      q = q.gte('production_date', d.toISOString().slice(0,10));
+    }
+
+    const raw = await fetchAllRows(q);
+    const filtered = type ? raw.filter(r => r.paper_invoices?.paper_type === type) : raw;
+
+    if (!filtered.length) {
+      $('#t-results').innerHTML = '<div class="panel"><div class="empty">ไม่พบข้อมูลในช่วงนี้</div></div>';
+      return;
+    }
+
+    // calc stats for control limits
+    const vals = filtered.map(r => +r[param]).filter(v => !isNaN(v));
+    const stats = calcStats(vals);
+    const ucl3 = stats.mean + 3 * stats.sd;
+    const lcl3 = stats.mean - 3 * stats.sd;
+    const ucl2 = stats.mean + 2 * stats.sd;
+    const lcl2 = stats.mean - 2 * stats.sd;
+
+    // count out-of-control points
+    const outCount = filtered.filter(r => Math.abs(+r[param] - stats.mean) > 3 * stats.sd).length;
+    const warnCount = filtered.filter(r => {
+      const dev = Math.abs(+r[param] - stats.mean);
+      return dev > 2 * stats.sd && dev <= 3 * stats.sd;
+    }).length;
+
+    const info = PARAMS[param];
+    $('#t-results').innerHTML = `
+      <div class="kpi-grid">
+        <div class="kpi"><div class="kpi-label">Data Points</div>
+          <div class="kpi-value">${stats.n}</div></div>
+        <div class="kpi"><div class="kpi-label">Mean</div>
+          <div class="kpi-value">${fmtNum(stats.mean)}</div>
+          <div class="kpi-sub">${info.unit}</div></div>
+        <div class="kpi"><div class="kpi-label">Std Dev (σ)</div>
+          <div class="kpi-value">${fmtNum(stats.sd)}</div>
+          <div class="kpi-sub">CV: ${fmtNum(stats.cv,2)}%</div></div>
+        <div class="kpi"><div class="kpi-label">Out of Control</div>
+          <div class="kpi-value" style="color:${outCount?'var(--danger)':'var(--success)'}">${outCount}</div>
+          <div class="kpi-sub">เตือน (>2σ): ${warnCount}</div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">${info.label} (${info.unit}) — Trend</div>
+        <div class="panel-sub">เส้นกลาง = mean, สีส้ม = ±2σ, สีแดง = ±3σ (control limit)</div>
+        <div class="chart-wrap"><canvas id="t-chart"></canvas></div>
+      </div>
+    `;
+
+    // build chart
+    if (state.charts.trend) state.charts.trend.destroy();
+    const ctx = $('#t-chart').getContext('2d');
+
+    const points = filtered.map(r => ({
+      x: r.production_date,
+      y: +r[param],
+      lot: r.paper_invoices?.paper_lot || '—',
+    }));
+    // line for mean / ucl / lcl
+    const mkLine = (label, val, color, dash=[]) => ({
+      label, data: points.map(p => ({x: p.x, y: val})),
+      borderColor: color, borderWidth: 1.5, borderDash: dash,
+      pointRadius: 0, fill: false, type: 'line',
+    });
+
+    state.charts.trend = new Chart(ctx, {
+      type: 'scatter',
+      data: {
+        datasets: [
+          {
+            label: info.label,
+            data: points,
+            backgroundColor: points.map(p => {
+              const dev = Math.abs(p.y - stats.mean);
+              if (dev > 3 * stats.sd) return '#b91c1c';
+              if (dev > 2 * stats.sd) return '#b45309';
+              return '#1d4ed8';
+            }),
+            borderColor: '#1d4ed8',
+            pointRadius: 4, pointHoverRadius: 7,
+            showLine: true, borderWidth: 1, tension: 0,
+          },
+          mkLine('Mean', stats.mean, '#047857'),
+          mkLine('+2σ', ucl2, '#b45309', [4,3]),
+          mkLine('-2σ', lcl2, '#b45309', [4,3]),
+          mkLine('+3σ', ucl3, '#b91c1c', [2,2]),
+          mkLine('-3σ', lcl3, '#b91c1c', [2,2]),
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        scales: {
+          x: { type: 'time', time: { unit: 'day' }, title: { display: true, text: 'Production Date' } },
+          y: { title: { display: true, text: `${info.label} (${info.unit})` } },
+        },
+        plugins: {
+          legend: { position: 'bottom' },
+          tooltip: {
+            callbacks: {
+              label: (c) => {
+                const p = c.raw;
+                if (typeof p.lot === 'undefined') return `${c.dataset.label}: ${fmtNum(p.y)}`;
+                return [`Lot: ${p.lot}`, `${info.label}: ${fmtNum(p.y)} ${info.unit}`];
+              }
+            }
+          }
+        }
+      }
+    });
+  } catch (e) {
+    console.error(e);
+    $('#t-results').innerHTML = `<div class="panel"><div class="empty" style="color:var(--danger)">Error: ${escapeHtml(e.message || e)}</div></div>`;
+  }
+}
+
+// ============================================================
+// TAB 3: LOT LOOKUP
+// ============================================================
+$('#l-go').addEventListener('click', () => doLookup($('#l-lot').value, '#l-results', false));
+$('#l-lot').addEventListener('keydown', e => { if (e.key === 'Enter') $('#l-go').click(); });
+
+async function doLookup(lotInput, targetId, asObject=false) {
+  const lot = String(lotInput || '').trim();
+  if (!lot) {
+    if (!asObject) showToast('กรุณาใส่ paper lot', 'error');
+    return null;
+  }
+  const norm = normalizeLot(lot);
+
+  if (!asObject) {
+    $(targetId).innerHTML = '<div class="panel"><div class="loading"><div class="spinner"></div>กำลังค้นหา...</div></div>';
+  }
+
+  try {
+    // หา invoice
+    const { data: invs, error: e1 } = await supabase
+      .from('paper_invoices')
+      .select('*')
+      .eq('paper_lot_normalized', norm);
+    if (e1) throw e1;
+
+    if (!invs || !invs.length) {
+      const html = `<div class="panel"><div class="empty">ไม่พบ lot <b>${escapeHtml(lot)}</b> ในระบบ</div></div>`;
+      if (asObject) return null;
+      $(targetId).innerHTML = html;
+      return null;
+    }
+
+    // หา COA
+    const ids = invs.map(i => i.id);
+    const { data: coas } = await supabase
+      .from('quality_tests')
+      .select('*')
+      .in('paper_invoice_id', ids);
+
+    // หา outflows ที่ใช้ lot นี้
+    const { data: outs } = await supabase
+      .from('paper_outflows')
+      .select('id, weight_kg, machine_id, paper_lot, outflow_date, source, paper_invoice_id, paper_type, supplier_name')
+      .in('paper_invoice_id', ids)
+      .order('outflow_date', { ascending: false });
+
+    // หา quality issues ที่บันทึก lot นี้
+    // ระวัง: ถ้า ids ว่างจะทำให้ .in() พัง — เช็คก่อน
+    let issues = [];
+    if (ids.length > 0) {
+      const { data: issArr } = await supabase
+        .from('quality_issues')
+        .select('*')
+        .in('paper_invoice_id', ids)
+        .order('issue_date', { ascending: false });
+      issues = issArr || [];
+    }
+    // เผื่อปัญหาที่บันทึกก่อน paper_invoice_id ถูก link — match ด้วย paper_lot ตรงๆ
+    {
+      const { data: byLot } = await supabase
+        .from('quality_issues')
+        .select('*')
+        .ilike('paper_lot', lot)
+        .order('issue_date', { ascending: false });
+      const seen = new Set(issues.map(i => i.id));
+      for (const i of (byLot || [])) {
+        if (!seen.has(i.id)) issues.push(i);
+      }
+    }
+
+    if (asObject) {
+      return { invoices: invs, coas: coas || [], outflows: outs || [], issues: issues || [] };
+    }
+
+    renderLookup(invs, coas || [], outs || [], issues || [], targetId);
+    return null;
+  } catch (e) {
+    console.error(e);
+    const html = `<div class="panel"><div class="empty" style="color:var(--danger)">Error: ${escapeHtml(e.message || e)}</div></div>`;
+    if (asObject) return null;
+    $(targetId).innerHTML = html;
+    return null;
+  }
+}
+
+function renderLookup(invs, coas, outs, issues, targetId) {
+  let html = '';
+
+  // sum used weight
+  const totalUsed = outs.reduce((a, o) => a + (+o.weight_kg || 0), 0);
+  const totalRecv = invs.reduce((a, i) => a + (+i.weight_kg || 0), 0);
+  const remaining = totalRecv - totalUsed;
+
+  html += `<div class="kpi-grid">
+    <div class="kpi"><div class="kpi-label">จำนวน Lot</div>
+      <div class="kpi-value">${invs.length}</div></div>
+    <div class="kpi"><div class="kpi-label">น้ำหนักรับ</div>
+      <div class="kpi-value">${fmtNum(totalRecv,1)}</div><div class="kpi-sub">kg</div></div>
+    <div class="kpi"><div class="kpi-label">ใช้แล้ว</div>
+      <div class="kpi-value">${fmtNum(totalUsed,1)}</div><div class="kpi-sub">kg (${outs.length} ครั้ง)</div></div>
+    <div class="kpi"><div class="kpi-label">คงเหลือ</div>
+      <div class="kpi-value" style="color:${remaining>0?'var(--success)':'var(--text-dim)'}">${fmtNum(remaining,1)}</div>
+      <div class="kpi-sub">kg</div></div>
+  </div>`;
+
+  // each invoice as a card
+  for (const inv of invs) {
+    const coa = coas.find(c => c.paper_invoice_id === inv.id);
+    const usedRows = outs.filter(o => o.paper_invoice_id === inv.id);
+    const lotIssues = issues.filter(i => i.paper_invoice_id === inv.id);
+
+    html += `<div class="lot-card">
+      <div class="lot-card-head">
+        <div>
+          <div class="lot-lot">${escapeHtml(inv.paper_lot)}</div>
+          <div style="color:var(--text-dim); font-size:14px; margin-top:4px;">
+            ${escapeHtml(inv.supplier || '—')} · ${escapeHtml(inv.paper_type || '—')}
+            ${inv.gsm ? ' · ' + inv.gsm + ' g/m²' : ''}
+            ${inv.width_mm ? ' · ' + inv.width_mm + ' mm' : ''}
+          </div>
+        </div>
+        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+          <span class="badge ${inv.status === 'in_stock' ? 'b-ok' : inv.status === 'used' ? 'b-neutral' : 'b-info'}">${escapeHtml(inv.status || '?')}</span>
+          ${coa ? '<span class="badge b-info">📋 มี COA</span>' : '<span class="badge b-warn">⚠ ไม่มี COA</span>'}
+          ${lotIssues.length ? `<span class="badge b-bad">⚠ ${lotIssues.length} issues</span>` : ''}
+        </div>
+      </div>
+
+      <div class="info-grid">
+        <div class="info-cell"><div class="info-label">Invoice</div>
+          <div class="info-value">${escapeHtml(inv.invoice_no || '—')}</div></div>
+        <div class="info-cell"><div class="info-label">วันที่รับ</div>
+          <div class="info-value">${fmtDate(inv.invoice_date)}</div></div>
+        <div class="info-cell"><div class="info-label">น้ำหนัก</div>
+          <div class="info-value">${fmtNum(inv.weight_kg,2)} kg</div></div>
+        ${inv.po_no ? `<div class="info-cell"><div class="info-label">PO</div>
+          <div class="info-value">${escapeHtml(inv.po_no)}</div></div>` : ''}
+        ${inv.project_code ? `<div class="info-cell"><div class="info-label">Project</div>
+          <div class="info-value">${escapeHtml(inv.project_code)}</div></div>` : ''}
+      </div>`;
+
+    // COA panel
+    if (coa) {
+      html += `<div style="margin-top:14px; background:var(--accent-bg); border-radius:10px; padding:12px;">
+        <div style="font-weight:700; font-size:14px; margin-bottom:8px;">📋 COA — ผลทดสอบคุณภาพ</div>
+        <div class="info-grid">`;
+      if (coa.production_date)
+        html += `<div class="info-cell"><div class="info-label">Production Date</div>
+                 <div class="info-value">${fmtDate(coa.production_date)}</div></div>`;
+      for (const [k, info] of Object.entries(PARAMS)) {
+        if (coa[k] != null) {
+          html += `<div class="info-cell"><div class="info-label">${info.label} (${info.unit})</div>
+                   <div class="info-value">${fmtNum(coa[k])}</div></div>`;
+        }
+      }
+      html += `</div></div>`;
+    }
+
+    // Usage history
+    if (usedRows.length) {
+      html += `<div style="margin-top:14px;">
+        <div style="font-weight:700; font-size:14px; margin-bottom:8px;">📤 ประวัติการใช้ (${usedRows.length} ครั้ง)</div>
+        <div style="overflow-x:auto"><table>
+          <thead><tr><th>วันที่ใช้</th><th>เครื่อง</th><th>ที่มา</th><th class="num">น้ำหนัก (kg)</th></tr></thead>
+          <tbody>`;
+      for (const o of usedRows.slice(0, 20)) {
+        html += `<tr><td>${fmtDate(o.outflow_date)}</td>
+                 <td>M${escapeHtml(o.machine_id ?? '—')}</td>
+                 <td><span class="badge b-neutral">${escapeHtml(o.source || '—')}</span></td>
+                 <td class="num">${fmtNum(o.weight_kg,2)}</td></tr>`;
+      }
+      if (usedRows.length > 20)
+        html += `<tr><td colspan="4" style="color:var(--text-dim); text-align:center;">... และอีก ${usedRows.length - 20} แถว</td></tr>`;
+      html += `</tbody></table></div></div>`;
+    }
+
+    // Quality issues for this lot
+    if (lotIssues.length) {
+      html += `<div style="margin-top:14px; background:var(--danger-bg); border-radius:10px; padding:12px;">
+        <div style="font-weight:700; font-size:14px; margin-bottom:8px; color:var(--danger);">⚠ ปัญหาที่บันทึกไว้</div>`;
+      for (const iss of lotIssues) {
+        html += `<div style="background:var(--panel); border-radius:8px; padding:10px; margin-bottom:6px;">
+          <div style="display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:4px;">
+            <b>${escapeHtml(iss.issue_type || iss.description.slice(0,40))}</b>
+            <span class="badge b-${iss.severity === 'critical' ? 'bad' : iss.severity === 'high' ? 'warn' : 'info'}">${iss.severity}</span>
+          </div>
+          <div style="font-size:13px; color:var(--text-dim);">
+            ${fmtDate(iss.issue_date)} · ${escapeHtml(iss.reported_by || '—')} · ${escapeHtml(iss.status)}
+          </div>
+          <div style="margin-top:4px; font-size:14px;">${escapeHtml(iss.description)}</div>
+        </div>`;
+      }
+      html += `</div>`;
+    }
+
+    html += `</div>`;
+  }
+
+  $(targetId).innerHTML = html;
+}
+
+// ============================================================
+// TAB 4: ISSUE FORM (auto-fill from lot)
+// ============================================================
+$('#i-fetch').addEventListener('click', fetchLotForIssue);
+$('#i-lot').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); fetchLotForIssue(); } });
+$('#i-save').addEventListener('click', saveIssue);
+$('#i-clear').addEventListener('click', clearIssueForm);
+
+async function fetchLotForIssue() {
+  const lot = $('#i-lot').value.trim();
+  if (!lot) { showToast('ใส่ paper lot ก่อน', 'error'); return; }
+
+  $('#i-lot-info').style.display = 'block';
+  $('#i-lot-info').innerHTML = '<div class="loading"><div class="spinner"></div>กำลังดึงข้อมูล...</div>';
+
+  const result = await doLookup(lot, '', true);
+  if (!result) {
+    $('#i-lot-info').innerHTML = `<div class="lot-card"><div class="empty" style="color:var(--danger)">ไม่พบ lot นี้ในระบบ</div></div>`;
+    state.currentLot = null;
+    return;
+  }
+
+  // เก็บ context
+  const inv = result.invoices[0];
+  const coa = result.coas.find(c => c.paper_invoice_id === inv.id);
+  state.currentLot = { invoice: inv, coa, allInvoices: result.invoices, allCoas: result.coas };
+
+  // mark lot field as auto-filled
+  $('#i-lot').classList.add('auto-filled');
+
+  // render context card
+  let html = `<div class="lot-card">
+    <div class="lot-card-head">
+      <div>
+        <div class="lot-lot">${escapeHtml(inv.paper_lot)}</div>
+        <div style="color:var(--text-dim); font-size:14px; margin-top:4px;">
+          ${escapeHtml(inv.supplier || '—')} · ${escapeHtml(inv.paper_type || '—')}
+          ${inv.gsm ? ' · ' + inv.gsm + ' g/m²' : ''}
+        </div>
+      </div>
+      ${coa ? '<span class="badge b-info">📋 มี COA</span>' : '<span class="badge b-warn">⚠ ไม่มี COA</span>'}
+    </div>
+    <div class="info-grid">
+      <div class="info-cell"><div class="info-label">Invoice</div>
+        <div class="info-value">${escapeHtml(inv.invoice_no || '—')}</div></div>
+      <div class="info-cell"><div class="info-label">วันที่รับ</div>
+        <div class="info-value">${fmtDate(inv.invoice_date)}</div></div>
+      <div class="info-cell"><div class="info-label">น้ำหนัก</div>
+        <div class="info-value">${fmtNum(inv.weight_kg,2)} kg</div></div>`;
+
+  if (coa) {
+    if (coa.production_date)
+      html += `<div class="info-cell"><div class="info-label">Production Date</div>
+               <div class="info-value">${fmtDate(coa.production_date)}</div></div>`;
+    for (const [k, info] of Object.entries(PARAMS)) {
+      if (coa[k] != null)
+        html += `<div class="info-cell"><div class="info-label">${info.label} (${info.unit})</div>
+                 <div class="info-value">${fmtNum(coa[k])}</div></div>`;
+    }
+  }
+  html += `</div></div>`;
+
+  $('#i-lot-info').innerHTML = html;
+  showToast('ดึงข้อมูล lot สำเร็จ ✅', 'success');
+}
+
+function clearIssueForm() {
+  $('#i-lot').value = ''; $('#i-lot').classList.remove('auto-filled');
+  $('#i-by').value = ''; $('#i-dept').value = '';
+  $('#i-sev').value = 'medium'; $('#i-type').value = '';
+  $('#i-batch').value = ''; $('#i-desc').value = ''; $('#i-symp').value = '';
+  $('#i-date').value = new Date().toISOString().slice(0,10);
+  $('#i-lot-info').style.display = 'none';
+  state.currentLot = null;
+}
+
+async function saveIssue() {
+  const desc = $('#i-desc').value.trim();
+  const lotRaw = $('#i-lot').value.trim();
+  if (!lotRaw) { showToast('กรุณาใส่ paper lot', 'error'); return; }
+  if (!desc)   { showToast('กรุณากรอกรายละเอียดปัญหา', 'error'); return; }
+
+  const ctx = state.currentLot;
+  // ถ้ายังไม่ได้กด fetch — ลอง fetch ก่อน
+  if (!ctx) {
+    showToast('กำลังดึงข้อมูล lot...', 'info');
+    await fetchLotForIssue();
+    if (!state.currentLot) { showToast('ไม่พบ lot — กรุณาตรวจสอบ', 'error'); return; }
+  }
+
+  const inv = state.currentLot.invoice;
+  const coa = state.currentLot.coa;
+
+  const payload = {
+    issue_date:        $('#i-date').value || null,
+    reported_by:       $('#i-by').value.trim() || null,
+    department:        $('#i-dept').value || null,
+    severity:          $('#i-sev').value,
+    status:            'open',
+    issue_type:        $('#i-type').value || null,
+    description:       desc,
+    symptoms:          $('#i-symp').value.trim() || null,
+    paper_invoice_id:  inv.id,
+    paper_lot:         inv.paper_lot,
+    supplier:          inv.supplier,
+    paper_type:        inv.paper_type,
+    quality_test_id:   coa?.id || null,
+    related_batch_no:  $('#i-batch').value.trim() || null,
+  };
+
+  // related_batch_id เป็น text — เก็บค่าที่ user กรอกตรงๆ (ไม่ต้อง resolve)
+  // ถ้าใส่เลขล้วน → verify ว่ามี batch_id ตรงกับใน production_batches
+  if (payload.related_batch_no) {
+    payload.related_batch_id = payload.related_batch_no;
+  }
+
+  $('#i-save').disabled = true;
+  $('#i-save').textContent = 'กำลังบันทึก...';
+
+  try {
+    const { data, error } = await supabase
+      .from('quality_issues')
+      .insert(payload)
+      .select()
+      .single();
+    if (error) throw error;
+    showToast('บันทึกปัญหาสำเร็จ ✅ — ID: ' + data.id, 'success');
+    clearIssueForm();
+  } catch (e) {
+    console.error(e);
+    showToast('บันทึกไม่ได้: ' + (e.message || e), 'error');
+  } finally {
+    $('#i-save').disabled = false;
+    $('#i-save').textContent = '💾 บันทึกปัญหา';
+  }
+}
+
+// ============================================================
+// TAB 5: ISSUES LIST
+// ============================================================
+$('#il-go').addEventListener('click', loadIssuesList);
+
+async function loadIssuesList() {
+  $('#il-results').innerHTML = '<div class="panel"><div class="loading"><div class="spinner"></div>กำลังโหลด...</div></div>';
+  try {
+    let q = supabase
+      .from('quality_issues')
+      .select('*')
+      .order('issue_date', { ascending: false });
+    const status = $('#il-status').value;
+    const sev    = $('#il-sev').value;
+    const sup    = $('#il-supplier').value;
+    if (status) q = q.eq('status', status);
+    if (sev)    q = q.eq('severity', sev);
+    if (sup)    q = q.eq('supplier', sup);
+
+    const data = await fetchAllRows(q);
+    if (!data.length) {
+      $('#il-results').innerHTML = '<div class="panel"><div class="empty">ไม่พบรายการ</div></div>';
+      return;
+    }
+
+    let html = `<div class="panel">
+      <div style="overflow-x:auto"><table>
+      <thead><tr>
+        <th>ID</th><th>วันที่</th><th>Lot</th><th>Supplier</th><th>ปัญหา</th>
+        <th>Severity</th><th>Status</th><th>ผู้รายงาน</th><th></th>
+      </tr></thead><tbody>`;
+    for (const r of data) {
+      const sevClass = r.severity === 'critical' ? 'b-bad' :
+                       r.severity === 'high'     ? 'b-warn' :
+                       r.severity === 'medium'   ? 'b-info' : 'b-neutral';
+      const stClass  = r.status === 'open' ? 'b-bad' :
+                       r.status === 'investigating' ? 'b-warn' :
+                       r.status === 'resolved' ? 'b-ok' : 'b-neutral';
+      html += `<tr>
+        <td class="mono">#${r.id}</td>
+        <td>${fmtDate(r.issue_date)}</td>
+        <td class="mono">${escapeHtml(r.paper_lot || '—')}</td>
+        <td>${escapeHtml(r.supplier || '—')}</td>
+        <td><b>${escapeHtml(r.issue_type || '—')}</b><br>
+            <span style="color:var(--text-dim); font-size:12px;">${escapeHtml((r.description || '').slice(0,80))}${(r.description||'').length>80?'…':''}</span></td>
+        <td><span class="badge ${sevClass}">${escapeHtml(r.severity)}</span></td>
+        <td><span class="badge ${stClass}">${escapeHtml(r.status)}</span></td>
+        <td>${escapeHtml(r.reported_by || '—')}</td>
+        <td><button class="btn outline" data-id="${r.id}" data-lot="${escapeHtml(r.paper_lot || '')}" data-act="view" style="padding:6px 12px; font-size:12px;">ดู</button></td>
+      </tr>`;
+    }
+    html += `</tbody></table></div></div>`;
+    html += `<div id="il-detail"></div>`;
+    $('#il-results').innerHTML = html;
+
+    // bind buttons
+    $$('#il-results button[data-act="view"]').forEach(btn => {
+      btn.addEventListener('click', () => viewIssueDetail(+btn.dataset.id, btn.dataset.lot));
+    });
+  } catch (e) {
+    console.error(e);
+    $('#il-results').innerHTML = `<div class="panel"><div class="empty" style="color:var(--danger)">Error: ${escapeHtml(e.message || e)}</div></div>`;
+  }
+}
+
+async function viewIssueDetail(id, lot) {
+  const detail = $('#il-detail');
+  detail.innerHTML = '<div class="panel"><div class="loading"><div class="spinner"></div>กำลังโหลดรายละเอียด...</div></div>';
+
+  const { data: iss, error } = await supabase.from('quality_issues').select('*').eq('id', id).single();
+  if (error) {
+    detail.innerHTML = `<div class="panel"><div class="empty" style="color:var(--danger)">โหลดไม่ได้</div></div>`;
+    return;
+  }
+
+  let html = `<div class="panel">
+    <div class="panel-title">⚠ Issue #${iss.id}</div>
+    <div class="info-grid">
+      <div class="info-cell"><div class="info-label">วันที่</div>
+        <div class="info-value">${fmtDate(iss.issue_date)}</div></div>
+      <div class="info-cell"><div class="info-label">Paper Lot</div>
+        <div class="info-value">${escapeHtml(iss.paper_lot || '—')}</div></div>
+      <div class="info-cell"><div class="info-label">Supplier</div>
+        <div class="info-value">${escapeHtml(iss.supplier || '—')}</div></div>
+      <div class="info-cell"><div class="info-label">ผู้รายงาน</div>
+        <div class="info-value">${escapeHtml(iss.reported_by || '—')}</div></div>
+      <div class="info-cell"><div class="info-label">ฝ่าย</div>
+        <div class="info-value">${escapeHtml(iss.department || '—')}</div></div>
+      <div class="info-cell"><div class="info-label">ประเภท</div>
+        <div class="info-value">${escapeHtml(iss.issue_type || '—')}</div></div>
+      ${iss.related_batch_no ? `<div class="info-cell"><div class="info-label">Batch ที่ใช้</div>
+        <div class="info-value">${escapeHtml(iss.related_batch_no)}</div></div>` : ''}
+    </div>
+
+    <div style="margin-top:14px;">
+      <div class="info-label">รายละเอียด</div>
+      <div style="background:var(--panel-2); border-radius:10px; padding:12px; margin-top:4px;">${escapeHtml(iss.description)}</div>
+    </div>
+    ${iss.symptoms ? `<div style="margin-top:10px;">
+      <div class="info-label">อาการ</div>
+      <div style="background:var(--panel-2); border-radius:10px; padding:12px; margin-top:4px;">${escapeHtml(iss.symptoms)}</div>
+    </div>` : ''}
+
+    <div style="margin-top:18px; padding-top:14px; border-top:1px solid var(--border);">
+      <div style="font-weight:700; margin-bottom:10px;">🔧 Update Status</div>
+      <div class="form-grid-2">
+        <div>
+          <label class="field-label">Status</label>
+          <select id="il-d-status">
+            <option value="open" ${iss.status==='open'?'selected':''}>Open</option>
+            <option value="investigating" ${iss.status==='investigating'?'selected':''}>Investigating</option>
+            <option value="resolved" ${iss.status==='resolved'?'selected':''}>Resolved</option>
+            <option value="closed" ${iss.status==='closed'?'selected':''}>Closed</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label">ผู้แก้ไข</label>
+          <input type="text" id="il-d-resolved-by" value="${escapeHtml(iss.resolved_by || '')}">
+        </div>
+        <div style="grid-column: 1 / -1;">
+          <label class="field-label">Root Cause</label>
+          <textarea id="il-d-root">${escapeHtml(iss.root_cause || '')}</textarea>
+        </div>
+        <div style="grid-column: 1 / -1;">
+          <label class="field-label">Corrective Action</label>
+          <textarea id="il-d-action">${escapeHtml(iss.corrective_action || '')}</textarea>
+        </div>
+      </div>
+      <div style="margin-top:12px; display:flex; gap:8px;">
+        <button class="btn success" id="il-d-save">💾 บันทึก</button>
+        ${lot ? `<button class="btn outline" id="il-d-lot">🔍 ดูข้อมูล lot นี้</button>` : ''}
+      </div>
+    </div>
+  </div>`;
+
+  detail.innerHTML = html;
+
+  $('#il-d-save').addEventListener('click', async () => {
+    const upd = {
+      status:           $('#il-d-status').value,
+      resolved_by:      $('#il-d-resolved-by').value.trim() || null,
+      root_cause:       $('#il-d-root').value.trim() || null,
+      corrective_action:$('#il-d-action').value.trim() || null,
+    };
+    if (upd.status === 'resolved' || upd.status === 'closed') upd.resolved_at = new Date().toISOString();
+    const { error } = await supabase.from('quality_issues').update(upd).eq('id', id);
+    if (error) { showToast('บันทึกไม่ได้: ' + error.message, 'error'); return; }
+    showToast('อัปเดตสำเร็จ ✅', 'success');
+    loadIssuesList();
+  });
+
+  if (lot) {
+    $('#il-d-lot').addEventListener('click', () => {
+      // switch tab
+      $$('.tab').forEach(b => b.classList.remove('active'));
+      $$('.view').forEach(v => v.classList.remove('active'));
+      $('.tab[data-view="lookup"]').classList.add('active');
+      $('#v-lookup').classList.add('active');
+      $('#l-lot').value = lot;
+      $('#l-go').click();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  }
+}
+
+// ============================================================
+// Boot
+// ============================================================
+init().catch(e => {
+  console.error(e);
+  showToast('Init error — ดู console', 'error');
+});
+</script>
+
+</body>
+</html>
