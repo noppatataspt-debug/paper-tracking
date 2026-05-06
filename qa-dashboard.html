@@ -245,9 +245,134 @@
     .tab { padding: 10px 14px; font-size: 13px; }
     .kpi-value { font-size: 22px; }
   }
+
+  /* Print header: hidden by default, only shown when printing */
+  .print-header { display: none; }
+  .print-header-left { font-size: 13px; }
+  .print-header-left h2 { font-size: 18px; margin-bottom: 4px; }
+  .print-header-right { text-align: right; font-size: 12px; }
+
+  /* ============ Print Styles (data-print-include system) ============ */
+  @media print {
+    /* Default: hide everything */
+    body * { visibility: hidden; }
+
+    /* Show only elements marked with data-print-include="1" */
+    [data-print-include] { visibility: visible; }
+    [data-print-include] * { visibility: visible; }
+
+    /* Always hide UI chrome */
+    .header, .header-nav-wrap, .tabs,
+    [id$="-modal"],
+    .toast {
+      display: none !important;
+      visibility: hidden !important;
+    }
+
+    /* Container */
+    body { background: white !important; padding: 0 !important; color: #000 !important; font-size: 11pt; }
+    .container { padding: 0 !important; max-width: none !important; }
+
+    /* Print header (always visible when printing) */
+    .print-header { display: flex !important; visibility: visible !important; margin-bottom: 14px;
+                    border-bottom: 2px solid #000; padding-bottom: 10px;
+                    justify-content: space-between; align-items: flex-start; }
+    .print-header * { visibility: visible !important; }
+
+    /* Panels */
+    .panel { box-shadow: none !important; border: 1px solid #ccc !important;
+             padding: 12px !important; margin-bottom: 10px !important;
+             page-break-inside: avoid; background: white !important; }
+    .panel-title { font-size: 14pt; font-weight: 700; margin-bottom: 8px; }
+    .panel-sub { font-size: 9pt; color: #555; }
+
+    /* Charts */
+    canvas { max-width: 100% !important; height: auto !important; }
+    .chart-wrap { height: 320px !important; page-break-inside: avoid; }
+    .mini-chart-canvas { height: 200px !important; }
+    .small-multiples > * { width: 100% !important; page-break-inside: avoid; }
+
+    /* Tables */
+    table { width: 100% !important; border-collapse: collapse !important; font-size: 9pt; }
+    th, td { border: 1px solid #ccc !important; padding: 4px 8px !important; }
+    th { background: #f5f5f5 !important;
+         -webkit-print-color-adjust: exact !important;
+         print-color-adjust: exact !important; }
+
+    /* KPIs */
+    .kpi-grid {
+      display: grid !important;
+      grid-template-columns: repeat(4, 1fr) !important;
+      gap: 6px !important;
+      margin-bottom: 10px !important;
+    }
+    .kpi { border: 1px solid #ccc !important; padding: 8px !important;
+           page-break-inside: avoid; background: white !important; }
+    .kpi-value { font-size: 16pt !important; }
+
+    /* Keep colors on badges + colored backgrounds */
+    .badge, [class*="badge"], [style*="background"] {
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+      color-adjust: exact !important;
+    }
+
+    /* Avoid breaks */
+    tr, .lot-card, .mini-chart, .info-row { page-break-inside: avoid; }
+
+    /* Hide form inputs */
+    input, select, textarea { display: none !important; }
+    button, .btn { display: none !important; }
+
+    /* Disable sticky positioning */
+    th, td { position: static !important; }
+
+    /* Allow horizontal overflow visible */
+    [style*="overflow-x"] { overflow-x: visible !important; }
+  }
 </style>
 </head>
 <body>
+
+<!-- ===== Universal Print Modal ===== -->
+<div id="print-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center;">
+  <div style="background:white; border-radius:12px; padding:24px; max-width:480px; width:90%; box-shadow:0 10px 40px rgba(0,0,0,0.3);">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+      <div style="font-size:18px; font-weight:700;">🖨️ พิมพ์รายงาน QA</div>
+      <button id="print-modal-close" style="background:none; border:none; font-size:22px; cursor:pointer; color:#64748b;">✕</button>
+    </div>
+
+    <div style="background:#f8fafc; padding:10px 14px; border-radius:8px; margin-bottom:16px; font-size:13px;">
+      <span style="color:#64748b;">Tab ปัจจุบัน:</span>
+      <b id="print-tab-name" style="color:#1e293b;">-</b>
+    </div>
+
+    <div style="margin-bottom:16px;">
+      <label style="display:block; font-weight:700; font-size:13px; margin-bottom:8px;">📐 แนวกระดาษ:</label>
+      <div style="display:flex; gap:10px;">
+        <label style="flex:1; padding:10px; border:2px solid #e5e7eb; border-radius:8px; cursor:pointer; display:flex; gap:8px; align-items:center;" id="print-orient-portrait-label">
+          <input type="radio" name="print-orient" value="portrait" id="print-orient-portrait">
+          <span>📄 แนวตั้ง (Portrait)</span>
+        </label>
+        <label style="flex:1; padding:10px; border:2px solid #e5e7eb; border-radius:8px; cursor:pointer; display:flex; gap:8px; align-items:center;" id="print-orient-landscape-label">
+          <input type="radio" name="print-orient" value="landscape" id="print-orient-landscape">
+          <span>📃 แนวนอน (Landscape)</span>
+        </label>
+      </div>
+      <div style="font-size:12px; color:#64748b; margin-top:6px;" id="print-orient-hint"></div>
+    </div>
+
+    <div style="margin-bottom:18px;" id="print-sections-wrap">
+      <label style="display:block; font-weight:700; font-size:13px; margin-bottom:8px;">📑 เลือกส่วนที่จะพิมพ์:</label>
+      <div id="print-sections" style="display:flex; flex-direction:column; gap:8px;"></div>
+    </div>
+
+    <div style="display:flex; gap:10px;">
+      <button class="btn" id="print-modal-cancel" style="flex:1;">ยกเลิก</button>
+      <button class="btn" id="print-modal-do" style="flex:2; background:#3b82f6; color:white; border-color:#3b82f6;">🖨️ พิมพ์</button>
+    </div>
+  </div>
+</div>
 
 <div class="container">
 
@@ -257,11 +382,14 @@
         <h1>🧪 QA <span>Dashboard</span></h1>
         <p>Monitor คุณภาพกระดาษ + สอบกลับ lot ที่พบปัญหา</p>
       </div>
-      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <div class="header-nav-wrap" style="display:flex; gap:8px; flex-wrap:wrap;">
         <a href="./" class="nav-link">🏠 Home</a>
         <a href="paper-in.html" class="nav-link">📥 Paper-In</a>
+        <a href="paper-out.html" class="nav-link">📤 Paper-Out</a>
         <a href="dashboard.html" class="nav-link">📊 Trace</a>
         <a href="stock-dashboard.html" class="nav-link">📦 Stock</a>
+        <a href="qa-dashboard.html" class="nav-link" style="background:var(--accent); color:white;">🧪 QA</a>
+        <button class="nav-link" id="btn-open-print" style="border:1px solid var(--border); cursor:pointer; background:transparent; font: inherit;">🖨 พิมพ์</button>
       </div>
     </div>
   </div>
@@ -4317,6 +4445,198 @@ async function renderCmpCharts() {
     });
   }
 }
+
+// ============================================================
+// Universal Print Modal
+// ============================================================
+const PRINT_CONFIG = {
+  monitor: {
+    name: '📊 Monitor by Supplier',
+    orientation: 'landscape',
+    sections: [
+      { id: 'm-results', label: 'KPI + ตาราง + กราฟ', default: true },
+    ],
+  },
+  trend: {
+    name: '📈 Parameter Trend',
+    orientation: 'landscape',
+    sections: [
+      { id: 't-results', label: 'KPI + กราฟ trend', default: true },
+    ],
+  },
+  lookup: {
+    name: '🔍 Lot Lookup',
+    orientation: 'portrait',
+    sections: [
+      { id: 'l-results', label: 'ผลการค้นหา + กราฟเปรียบเทียบ', default: true },
+    ],
+  },
+  compare: {
+    name: '⚖️ Compare Lots',
+    orientation: 'landscape',
+    sections: [
+      { id: 'cmp-results', label: 'รายละเอียด Case + ตาราง + กราฟเปรียบเทียบ', default: true },
+    ],
+  },
+  issue: {
+    name: '⚠️ บันทึกปัญหา',
+    orientation: 'portrait',
+    sections: [
+      { id: 'i-lot-info', label: 'ข้อมูล Lot ที่บันทึก', default: true },
+    ],
+  },
+  'issues-list': {
+    name: '📋 รายการปัญหา',
+    orientation: 'portrait',
+    sections: [
+      { id: 'il-results', label: 'รายการปัญหา + รายละเอียด', default: true },
+    ],
+  },
+};
+
+function getCurrentTabName() {
+  const active = document.querySelector('.tab.active');
+  return active ? active.dataset.view : null;
+}
+
+function openPrintModal() {
+  const tabName = getCurrentTabName();
+  const cfg = PRINT_CONFIG[tabName];
+  if (!cfg) {
+    showToast('Tab นี้ไม่รองรับการพิมพ์ — เปลี่ยน tab อื่นก่อน', 'error');
+    return;
+  }
+
+  $('#print-tab-name').textContent = cfg.name;
+  $('#print-orient-portrait').checked = (cfg.orientation === 'portrait');
+  $('#print-orient-landscape').checked = (cfg.orientation === 'landscape');
+  updateOrientLabels();
+
+  $('#print-orient-hint').textContent =
+    cfg.orientation === 'landscape' ? '💡 แนะนำ: แนวนอน (กราฟ + ตารางกว้าง)' : '💡 แนะนำ: แนวตั้ง';
+
+  // sections checkboxes
+  const wrap = $('#print-sections');
+  if (cfg.sections.length <= 1) {
+    $('#print-sections-wrap').style.display = 'none';
+  } else {
+    $('#print-sections-wrap').style.display = 'block';
+    wrap.innerHTML = cfg.sections.map(s => `
+      <label style="display:flex; align-items:center; gap:8px; padding:8px 12px; border:1px solid #e5e7eb; border-radius:6px; cursor:pointer;">
+        <input type="checkbox" data-section-id="${s.id}" ${s.default ? 'checked' : ''}>
+        <span>${s.label}</span>
+      </label>
+    `).join('');
+  }
+
+  $('#print-modal').style.display = 'flex';
+}
+
+function updateOrientLabels() {
+  const portrait = $('#print-orient-portrait').checked;
+  $('#print-orient-portrait-label').style.borderColor = portrait ? '#3b82f6' : '#e5e7eb';
+  $('#print-orient-portrait-label').style.background = portrait ? '#eff6ff' : 'white';
+  $('#print-orient-landscape-label').style.borderColor = !portrait ? '#3b82f6' : '#e5e7eb';
+  $('#print-orient-landscape-label').style.background = !portrait ? '#eff6ff' : 'white';
+}
+
+function closePrintModal() {
+  $('#print-modal').style.display = 'none';
+}
+
+function doPrintFromModal() {
+  const tabName = getCurrentTabName();
+  const cfg = PRINT_CONFIG[tabName];
+  if (!cfg) return;
+
+  const orientation = $('#print-orient-landscape').checked ? 'landscape' : 'portrait';
+
+  // เลือก sections ที่ checked
+  let selectedIds;
+  if (cfg.sections.length <= 1) {
+    selectedIds = cfg.sections.map(s => s.id);
+  } else {
+    selectedIds = [...$('#print-sections').querySelectorAll('input[type=checkbox]:checked')]
+      .map(cb => cb.dataset.sectionId);
+    if (selectedIds.length === 0) {
+      showToast('กรุณาเลือกส่วนที่จะพิมพ์อย่างน้อย 1 ส่วน', 'error');
+      return;
+    }
+  }
+
+  // 1. set orientation via dynamic <style>
+  let oldStyle = document.getElementById('dynamic-print-style');
+  if (oldStyle) oldStyle.remove();
+  const styleEl = document.createElement('style');
+  styleEl.id = 'dynamic-print-style';
+  const margin = orientation === 'landscape' ? '0.5cm 0.6cm' : '1cm 1cm';
+  styleEl.textContent = `@page { size: A4 ${orientation}; margin: ${margin}; }`;
+  document.head.appendChild(styleEl);
+
+  // 2. mark sections to include
+  const view = document.getElementById('v-' + tabName);
+  if (!view) { closePrintModal(); showToast('ไม่พบ view ที่จะพิมพ์', 'error'); return; }
+
+  // ลบ marker เก่า
+  document.querySelectorAll('[data-print-include]').forEach(el => el.removeAttribute('data-print-include'));
+
+  for (const id of selectedIds) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    let cur = el;
+    while (cur && cur !== document.body) {
+      cur.setAttribute('data-print-include', '1');
+      cur = cur.parentElement;
+    }
+    // mark all children too
+    el.querySelectorAll('*').forEach(c => c.setAttribute('data-print-include', '1'));
+  }
+
+  // 3. build print header
+  view.querySelectorAll('.print-header').forEach(el => el.remove());
+
+  const today = new Date();
+  const dateStr = today.toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' });
+  const timeStr = today.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+
+  const ph = document.createElement('div');
+  ph.className = 'print-header';
+  ph.setAttribute('data-print-include', '1');
+  ph.innerHTML = `
+    <div class="print-header-left">
+      <h2>${escapeHtml(cfg.name)}</h2>
+      <div style="font-size:12px; color:#475569;">บริษัท เอเชียเปเปอร์ทิ้ว จำกัด · Asia Paper Tube Co., Ltd.</div>
+    </div>
+    <div class="print-header-right">
+      <div>วันที่พิมพ์: ${dateStr}</div>
+      <div>เวลา: ${timeStr}</div>
+    </div>
+  `;
+  view.insertBefore(ph, view.firstChild);
+
+  closePrintModal();
+
+  setTimeout(() => {
+    window.print();
+    setTimeout(() => {
+      const dyn = document.getElementById('dynamic-print-style');
+      if (dyn) dyn.remove();
+      document.querySelectorAll('[data-print-include]').forEach(el => el.removeAttribute('data-print-include'));
+      view.querySelectorAll('.print-header').forEach(el => el.remove());
+    }, 500);
+  }, 200);
+}
+
+// wire events
+$('#btn-open-print').addEventListener('click', openPrintModal);
+$('#print-modal-close').addEventListener('click', closePrintModal);
+$('#print-modal-cancel').addEventListener('click', closePrintModal);
+$('#print-modal-do').addEventListener('click', doPrintFromModal);
+$('#print-orient-portrait').addEventListener('change', updateOrientLabels);
+$('#print-orient-landscape').addEventListener('change', updateOrientLabels);
+$('#print-modal').addEventListener('click', e => {
+  if (e.target.id === 'print-modal') closePrintModal();
+});
 
 // ============================================================
 // Boot
