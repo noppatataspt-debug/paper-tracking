@@ -72,6 +72,23 @@ body {
 .nav-link:hover { background: var(--panel-2); color: var(--text); }
 .nav-link.active { background: var(--accent); color: white; border-color: var(--accent); }
 
+/* ====== Manager-only visibility ======
+   ซ่อน element ที่มี class .manager-only ถ้า body ไม่มี class .is-manager
+   ใช้กับน้ำหนัก (kg) ที่ต้องการให้เห็นเฉพาะ manager
+*/
+body:not(.is-manager) .manager-only {
+  display: none !important;
+}
+body:not(.is-manager) .manager-only-cell {
+  display: none !important;
+}
+body:not(.is-manager) .manager-only-inline::after {
+  content: "🔒";
+  color: var(--text-dim);
+  font-size: 12px;
+  margin-left: 4px;
+}
+
 /* ============================================
    TABS
    ============================================ */
@@ -1052,7 +1069,7 @@ tr:hover td { background: var(--panel-2); }
           <div class="label">จำนวนม้วน</div>
           <div class="value" id="m-total-rolls">0</div>
         </div>
-        <div class="summary-stat">
+        <div class="summary-stat manager-only">
           <div class="label">น้ำหนักรวม</div>
           <div class="value"><span id="m-total-weight">0</span> kg</div>
         </div>
@@ -1997,7 +2014,13 @@ function renderProjectBadge(proj) {
 let currentAdmin = null;
 const savedAdmin = sessionStorage.getItem('paper_admin');
 if (savedAdmin) {
-  try { currentAdmin = JSON.parse(savedAdmin); } catch(e) {}
+  try {
+    currentAdmin = JSON.parse(savedAdmin);
+    // Set initial body class for weight visibility
+    if (currentAdmin?.role === 'manager') {
+      document.body.classList.add('is-manager');
+    }
+  } catch(e) {}
 }
 
 // ====== Helper: เรียก admin RPC + ส่ง session token ======
@@ -2328,7 +2351,7 @@ function addInvoiceCard(result) {
         <div class="label">PO</div>
         <div class="value">${escapeHtml(d.po_no || '—')}</div>
       </div>
-      <div class="inv-meta-item">
+      <div class="inv-meta-item manager-only">
         <div class="label">น้ำหนักรวม</div>
         <div class="value">${formatNumber(totalWeight)} kg</div>
       </div>
@@ -2343,7 +2366,7 @@ function addInvoiceCard(result) {
             <th>Lot</th>
             <th>ประเภท</th>
             <th>กว้าง (mm)</th>
-            <th>น้ำหนัก (kg)</th>
+            <th class="manager-only-cell">น้ำหนัก (kg)</th>
           </tr>
         </thead>
         <tbody>
@@ -2352,7 +2375,7 @@ function addInvoiceCard(result) {
               <td class="mono">${escapeHtml(r.paper_lot)}</td>
               <td class="mono">${escapeHtml(r.paper_type)}</td>
               <td class="mono">${r.width_mm || '—'}</td>
-              <td class="mono">${formatNumber(r.weight_kg)}</td>
+              <td class="mono manager-only-cell">${formatNumber(r.weight_kg)}</td>
             </tr>
           `).join('')}
         </tbody>
@@ -2758,7 +2781,7 @@ function renderGroupedList(rows, totalCount) {
             <span class="group-day-date">${escapeHtml(date)}</span>
             <span class="group-day-tag">${supplierSet.size} supplier${supplierSet.size > 1 ? 's' : ''}</span>
           </div>
-          <div class="group-day-stats">${dayRolls} ม้วน · ${formatNumber(dayWeight)} kg</div>
+          <div class="group-day-stats">${dayRolls} ม้วน<span class="manager-only"> · ${formatNumber(dayWeight)} kg</span></div>
         </div>
       </div>
       <div class="group-day-children" id="${dayId}" style="display:${isFirst ? 'block' : 'none'}">
@@ -2786,7 +2809,7 @@ function renderGroupedList(rows, totalCount) {
                 <button class="btn-delete-batch" onclick="event.stopPropagation();window.openDeleteBatch('${escapeHtml(supplier)}','${escapeHtml(invoice_no)}','${date}')" title="ลบทั้ง batch">🗑️ ลบ batch</button>
               ` : ''}
             </div>
-            <div class="group-inv-stats">${formatNumber(sumWeight)} kg · คงเหลือ ${formatNumber(sumRemaining)} kg</div>
+            <div class="group-inv-stats manager-only">${formatNumber(sumWeight)} kg · คงเหลือ ${formatNumber(sumRemaining)} kg</div>
           </div>
         </div>
         <div class="group-inv-children" id="${invId}" style="display:${isFirstInv ? 'block' : 'none'}">
@@ -2798,7 +2821,7 @@ function renderGroupedList(rows, totalCount) {
                 <th style="text-align:left;">ชนิด</th>
                 <th style="text-align:left;">โครงการ</th>
                 <th class="td-right">กว้าง</th>
-                <th class="td-right">น้ำหนัก</th>
+                <th class="td-right manager-only-cell">น้ำหนัก</th>
                 <th class="td-right">คงเหลือ</th>
                 <th class="td-right">ราคา/kg</th>
                 <th>Status</th>
@@ -2813,8 +2836,8 @@ function renderGroupedList(rows, totalCount) {
                   <td>${renderCategoryBadge(r.paper_category)}</td>
                   <td>${renderProjectBadge(r.project_code)}</td>
                   <td class="td-mono td-right">${r.width_mm || '—'}</td>
-                  <td class="td-mono td-right">${formatNumber(r.weight_kg)}</td>
-                  <td class="td-mono td-right">${formatNumber(r.remaining_weight_kg)}</td>
+                  <td class="td-mono td-right manager-only-cell">${formatNumber(r.weight_kg)}</td>
+                  <td class="td-mono td-right manager-only-cell">${formatNumber(r.remaining_weight_kg)}</td>
                   <td class="td-right price-cell ${r.price_per_kg ? '' : 'no-price'}">${r.price_per_kg ? formatPrice(r.price_per_kg) : '—'}</td>
                   <td><span class="status-badge status-${r.status || 'in_stock'}">${escapeHtml(r.status || 'in_stock')}</span></td>
                   ${currentAdmin ? `
@@ -2933,6 +2956,14 @@ async function init() {
 function renderAdminBar() {
   const bar = $('#adminBar');
   if (!bar) return;
+
+  // Toggle is-manager body class for weight visibility
+  if (currentAdmin && currentAdmin.role === 'manager') {
+    document.body.classList.add('is-manager');
+  } else {
+    document.body.classList.remove('is-manager');
+  }
+
   if (currentAdmin) {
     bar.style.display = 'flex';
     bar.className = 'admin-bar';
@@ -3234,7 +3265,7 @@ window.openSinglePrice = function(id) {
   $('#singlePriceInfo').innerHTML = `
     <div>Lot: <b>${escapeHtml(row.paper_lot)}</b></div>
     <div>Supplier: <b>${escapeHtml(row.supplier)}</b> · ${escapeHtml(row.paper_type || '-')}</div>
-    <div>น้ำหนัก: <b>${formatNumber(row.weight_kg)} kg</b></div>
+    <div class="manager-only">น้ำหนัก: <b>${formatNumber(row.weight_kg)} kg</b></div>
     ${row.price_per_kg ? `<div style="color:#ca8a04;">ราคาเดิม: <b>${formatPrice(row.price_per_kg)} บาท/kg</b></div>` : ''}
   `;
   $('#singlePriceInput').value = row.price_per_kg || '';
@@ -3327,7 +3358,7 @@ window.openBulkPrice = async function(supplier, invoice_no, date) {
   $('#bulkPriceInfo').innerHTML = `
     <div>Supplier: <b>${escapeHtml(supplier)}</b></div>
     <div>Invoice: <b>${escapeHtml(invoice_no)}</b> · วันที่ <b>${escapeHtml(date)}</b></div>
-    <div>จำนวน: <b>${rolls.length} ม้วน</b> · น้ำหนัก <b>${formatNumber(totalWeight)} kg</b></div>
+    <div>จำนวน: <b>${rolls.length} ม้วน</b><span class="manager-only"> · น้ำหนัก <b>${formatNumber(totalWeight)} kg</b></span></div>
     ${withPrice > 0 ? `<div style="color:#ca8a04;">มีราคาแล้ว: <b>${withPrice}/${rolls.length} ม้วน</b></div>` : ''}
   `;
   
@@ -3343,7 +3374,7 @@ window.openBulkPrice = async function(supplier, invoice_no, date) {
         <tr>
           <th>Lot</th>
           <th>ประเภท</th>
-          <th class="td-right">น้ำหนัก</th>
+          <th class="td-right manager-only-cell">น้ำหนัก</th>
           <th class="td-right">ราคา/kg</th>
         </tr>
       </thead>
@@ -3352,7 +3383,7 @@ window.openBulkPrice = async function(supplier, invoice_no, date) {
           <tr>
             <td class="td-mono">${escapeHtml(r.paper_lot)}</td>
             <td class="td-mono">${escapeHtml(r.paper_type || '—')}</td>
-            <td class="td-right td-mono">${formatNumber(r.weight_kg)}</td>
+            <td class="td-right td-mono manager-only-cell">${formatNumber(r.weight_kg)}</td>
             <td class="td-right">
               <input type="number" class="roll-price-input" step="0.0001" 
                      data-roll-id="${r.id}" data-roll-weight="${r.weight_kg}"
@@ -3498,7 +3529,7 @@ window.openDeleteBatch = async function(supplier, invoice_no, date) {
   $('#deleteBatchInfo').innerHTML = `
     <div>Supplier: <b>${escapeHtml(supplier)}</b></div>
     <div>Invoice: <b>${escapeHtml(invoice_no)}</b> · วันที่ <b>${escapeHtml(date)}</b></div>
-    <div>จำนวน: <b>${rolls.length} ม้วน</b> · น้ำหนัก <b>${formatNumber(totalWeight)} kg</b></div>
+    <div>จำนวน: <b>${rolls.length} ม้วน</b><span class="manager-only"> · น้ำหนัก <b>${formatNumber(totalWeight)} kg</b></span></div>
   `;
   
   // เช็คความปลอดภัย — มีม้วนไหนถูกตัดออกแล้วบ้าง?
