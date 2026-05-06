@@ -338,7 +338,7 @@ body {
 }
 
 .outflow-row {
-  display: grid; grid-template-columns: 80px 130px 1fr auto;
+  display: grid; grid-template-columns: 95px 130px 1fr auto;
   gap: 8px; padding: 10px 16px; border-top: 1px solid var(--border);
   align-items: center; font-size: 13px; transition: background 0.15s;
 }
@@ -989,6 +989,12 @@ function fmtTime(d) {
   return new Date(d).toLocaleTimeString('th-TH', { hour:'2-digit', minute:'2-digit' });
 }
 
+// แสดงเวลาแบบละเอียด (มีวินาที) — สำหรับ list แยก records ที่บันทึกใกล้กัน
+function fmtTimeFull(d) {
+  if (!d) return '-';
+  return new Date(d).toLocaleTimeString('th-TH', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+}
+
 // ====== Init ======
 document.getElementById('outflowDate').value = new Date().toISOString().split('T')[0];
 
@@ -1564,7 +1570,12 @@ function renderList() {
           <span class="day-stats">${totalRolls} ม้วน · ${totalKg} kg</span>
         </div>
         ${sortedMachines.map(m => {
-          const rows = machines[m];
+          // เรียง records ภายในเครื่องตาม created_at (ใหม่ → เก่า) เพื่อความ stable
+          const rows = (machines[m] || []).slice().sort((a, b) => {
+            const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
+            const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+            return tb - ta;
+          });
           const mRolls = rows.filter(o => !o.voided).length;
           const mKg = Math.round(rows.filter(o => !o.voided).reduce((s, o) => s + (Number(o.weight_kg) || 0), 0));
           const mLabel = MACHINE_LABELS[m] || `❓ ${m}`;
@@ -1577,7 +1588,7 @@ function renderList() {
               </div>
               ${rows.map(o => `
                 <div class="outflow-row ${o.voided ? 'voided' : ''} ${o.outflow_reason === 'pre_stock' ? 'prestock' : ''}">
-                  <div class="outflow-time">${fmtTime(o.created_at)}</div>
+                  <div class="outflow-time" title="บันทึกเข้าระบบ: ${fmtTimeFull(o.created_at)}">${fmtTimeFull(o.created_at)}</div>
                   <div class="outflow-lot">
                     ${o.outflow_reason === 'pre_stock' ? '<span class="prestock-icon">⚠️</span>' : ''}${escapeHtml(o.paper_lot)}
                   </div>
