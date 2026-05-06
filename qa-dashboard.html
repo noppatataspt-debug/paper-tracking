@@ -146,6 +146,30 @@
     position: relative; width: 100%;
     height: 380px; margin-top: 12px;
   }
+
+  /* Small multiples — grid of mini charts */
+  .small-multiples {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 14px;
+  }
+  .mini-chart {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px 8px;
+  }
+  .mini-chart-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    flex-wrap: wrap; gap: 4px; margin-bottom: 4px;
+  }
+  .mini-chart-label { font-weight: 700; font-size: 13px; }
+  .mini-chart-stat {
+    font-family: var(--mono); font-size: 11px; color: var(--text-dim);
+  }
+  .mini-chart-canvas {
+    position: relative; width: 100%; height: 140px;
+  }
   .empty {
     text-align: center; padding: 60px 20px;
     color: var(--text-dim); font-weight: 600;
@@ -266,7 +290,14 @@
           <select id="m-type"><option value="">— ทั้งหมด —</option></select>
         </div>
         <div>
-          <label class="field-label">Production Date ตั้งแต่</label>
+          <label class="field-label">ใช้วันที่ของ</label>
+          <select id="m-datefield">
+            <option value="production_date">Production Date (ผลิต)</option>
+            <option value="receive_date">Receive Date (รับเข้าคลัง)</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label">ตั้งแต่</label>
           <input type="date" id="m-from">
         </div>
         <div>
@@ -686,10 +717,11 @@ $('#m-reset').addEventListener('click', () => {
 });
 
 async function loadMonitor() {
-  const supplier = $('#m-supplier').value;
-  const type     = $('#m-type').value;
-  const from     = $('#m-from').value;
-  const to       = $('#m-to').value;
+  const supplier  = $('#m-supplier').value;
+  const type      = $('#m-type').value;
+  const from      = $('#m-from').value;
+  const to        = $('#m-to').value;
+  const dateField = $('#m-datefield').value;  // 'production_date' or 'receive_date'
 
   $('#m-results').innerHTML = '<div class="panel"><div class="loading"><div class="spinner"></div>กำลังโหลด...</div></div>';
 
@@ -697,19 +729,28 @@ async function loadMonitor() {
     // ดึง COA + join paper_invoices ผ่าน paper_invoice_id
     let q = supabase
       .from('quality_tests')
-      .select('id, supplier, production_date, basis_weight, burst, plybond, cobb_top, cobb_bottom, caliper, moisture, paper_invoice_id, paper_invoices(paper_type, paper_lot)')
-      .order('production_date', { ascending: false });
+      .select('id, supplier, production_date, basis_weight, burst, plybond, cobb_top, cobb_bottom, caliper, moisture, paper_invoice_id, paper_invoices(paper_type, paper_lot, receive_date)')
+      .order('production_date', { ascending: true });
 
     if (supplier) q = q.eq('supplier', supplier);
-    if (from)     q = q.gte('production_date', from);
-    if (to)       q = q.lte('production_date', to);
+
+    // filter ตาม date field ที่เลือก
+    if (dateField === 'production_date') {
+      if (from) q = q.gte('production_date', from);
+      if (to)   q = q.lte('production_date', to);
+    }
+    // ถ้าเป็น receive_date — filter ทาง client-side หลัง fetch (เพราะอยู่ใน paper_invoices)
 
     const data = await fetchAllRows(q);
 
-    // filter by paper_type (client-side after join)
-    const filtered = type
+    // filter by paper_type + receive_date (client-side)
+    let filtered = type
       ? data.filter(r => r.paper_invoices?.paper_type === type)
       : data;
+    if (dateField === 'receive_date') {
+      if (from) filtered = filtered.filter(r => (r.paper_invoices?.receive_date || '') >= from);
+      if (to)   filtered = filtered.filter(r => (r.paper_invoices?.receive_date || '') <= to);
+    }
 
     if (!filtered.length) {
       $('#m-results').innerHTML = '<div class="panel"><div class="empty">ไม่พบข้อมูล COA ตาม filter</div></div>';
@@ -720,10 +761,12 @@ async function loadMonitor() {
     const totalLots = filtered.length;
     const supplierCount = new Set(filtered.map(r => r.supplier)).size;
     const typeCount = new Set(filtered.map(r => r.paper_invoices?.paper_type).filter(Boolean)).size;
-    const dateMin = filtered.map(r => r.production_date).filter(Boolean).sort()[0];
-    const dateMax = filtered.map(r => r.production_date).filter(Boolean).sort().slice(-1)[0];
+    const dates = filtered.map(r => dateField === 'receive_date' ? r.paper_invoices?.receive_date : r.production_date).filter(Boolean).sort();
+    const dateMin = dates[0];
+    const dateMax = dates.slice(-1)[0];
+    const dateLabel = dateField === 'receive_date' ? 'ช่วงวันรับเข้า' : 'ช่วงวันที่ผลิต';
 
-    // group by paper_type → calc stats per parameter
+    // group by paper_type
     const byType = {};
     for (const r of filtered) {
       const pt = r.paper_invoices?.paper_type || '—';
@@ -739,15 +782,17 @@ async function loadMonitor() {
           <div class="kpi-value">${supplierCount}</div></div>
         <div class="kpi"><div class="kpi-label">Paper Types</div>
           <div class="kpi-value">${typeCount}</div></div>
-        <div class="kpi"><div class="kpi-label">ช่วงวันที่ผลิต</div>
+        <div class="kpi"><div class="kpi-label">${dateLabel}</div>
           <div class="kpi-value" style="font-size:14px">${fmtDate(dateMin)}<br>${fmtDate(dateMax)}</div></div>
       </div>
     `;
 
-    // table per paper_type
+    // table + chart per paper_type
     for (const [pt, rows] of Object.entries(byType)) {
+      const chartId = `m-chart-${pt.replace(/[^a-zA-Z0-9]/g,'_')}`;
       html += `<div class="panel">
         <div class="panel-title">${escapeHtml(pt)} <span style="color:var(--text-dim); font-size:14px; font-weight:500;">(${rows.length} lots)</span></div>
+
         <div style="overflow-x:auto"><table>
           <thead><tr>
             <th>Parameter</th><th class="num">N</th><th class="num">Min</th>
@@ -771,13 +816,130 @@ async function loadMonitor() {
           <td class="num">${fmtNum(stats.cv, 2)}</td>
         </tr>`;
       }
-      html += `</tbody></table></div></div>`;
+      html += `</tbody></table></div>
+
+        <div style="margin-top:18px;">
+          <div style="font-weight:700; font-size:14px; margin-bottom:8px;">📈 Trend ของแต่ละ Parameter</div>
+          <div style="font-size:12px; color:var(--text-dim); margin-bottom:10px;">
+            กราฟเล็ก 1 อันต่อ parameter — เส้นกลางคือค่าเฉลี่ย, แถบสีอ่อน = ±1σ
+          </div>
+          <div id="${chartId}" class="small-multiples"></div>
+        </div>
+      </div>`;
     }
 
     $('#m-results').innerHTML = html;
+
+    // render small multiples charts
+    for (const [pt, rows] of Object.entries(byType)) {
+      const chartId = `m-chart-${pt.replace(/[^a-zA-Z0-9]/g,'_')}`;
+      renderSmallMultiples(chartId, rows, dateField);
+    }
   } catch (e) {
     console.error(e);
     $('#m-results').innerHTML = `<div class="panel"><div class="empty" style="color:var(--danger)">Error: ${escapeHtml(e.message || e)}</div></div>`;
+  }
+}
+
+// ----------- small multiples renderer -----------
+function renderSmallMultiples(containerId, rows, dateField) {
+  const container = $('#' + containerId);
+  if (!container) return;
+  container.innerHTML = '';
+
+  // create one mini chart per parameter
+  for (const [key, info] of Object.entries(PARAMS)) {
+    // build sorted points
+    const points = rows
+      .map(r => ({
+        x: dateField === 'receive_date' ? r.paper_invoices?.receive_date : r.production_date,
+        y: r[key],
+        lot: r.paper_invoices?.paper_lot,
+      }))
+      .filter(p => p.x && p.y != null && !isNaN(+p.y))
+      .sort((a,b) => a.x.localeCompare(b.x));
+
+    if (!points.length) continue;
+
+    const stats = calcStats(points.map(p => p.y));
+    const ucl1 = stats.mean + stats.sd;
+    const lcl1 = stats.mean - stats.sd;
+
+    const wrap = document.createElement('div');
+    wrap.className = 'mini-chart';
+    wrap.innerHTML = `
+      <div class="mini-chart-head">
+        <span class="mini-chart-label">${info.label} <span style="color:var(--text-dim); font-weight:500; font-size:11px;">${info.unit}</span></span>
+        <span class="mini-chart-stat">μ ${fmtNum(stats.mean)} · σ ${fmtNum(stats.sd, 2)} · CV ${fmtNum(stats.cv,1)}%</span>
+      </div>
+      <div class="mini-chart-canvas"><canvas></canvas></div>
+    `;
+    container.appendChild(wrap);
+
+    const canvas = wrap.querySelector('canvas');
+    new Chart(canvas.getContext('2d'), {
+      type: 'line',
+      data: {
+        datasets: [
+          {
+            label: info.label,
+            data: points,
+            borderColor: '#1d4ed8',
+            backgroundColor: '#1d4ed8',
+            borderWidth: 1.8,
+            pointRadius: 3,
+            pointHoverRadius: 5,
+            tension: 0,
+            fill: false,
+          },
+          {
+            label: 'Mean',
+            data: points.map(p => ({x: p.x, y: stats.mean})),
+            borderColor: '#047857',
+            borderWidth: 1.5,
+            borderDash: [3,3],
+            pointRadius: 0,
+            fill: false,
+          },
+          {
+            label: '+1σ',
+            data: points.map(p => ({x: p.x, y: ucl1})),
+            borderColor: 'rgba(180, 83, 9, 0.4)',
+            backgroundColor: 'rgba(180, 83, 9, 0.08)',
+            borderWidth: 1, borderDash: [2,2], pointRadius: 0,
+            fill: '+1', // fill to next dataset (-1σ)
+          },
+          {
+            label: '-1σ',
+            data: points.map(p => ({x: p.x, y: lcl1})),
+            borderColor: 'rgba(180, 83, 9, 0.4)',
+            borderWidth: 1, borderDash: [2,2], pointRadius: 0,
+            fill: false,
+          },
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        scales: {
+          x: { type: 'time', time: { unit: 'day' },
+               ticks: { font: { size: 10 }, maxRotation: 0, autoSkipPadding: 14 } },
+          y: { ticks: { font: { size: 10 } } },
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              title: items => items[0]?.raw?.x ? fmtDate(items[0].raw.x) : '',
+              label: c => {
+                const p = c.raw;
+                if (typeof p.lot === 'undefined') return `${c.dataset.label}: ${fmtNum(p.y)}`;
+                return [`Lot: ${p.lot}`, `${info.label}: ${fmtNum(p.y)} ${info.unit}`];
+              }
+            }
+          }
+        }
+      }
+    });
   }
 }
 
