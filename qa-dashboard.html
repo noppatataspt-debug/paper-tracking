@@ -266,7 +266,7 @@
           <select id="m-type"><option value="">— ทั้งหมด —</option></select>
         </div>
         <div>
-          <label class="field-label">ตั้งแต่วันที่ (Production Date)</label>
+          <label class="field-label">Production Date ตั้งแต่</label>
           <input type="date" id="m-from">
         </div>
         <div>
@@ -274,7 +274,11 @@
           <input type="date" id="m-to">
         </div>
       </div>
-      <button class="btn" id="m-go">📊 แสดงข้อมูล</button>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+        <button class="btn" id="m-go">📊 แสดงข้อมูล</button>
+        <button class="btn outline" id="m-reset">🗑 ล้าง filter วันที่</button>
+        <span style="color:var(--text-dim); font-size:13px;">💡 ปล่อยช่องวันที่ว่างเพื่อดูข้อมูลทั้งหมด</span>
+      </div>
     </div>
 
     <div id="m-results"></div>
@@ -590,7 +594,7 @@ async function init() {
   // โหลด paper_types ที่มี COA — ต้อง join กับ paper_invoices
   const invIds = [...new Set(distinct.map(d => d.paper_invoice_id).filter(Boolean))];
   if (invIds.length) {
-    // page through
+    // page through (in() limit ~1000 ids ใน 1 call)
     const allPt = [];
     for (let i = 0; i < invIds.length; i += 500) {
       const slice = invIds.slice(i, i+500);
@@ -600,16 +604,24 @@ async function init() {
         .in('id', slice);
       if (invs) allPt.push(...invs);
     }
-    // build supplier -> paper_types map
-    const map = {};
-    for (const r of allPt) {
-      if (!r.supplier || !r.paper_type) continue;
-      map[r.supplier] = map[r.supplier] || new Set();
-      map[r.supplier].add(r.paper_type);
+    // count COA rows per paper_type (per supplier)
+    const supplierTypeCount = {};   // { supplier: { type: count } }
+    const allTypeCount = {};        // { type: count }
+    // build invId → paper_type map
+    const invMap = {};
+    for (const r of allPt) invMap[r.id] = r;
+    for (const d of distinct) {
+      const inv = invMap[d.paper_invoice_id];
+      if (!inv?.paper_type) continue;
+      const sup = inv.supplier;
+      const pt = inv.paper_type;
+      supplierTypeCount[sup] = supplierTypeCount[sup] || {};
+      supplierTypeCount[sup][pt] = (supplierTypeCount[sup][pt] || 0) + 1;
+      allTypeCount[pt] = (allTypeCount[pt] || 0) + 1;
     }
-    for (const s of Object.keys(map)) map[s] = [...map[s]].sort();
-    state.cachedSupplierTypes = map;
-    state.paperTypes = [...new Set(allPt.map(r => r.paper_type).filter(Boolean))].sort();
+    state.cachedSupplierTypes = supplierTypeCount;
+    state.allTypeCount = allTypeCount;
+    state.paperTypes = Object.keys(allTypeCount).sort();
   }
 
   // populate selects
@@ -628,8 +640,17 @@ function populateSupplierSelects() {
   }
 }
 function populateTypeSelects(supplier='') {
-  const types = supplier ? (state.cachedSupplierTypes[supplier] || []) : state.paperTypes;
-  const opts = types.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+  let typeCounts;
+  if (supplier) {
+    typeCounts = state.cachedSupplierTypes[supplier] || {};
+  } else {
+    typeCounts = state.allTypeCount || {};
+  }
+  const types = Object.keys(typeCounts).sort();
+  const opts = types.map(t => {
+    const c = typeCounts[t];
+    return `<option value="${escapeHtml(t)}">${escapeHtml(t)} (${c})</option>`;
+  }).join('');
   for (const id of ['#m-type', '#t-type']) {
     const el = $(id);
     const cur = el.value;
@@ -658,6 +679,11 @@ $$('.tab').forEach(btn => {
 // TAB 1: MONITOR
 // ============================================================
 $('#m-go').addEventListener('click', loadMonitor);
+$('#m-reset').addEventListener('click', () => {
+  $('#m-from').value = '';
+  $('#m-to').value = '';
+  loadMonitor();
+});
 
 async function loadMonitor() {
   const supplier = $('#m-supplier').value;
