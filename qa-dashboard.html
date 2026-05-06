@@ -482,8 +482,11 @@
     <!-- Items: เพิ่ม lot เข้า case -->
     <div class="panel" id="cmp-items-panel" style="display:none;">
       <div class="panel-title">➕ เพิ่ม Lots เข้า Case</div>
-      <div style="background:var(--accent-bg); border-radius:8px; padding:10px 12px; margin-bottom:14px; font-size:13px;">
-        💡 ใส่หลาย lots พร้อมกันได้ <b>(คั่นด้วย comma หรือ enter)</b> — Classification + วันที่จะใช้กับทุก lot ที่ใส่ → กด <b>➕ เพิ่ม Lot</b> หรือ <b>Enter</b>
+      <div style="background:var(--accent-bg); border-radius:8px; padding:10px 12px; margin-bottom:14px; font-size:13px; line-height:1.7;">
+        💡 <b>วิธีเพิ่ม NG + Normal ใน case เดียวกัน:</b><br>
+        1. กดปุ่ม 🔴 NG → ใส่ paper lots ของ NG → กด ➕ เพิ่ม Lot<br>
+        2. กดปุ่ม 🟢 Normal → ใส่ paper lots ของ Normal → กด ➕ เพิ่ม Lot<br>
+        3. ทำซ้ำกับ 🟡 Suspect ถ้ามี — ทุก lot จะอยู่ใน case เดียวกันให้เปรียบเทียบ
       </div>
       <div class="form-grid-2">
         <div style="grid-column: span 2;">
@@ -493,14 +496,17 @@
           <div id="cmp-item-chips" style="margin-top:6px;"></div>
         </div>
         <div>
-          <label class="field-label">Classification <span style="color:var(--danger)">*</span></label>
-          <input type="text" id="cmp-item-class" list="cmp-class-options" placeholder="พิมพ์เอง หรือเลือกจากรายการ"
+          <label class="field-label">Classification <span style="color:var(--danger)">*</span> <span style="color:var(--text-dim); font-weight:500; font-size:12px;">— กดเลือกทีละกลุ่ม</span></label>
+          <div style="display:flex; gap:6px; margin-bottom:6px; flex-wrap:wrap;">
+            <button type="button" class="cmp-class-pick" data-cls="ng"
+              style="padding:7px 14px; border-radius:18px; border:2px solid #dc2626; background:white; color:#dc2626; cursor:pointer; font-size:13px; font-weight:700;">🔴 NG</button>
+            <button type="button" class="cmp-class-pick" data-cls="normal"
+              style="padding:7px 14px; border-radius:18px; border:2px solid #16a34a; background:#16a34a; color:white; cursor:pointer; font-size:13px; font-weight:700;">🟢 Normal</button>
+            <button type="button" class="cmp-class-pick" data-cls="suspect"
+              style="padding:7px 14px; border-radius:18px; border:2px solid #ca8a04; background:white; color:#ca8a04; cursor:pointer; font-size:13px; font-weight:700;">🟡 Suspect</button>
+          </div>
+          <input type="text" id="cmp-item-class" placeholder="หรือพิมพ์เอง เช่น core-loose"
             value="normal" autocomplete="off">
-          <datalist id="cmp-class-options">
-            <option value="ng">🔴 NG — เสีย</option>
-            <option value="normal">🟢 Normal — ปกติ</option>
-            <option value="suspect">🟡 Suspect — สงสัย</option>
-          </datalist>
         </div>
         <div>
           <label class="field-label">วันที่ใช้ผลิตสินค้า</label>
@@ -534,7 +540,15 @@
           </div>
           <div>
             <label class="field-label">Classification <span style="color:var(--danger)">*</span></label>
-            <input type="text" id="cmp-edit-class" list="cmp-class-options" autocomplete="off">
+            <div style="display:flex; gap:4px; margin-bottom:6px; flex-wrap:wrap;">
+              <button type="button" class="cmp-edit-class-pick" data-cls="ng"
+                style="padding:5px 10px; border-radius:14px; border:1px solid #dc2626; background:#dc2626; color:white; cursor:pointer; font-size:12px; font-weight:600;">🔴 NG</button>
+              <button type="button" class="cmp-edit-class-pick" data-cls="normal"
+                style="padding:5px 10px; border-radius:14px; border:1px solid #16a34a; background:#16a34a; color:white; cursor:pointer; font-size:12px; font-weight:600;">🟢 Normal</button>
+              <button type="button" class="cmp-edit-class-pick" data-cls="suspect"
+                style="padding:5px 10px; border-radius:14px; border:1px solid #ca8a04; background:#ca8a04; color:white; cursor:pointer; font-size:12px; font-weight:600;">🟡 Suspect</button>
+            </div>
+            <input type="text" id="cmp-edit-class" placeholder="หรือพิมพ์เอง" autocomplete="off">
           </div>
           <div>
             <label class="field-label">วันที่ใช้ผลิตสินค้า</label>
@@ -552,6 +566,59 @@
         <div style="margin-top:14px; display:flex; gap:8px; justify-content:flex-end;">
           <button class="btn outline" id="cmp-edit-cancel">ยกเลิก</button>
           <button class="btn success" id="cmp-edit-save">💾 บันทึก</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bulk Edit Modal -->
+    <div id="cmp-bulk-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center; padding:20px;">
+      <div style="background:var(--panel); border-radius:12px; padding:20px; max-width:680px; width:100%; max-height:90vh; overflow-y:auto;">
+        <div style="font-weight:700; font-size:16px; margin-bottom:6px;">✏️ แก้ไขหลาย Lots พร้อมกัน</div>
+        <div id="cmp-bulk-modal-info" style="font-size:13px; color:var(--text-dim); margin-bottom:14px;"></div>
+        <div style="background:var(--accent-bg); border-radius:8px; padding:10px 12px; margin-bottom:14px; font-size:13px;">
+          💡 <b>เฉพาะช่องที่ติ๊ก ✅ จะถูกอัปเดต</b> — ช่องที่ไม่ติ๊กจะคงค่าเดิมไว้
+        </div>
+        <div class="form-grid-2">
+          <div>
+            <label style="display:flex; align-items:center; gap:6px; margin-bottom:6px; font-weight:600; font-size:13px; cursor:pointer;">
+              <input type="checkbox" id="cmp-bulk-class-on" style="cursor:pointer;">
+              อัปเดต Classification
+            </label>
+            <div style="display:flex; gap:4px; margin-bottom:6px; flex-wrap:wrap;">
+              <button type="button" class="cmp-bulk-class-pick" data-cls="ng" disabled
+                style="padding:5px 10px; border-radius:14px; border:1px solid #dc2626; background:#dc2626; color:white; cursor:pointer; font-size:12px; font-weight:600; opacity:0.4;">🔴 NG</button>
+              <button type="button" class="cmp-bulk-class-pick" data-cls="normal" disabled
+                style="padding:5px 10px; border-radius:14px; border:1px solid #16a34a; background:#16a34a; color:white; cursor:pointer; font-size:12px; font-weight:600; opacity:0.4;">🟢 Normal</button>
+              <button type="button" class="cmp-bulk-class-pick" data-cls="suspect" disabled
+                style="padding:5px 10px; border-radius:14px; border:1px solid #ca8a04; background:#ca8a04; color:white; cursor:pointer; font-size:12px; font-weight:600; opacity:0.4;">🟡 Suspect</button>
+            </div>
+            <input type="text" id="cmp-bulk-class" placeholder="หรือพิมพ์เอง" disabled autocomplete="off">
+          </div>
+          <div>
+            <label style="display:flex; align-items:center; gap:6px; margin-bottom:6px; font-weight:600; font-size:13px; cursor:pointer;">
+              <input type="checkbox" id="cmp-bulk-date-on" style="cursor:pointer;">
+              อัปเดตวันที่ใช้ผลิต
+            </label>
+            <input type="date" id="cmp-bulk-date" disabled>
+          </div>
+          <div>
+            <label style="display:flex; align-items:center; gap:6px; margin-bottom:6px; font-weight:600; font-size:13px; cursor:pointer;">
+              <input type="checkbox" id="cmp-bulk-batch-on" style="cursor:pointer;">
+              อัปเดต Batch สินค้า
+            </label>
+            <input type="text" id="cmp-bulk-batch" disabled>
+          </div>
+          <div>
+            <label style="display:flex; align-items:center; gap:6px; margin-bottom:6px; font-weight:600; font-size:13px; cursor:pointer;">
+              <input type="checkbox" id="cmp-bulk-notes-on" style="cursor:pointer;">
+              อัปเดตหมายเหตุ
+            </label>
+            <input type="text" id="cmp-bulk-notes" disabled>
+          </div>
+        </div>
+        <div style="margin-top:14px; display:flex; gap:8px; justify-content:flex-end;">
+          <button class="btn outline" id="cmp-bulk-cancel">ยกเลิก</button>
+          <button class="btn success" id="cmp-bulk-save">💾 บันทึก</button>
         </div>
       </div>
     </div>
@@ -3450,6 +3517,68 @@ $('#cmp-edit-modal').addEventListener('click', e => {
   if (e.target.id === 'cmp-edit-modal') $('#cmp-edit-modal').style.display = 'none';
 });
 
+// Bulk edit modal handlers
+$('#cmp-bulk-cancel').addEventListener('click', () => $('#cmp-bulk-modal').style.display = 'none');
+$('#cmp-bulk-save').addEventListener('click', saveBulkEdit);
+$('#cmp-bulk-modal').addEventListener('click', e => {
+  if (e.target.id === 'cmp-bulk-modal') $('#cmp-bulk-modal').style.display = 'none';
+});
+// Toggle each field's input when checkbox flipped
+['class','date','batch','notes'].forEach(k => {
+  $(`#cmp-bulk-${k}-on`).addEventListener('change', e => {
+    $(`#cmp-bulk-${k}`).disabled = !e.target.checked;
+    if (k === 'class') {
+      // also enable/disable chip buttons
+      $$('.cmp-bulk-class-pick').forEach(b => {
+        b.disabled = !e.target.checked;
+        b.style.opacity = e.target.checked ? '1' : '0.4';
+        b.style.cursor = e.target.checked ? 'pointer' : 'not-allowed';
+      });
+    }
+    if (e.target.checked) $(`#cmp-bulk-${k}`).focus();
+  });
+});
+
+// Quick-pick chip buttons — set value on the matching input
+function syncClassChips() {
+  const v = $('#cmp-item-class').value.trim().toLowerCase();
+  $$('.cmp-class-pick').forEach(b => {
+    const cls = b.dataset.cls;
+    const colors = { ng:'#dc2626', normal:'#16a34a', suspect:'#ca8a04' };
+    const c = colors[cls];
+    if (cls === v) {
+      // active — solid bg
+      b.style.background = c;
+      b.style.color = 'white';
+    } else {
+      // inactive — outline only
+      b.style.background = 'white';
+      b.style.color = c;
+    }
+  });
+}
+$$('.cmp-class-pick').forEach(btn => {
+  btn.addEventListener('click', () => {
+    $('#cmp-item-class').value = btn.dataset.cls;
+    syncClassChips();
+    // focus paper lot for immediate typing
+    $('#cmp-item-lot')?.focus();
+  });
+});
+$('#cmp-item-class').addEventListener('input', syncClassChips);
+// initial sync
+syncClassChips();
+
+$$('.cmp-edit-class-pick').forEach(btn => {
+  btn.addEventListener('click', () => { $('#cmp-edit-class').value = btn.dataset.cls; });
+});
+$$('.cmp-bulk-class-pick').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (btn.disabled) return;
+    $('#cmp-bulk-class').value = btn.dataset.cls;
+  });
+});
+
 function updateCmpChips() {
   const lots = parseLotsInput($('#cmp-item-lot').value);
   const wrap = $('#cmp-item-chips');
@@ -3660,15 +3789,24 @@ function renderCmpCase() {
   // Items table
   if (items.length) {
     html += `<div class="panel">
-      <div class="panel-title">📋 Lots ใน Case (${items.length})</div>
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:10px;">
+        <div class="panel-title" style="margin:0;">📋 Lots ใน Case (${items.length})</div>
+        <div id="cmp-bulk-actions" style="display:none; gap:8px;">
+          <span id="cmp-bulk-count" style="font-size:13px; color:var(--text-dim); align-self:center;"></span>
+          <button class="btn outline" id="cmp-bulk-edit" style="padding:6px 14px; font-size:13px;">✏️ แก้ไขทั้งหมด</button>
+          <button class="btn outline" id="cmp-bulk-delete" style="padding:6px 14px; font-size:13px; color:var(--danger);">🗑 ลบทั้งหมด</button>
+        </div>
+      </div>
       <div style="overflow-x:auto"><table>
         <thead><tr>
+          <th style="width:32px;"><input type="checkbox" id="cmp-select-all" style="cursor:pointer;"></th>
           <th>Class</th><th>Paper Lot</th><th>Type</th><th>Production</th>
           <th>วันที่ใช้ผลิต</th><th>Batch สินค้า</th><th>COA</th><th>Notes</th><th></th>
         </tr></thead><tbody>`;
     for (const it of items) {
       const ci = classInfo(it.classification);
       html += `<tr style="background:${ci.bg};">
+        <td><input type="checkbox" class="cmp-row-check" data-id="${it.item_id}" style="cursor:pointer;"></td>
         <td><span class="badge ${ci.badge}" style="background:${ci.color}; color:white;">${escapeHtml(ci.label)}</span></td>
         <td class="mono"><b>${escapeHtml(it.paper_lot)}</b></td>
         <td>${escapeHtml(it.invoice_paper_type || '—')}</td>
@@ -3745,6 +3883,51 @@ function renderCmpCase() {
   });
   $$('button[data-act="edit-item"]').forEach(b => {
     b.addEventListener('click', () => openEditCmpItem(+b.dataset.id));
+  });
+
+  // Bulk selection handlers
+  const updateBulkUI = () => {
+    const checked = $$('.cmp-row-check:checked');
+    const bulkBar = $('#cmp-bulk-actions');
+    if (!bulkBar) return;
+    if (checked.length) {
+      bulkBar.style.display = 'flex';
+      $('#cmp-bulk-count').textContent = `เลือก ${checked.length} lots`;
+    } else {
+      bulkBar.style.display = 'none';
+    }
+    // sync select-all state
+    const all = $$('.cmp-row-check');
+    const selAll = $('#cmp-select-all');
+    if (selAll) {
+      selAll.checked = all.length > 0 && checked.length === all.length;
+      selAll.indeterminate = checked.length > 0 && checked.length < all.length;
+    }
+  };
+
+  $('#cmp-select-all')?.addEventListener('change', e => {
+    $$('.cmp-row-check').forEach(cb => { cb.checked = e.target.checked; });
+    updateBulkUI();
+  });
+  $$('.cmp-row-check').forEach(cb => {
+    cb.addEventListener('change', updateBulkUI);
+  });
+  $('#cmp-bulk-edit')?.addEventListener('click', () => {
+    const ids = $$('.cmp-row-check:checked').map(cb => +cb.dataset.id);
+    if (ids.length) openBulkEditModal(ids);
+  });
+  $('#cmp-bulk-delete')?.addEventListener('click', async () => {
+    const ids = $$('.cmp-row-check:checked').map(cb => +cb.dataset.id);
+    if (!ids.length) return;
+    if (!confirm(`ลบ ${ids.length} lots ออกจาก case?`)) return;
+    try {
+      const { error } = await supabase.from('lot_compare_items').delete().in('id', ids);
+      if (error) throw error;
+      showToast(`ลบ ${ids.length} lots สำเร็จ ✅`, 'success');
+      await loadCmpCase(cmpState.currentGroupId);
+    } catch (e) {
+      showToast('ลบไม่ได้: ' + (e.message || e), 'error');
+    }
   });
   $('#cmp-link-issue')?.addEventListener('click', e => {
     e.preventDefault();
@@ -3862,6 +4045,63 @@ async function saveEditCmpItem() {
     showToast('แก้ไขไม่ได้: ' + (e.message || e), 'error');
   } finally {
     $('#cmp-edit-save').disabled = false;
+  }
+}
+
+// ----- Bulk Edit -----
+function openBulkEditModal(itemIds) {
+  $('#cmp-bulk-modal').dataset.ids = JSON.stringify(itemIds);
+  $('#cmp-bulk-modal-info').textContent = `จะแก้ไข ${itemIds.length} lots พร้อมกัน`;
+  // reset checkboxes + clear inputs
+  ['class','date','batch','notes'].forEach(k => {
+    const cb = $(`#cmp-bulk-${k}-on`);
+    const inp = $(`#cmp-bulk-${k}`);
+    cb.checked = false;
+    inp.disabled = true;
+    inp.value = '';
+  });
+  $('#cmp-bulk-modal').style.display = 'flex';
+}
+
+async function saveBulkEdit() {
+  const ids = JSON.parse($('#cmp-bulk-modal').dataset.ids || '[]');
+  if (!ids.length) return;
+
+  const payload = {};
+  if ($('#cmp-bulk-class-on').checked) {
+    const v = $('#cmp-bulk-class').value.trim();
+    if (!v) { showToast('Classification ห้ามเว้นว่าง', 'error'); return; }
+    payload.classification = v;
+  }
+  if ($('#cmp-bulk-date-on').checked) {
+    payload.used_for_product_date = $('#cmp-bulk-date').value || null;
+  }
+  if ($('#cmp-bulk-batch-on').checked) {
+    payload.product_batch_no = $('#cmp-bulk-batch').value.trim() || null;
+  }
+  if ($('#cmp-bulk-notes-on').checked) {
+    payload.notes = $('#cmp-bulk-notes').value.trim() || null;
+  }
+
+  if (!Object.keys(payload).length) {
+    showToast('กรุณาติ๊กช่องที่อยากอัปเดตอย่างน้อย 1 ช่อง', 'error');
+    return;
+  }
+
+  $('#cmp-bulk-save').disabled = true;
+  $('#cmp-bulk-save').textContent = `กำลังอัปเดต ${ids.length} lots...`;
+  try {
+    const { error } = await supabase.from('lot_compare_items').update(payload).in('id', ids);
+    if (error) throw error;
+    showToast(`อัปเดต ${ids.length} lots สำเร็จ ✅`, 'success');
+    $('#cmp-bulk-modal').style.display = 'none';
+    await loadCmpCase(cmpState.currentGroupId);
+  } catch (e) {
+    console.error(e);
+    showToast('อัปเดตไม่ได้: ' + (e.message || e), 'error');
+  } finally {
+    $('#cmp-bulk-save').disabled = false;
+    $('#cmp-bulk-save').textContent = '💾 บันทึก';
   }
 }
 
