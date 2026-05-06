@@ -270,6 +270,7 @@
     <button class="tab active" data-view="monitor">📊 Monitor by Supplier</button>
     <button class="tab" data-view="trend">📈 Parameter Trend</button>
     <button class="tab" data-view="lookup">🔍 Lot Lookup</button>
+    <button class="tab" data-view="compare">⚖️ Compare Lots</button>
     <button class="tab" data-view="issue">⚠️ บันทึกปัญหา</button>
     <button class="tab" data-view="issues-list">📋 รายการปัญหา</button>
     <button class="tab" data-view="import">📤 Import COA</button>
@@ -393,25 +394,127 @@
   <!-- ============ TAB 3: LOT LOOKUP ============ -->
   <div class="view" id="v-lookup">
     <div class="panel">
-      <div class="panel-title">🔍 Lot Lookup — ค้นหาข้อมูล lot</div>
-      <div class="panel-sub">ใส่ paper lot เพื่อดูข้อมูล COA + invoice + การใช้งาน</div>
+      <div class="panel-title">🔍 Lot Lookup — ค้นหาและเปรียบเทียบ COA หลายๆ lot</div>
+      <div class="panel-sub">ใส่ paper lot ได้สูงสุด 20 lots (คั่นด้วย comma, ขึ้นบรรทัดใหม่ หรือ space)</div>
 
-      <div class="filter-grid">
-        <div style="grid-column: span 2;">
-          <label class="field-label">Paper Lot</label>
-          <input type="text" id="l-lot" placeholder="เช่น 776A27501I">
-        </div>
-        <div>
-          <label class="field-label">&nbsp;</label>
-          <button class="btn" id="l-go" style="width:100%">🔍 ค้นหา</button>
-        </div>
+      <div style="margin-bottom:12px;">
+        <label class="field-label">Paper Lots</label>
+        <textarea id="l-lot" rows="3" placeholder="เช่น 776A27501I, 776A26862H&#10;หรือใส่บรรทัดละ 1 lot — รองรับสูงสุด 20 lots"
+          style="font-family: var(--mono); font-size: 14px;"></textarea>
+        <div id="l-chips" style="margin-top:8px;"></div>
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="btn" id="l-go">🔍 ค้นหา</button>
+        <button class="btn outline" id="l-clear">🗑 ล้าง</button>
       </div>
     </div>
 
     <div id="l-results"></div>
   </div>
 
-  <!-- ============ TAB 4: ISSUE FORM ============ -->
+  <!-- ============ TAB 4: COMPARE LOTS ============ -->
+  <div class="view" id="v-compare">
+    <!-- เลือก/สร้าง Case -->
+    <div class="panel">
+      <div class="panel-title">⚖️ Compare Lots — เปรียบเทียบ NG/Normal lots</div>
+      <div class="panel-sub">สร้าง case การสอบสวน → ใส่ lots ที่ NG และ Normal → เปรียบเทียบบนกราฟ</div>
+
+      <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end;">
+        <div style="flex:1; min-width:280px;">
+          <label class="field-label">เลือก Case ที่บันทึกไว้</label>
+          <select id="cmp-case-select">
+            <option value="">— เลือก case หรือสร้างใหม่ —</option>
+          </select>
+        </div>
+        <button class="btn" id="cmp-new-case">➕ สร้าง Case ใหม่</button>
+        <button class="btn outline" id="cmp-refresh-cases">🔄</button>
+      </div>
+    </div>
+
+    <!-- Form: New/Edit Case -->
+    <div class="panel" id="cmp-case-form" style="display:none;">
+      <div class="panel-title" id="cmp-case-form-title">➕ Case ใหม่</div>
+      <div class="form-grid-2">
+        <div style="grid-column: span 2;">
+          <label class="field-label">ชื่อ Case <span style="color:var(--danger)">*</span></label>
+          <input type="text" id="cmp-case-name" placeholder="เช่น ปัญหาแกนหลุดเลขที่ POW-2569-04">
+        </div>
+        <div>
+          <label class="field-label">Paper Type (focus)</label>
+          <select id="cmp-case-type">
+            <option value="">— ทั้งหมด —</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label">Status</label>
+          <select id="cmp-case-status">
+            <option value="open">Open</option>
+            <option value="investigating">Investigating</option>
+            <option value="resolved">Resolved</option>
+            <option value="closed">Closed</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label">ผู้รับผิดชอบ</label>
+          <input type="text" id="cmp-case-by" placeholder="ชื่อพนักงาน">
+        </div>
+        <div style="grid-column: span 2;">
+          <label class="field-label">เชื่อมกับ Issue ที่บันทึกไว้ (optional)</label>
+          <select id="cmp-case-issue">
+            <option value="">— ไม่เชื่อม —</option>
+          </select>
+        </div>
+        <div style="grid-column: span 2;">
+          <label class="field-label">รายละเอียดปัญหา</label>
+          <textarea id="cmp-case-desc" rows="2" placeholder="เช่น แกนหลุดบ่อยช่วงต้น batch"></textarea>
+        </div>
+      </div>
+      <div style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="btn success" id="cmp-case-save">💾 บันทึก Case</button>
+        <button class="btn outline" id="cmp-case-cancel">ยกเลิก</button>
+        <button class="btn outline" id="cmp-case-delete" style="margin-left:auto; color:var(--danger); display:none;">🗑 ลบ Case</button>
+      </div>
+    </div>
+
+    <!-- Items: เพิ่ม lot เข้า case -->
+    <div class="panel" id="cmp-items-panel" style="display:none;">
+      <div class="panel-title">➕ เพิ่ม Lots เข้า Case</div>
+      <div class="form-grid-2">
+        <div>
+          <label class="field-label">Paper Lot <span style="color:var(--danger)">*</span></label>
+          <input type="text" id="cmp-item-lot" placeholder="เช่น 776A26862H">
+        </div>
+        <div>
+          <label class="field-label">Classification <span style="color:var(--danger)">*</span></label>
+          <input type="text" id="cmp-item-class" list="cmp-class-options" placeholder="พิมพ์เอง หรือเลือกจากรายการ"
+            value="normal" autocomplete="off">
+          <datalist id="cmp-class-options">
+            <option value="ng">🔴 NG — เสีย</option>
+            <option value="normal">🟢 Normal — ปกติ</option>
+            <option value="suspect">🟡 Suspect — สงสัย</option>
+          </datalist>
+        </div>
+        <div>
+          <label class="field-label">วันที่ใช้ผลิตสินค้า</label>
+          <input type="date" id="cmp-item-proddate">
+        </div>
+        <div>
+          <label class="field-label">เลข Batch สินค้า (optional)</label>
+          <input type="text" id="cmp-item-batch" placeholder="เช่น POW-2569-04-15">
+        </div>
+        <div style="grid-column: span 2;">
+          <label class="field-label">หมายเหตุ</label>
+          <input type="text" id="cmp-item-notes" placeholder="เช่น 'พบปัญหาในชม.ที่ 3'">
+        </div>
+      </div>
+      <div style="margin-top:12px;">
+        <button class="btn" id="cmp-item-add">➕ เพิ่ม Lot</button>
+      </div>
+    </div>
+
+    <!-- Result: Items list + Compare graph -->
+    <div id="cmp-results"></div>
+  </div>
   <div class="view" id="v-issue">
     <div class="panel">
       <div class="panel-title">⚠️ บันทึกปัญหาคุณภาพกระดาษ</div>
@@ -1639,135 +1742,434 @@ async function loadTrend() {
 }
 
 // ============================================================
-// TAB 3: LOT LOOKUP
+// TAB 3: LOT LOOKUP (multi-lot comparison)
 // ============================================================
-$('#l-go').addEventListener('click', () => doLookup($('#l-lot').value, '#l-results', false));
-$('#l-lot').addEventListener('keydown', e => { if (e.key === 'Enter') $('#l-go').click(); });
+$('#l-go').addEventListener('click', () => doMultiLookup());
+$('#l-clear').addEventListener('click', () => {
+  $('#l-lot').value = '';
+  $('#l-chips').innerHTML = '';
+  $('#l-results').innerHTML = '';
+});
+$('#l-lot').addEventListener('input', updateLotChips);
 
-async function doLookup(lotInput, targetId, asObject=false) {
-  const lot = String(lotInput || '').trim();
-  if (!lot) {
-    if (!asObject) showToast('กรุณาใส่ paper lot', 'error');
+function parseLotsInput(text) {
+  return [...new Set(
+    String(text || '')
+      .split(/[\s,;]+/)
+      .map(s => s.trim())
+      .filter(Boolean)
+  )];
+}
+
+function updateLotChips() {
+  const lots = parseLotsInput($('#l-lot').value);
+  const wrap = $('#l-chips');
+  if (!lots.length) { wrap.innerHTML = ''; return; }
+  const limited = lots.slice(0, 20);
+  const over = lots.length > 20;
+  wrap.innerHTML = limited.map((l) =>
+    `<span class="lot-chip" style="background:var(--accent-2-bg); color:var(--accent-2); padding:4px 10px; border-radius:999px; font-size:13px; font-family:var(--mono); font-weight:600; margin:2px 4px 2px 0; display:inline-block;">${escapeHtml(l)}</span>`
+  ).join('') +
+  `<span style="margin-left:8px; font-size:12px; color:var(--text-dim);">${limited.length} lot${limited.length>1?'s':''}${over ? ' (จำกัด 20 — ตัด ' + (lots.length-20) + ' ออก)' : ''}</span>`;
+}
+
+async function doMultiLookup(opts) {
+  opts = opts || {};
+  const lots = parseLotsInput($('#l-lot').value).slice(0, 20);
+  if (!lots.length) {
+    if (!opts.silent) showToast('กรุณาใส่ paper lot อย่างน้อย 1 lot', 'error');
     return null;
   }
-  const norm = normalizeLot(lot);
 
-  if (!asObject) {
-    $(targetId).innerHTML = '<div class="panel"><div class="loading"><div class="spinner"></div>กำลังค้นหา...</div></div>';
+  if (!opts.silent) {
+    $('#l-results').innerHTML = '<div class="panel"><div class="loading"><div class="spinner"></div>กำลังค้นหา...</div></div>';
   }
 
   try {
-    // หา invoice
-    const { data: invs, error: e1 } = await supabase
+    const normLots = lots.map(normalizeLot);
+
+    const { data: invs } = await supabase
       .from('paper_invoices')
       .select('*')
-      .eq('paper_lot_normalized', norm);
-    if (e1) throw e1;
+      .in('paper_lot_normalized', normLots);
 
-    if (!invs || !invs.length) {
-      const html = `<div class="panel"><div class="empty">ไม่พบ lot <b>${escapeHtml(lot)}</b> ในระบบ</div></div>`;
-      if (asObject) return null;
-      $(targetId).innerHTML = html;
-      return null;
+    const invIds = (invs || []).map(i => i.id);
+
+    let coas = [];
+    if (invIds.length) {
+      const { data: c } = await supabase
+        .from('quality_tests')
+        .select('*')
+        .in('paper_invoice_id', invIds);
+      coas = c || [];
     }
-
-    // หา COA
-    const ids = invs.map(i => i.id);
-    const { data: coas } = await supabase
+    const { data: orphanCoas } = await supabase
       .from('quality_tests')
       .select('*')
-      .in('paper_invoice_id', ids);
+      .in('paper_lot', lots)
+      .is('paper_invoice_id', null);
+    const seenCoaIds = new Set(coas.map(c => c.id));
+    for (const oc of (orphanCoas || [])) {
+      if (!seenCoaIds.has(oc.id)) coas.push(oc);
+    }
 
-    // หา outflows ที่ใช้ lot นี้
-    const { data: outs } = await supabase
-      .from('paper_outflows')
-      .select('id, weight_kg, machine_id, paper_lot, outflow_date, source, paper_invoice_id, paper_type, supplier_name')
-      .in('paper_invoice_id', ids)
-      .order('outflow_date', { ascending: false });
+    let outs = [];
+    if (invIds.length) {
+      const { data: o } = await supabase
+        .from('paper_outflows')
+        .select('id, weight_kg, machine_id, paper_lot, outflow_date, source, paper_invoice_id')
+        .in('paper_invoice_id', invIds)
+        .order('outflow_date', { ascending: false });
+      outs = o || [];
+    }
 
-    // หา quality issues ที่บันทึก lot นี้
-    // ระวัง: ถ้า ids ว่างจะทำให้ .in() พัง — เช็คก่อน
     let issues = [];
-    if (ids.length > 0) {
-      const { data: issArr } = await supabase
+    if (invIds.length) {
+      const { data: i } = await supabase
         .from('quality_issues')
         .select('*')
-        .in('paper_invoice_id', ids)
+        .in('paper_invoice_id', invIds)
         .order('issue_date', { ascending: false });
-      issues = issArr || [];
+      issues = i || [];
     }
-    // เผื่อปัญหาที่บันทึกก่อน paper_invoice_id ถูก link — match ด้วย paper_lot ตรงๆ
     {
-      const { data: byLot } = await supabase
+      const { data: iByLot } = await supabase
         .from('quality_issues')
         .select('*')
-        .ilike('paper_lot', lot)
+        .in('paper_lot', lots)
         .order('issue_date', { ascending: false });
-      const seen = new Set(issues.map(i => i.id));
-      for (const i of (byLot || [])) {
-        if (!seen.has(i.id)) issues.push(i);
-      }
+      const seen = new Set(issues.map(x => x.id));
+      for (const x of (iByLot || [])) if (!seen.has(x.id)) issues.push(x);
     }
 
-    if (asObject) {
-      return { invoices: invs, coas: coas || [], outflows: outs || [], issues: issues || [] };
-    }
+    const lotResults = lots.map((lot, i) => {
+      const norm = normLots[i];
+      const inv = (invs || []).find(x => x.paper_lot_normalized === norm);
+      const coa = inv
+        ? coas.find(c => c.paper_invoice_id === inv.id)
+        : coas.find(c => c.paper_lot && normalizeLot(c.paper_lot) === norm);
+      const lotOuts = inv ? outs.filter(o => o.paper_invoice_id === inv.id) : [];
+      const lotIssues = issues.filter(x =>
+        (inv && x.paper_invoice_id === inv.id) ||
+        (x.paper_lot && normalizeLot(x.paper_lot) === norm)
+      );
+      return { input: lot, norm, invoice: inv, coa, outflows: lotOuts, issues: lotIssues };
+    });
 
-    renderLookup(invs, coas || [], outs || [], issues || [], targetId);
-    return null;
+    if (opts.asObject) return lotResults;
+    renderMultiLookup(lotResults);
+    return lotResults;
   } catch (e) {
     console.error(e);
-    const html = `<div class="panel"><div class="empty" style="color:var(--danger)">Error: ${escapeHtml(e.message || e)}</div></div>`;
-    if (asObject) return null;
-    $(targetId).innerHTML = html;
+    $('#l-results').innerHTML = `<div class="panel"><div class="empty" style="color:var(--danger)">Error: ${escapeHtml(e.message || e)}</div></div>`;
     return null;
   }
 }
 
-function renderLookup(invs, coas, outs, issues, targetId) {
-  let html = '';
+async function renderMultiLookup(lotResults) {
+  const found    = lotResults.filter(r => r.invoice || r.coa);
+  const notFound = lotResults.filter(r => !r.invoice && !r.coa);
+  const withCoa  = lotResults.filter(r => r.coa);
 
-  // sum used weight
-  const totalUsed = outs.reduce((a, o) => a + (+o.weight_kg || 0), 0);
-  const totalRecv = invs.reduce((a, i) => a + (+i.weight_kg || 0), 0);
-  const remaining = totalRecv - totalUsed;
+  const totalRecv = found.reduce((a, r) => a + (+r.invoice?.weight_kg || 0), 0);
+  const totalUsed = found.reduce((a, r) => a + r.outflows.reduce((b, o) => b + (+o.weight_kg || 0), 0), 0);
+  const totalIssues = found.reduce((a, r) => a + r.issues.length, 0);
 
-  html += `<div class="kpi-grid">
-    <div class="kpi"><div class="kpi-label">จำนวน Lot</div>
-      <div class="kpi-value">${invs.length}</div></div>
-    <div class="kpi"><div class="kpi-label">น้ำหนักรับ</div>
+  let html = `<div class="kpi-grid">
+    <div class="kpi"><div class="kpi-label">Lots ที่ค้นหา</div>
+      <div class="kpi-value">${lotResults.length}</div>
+      <div class="kpi-sub">มี COA: ${withCoa.length} · ไม่พบ: ${notFound.length}</div></div>
+    <div class="kpi"><div class="kpi-label">น้ำหนักรวม</div>
       <div class="kpi-value">${fmtNum(totalRecv,1)}</div><div class="kpi-sub">kg</div></div>
     <div class="kpi"><div class="kpi-label">ใช้แล้ว</div>
-      <div class="kpi-value">${fmtNum(totalUsed,1)}</div><div class="kpi-sub">kg (${outs.length} ครั้ง)</div></div>
-    <div class="kpi"><div class="kpi-label">คงเหลือ</div>
-      <div class="kpi-value" style="color:${remaining>0?'var(--success)':'var(--text-dim)'}">${fmtNum(remaining,1)}</div>
-      <div class="kpi-sub">kg</div></div>
+      <div class="kpi-value">${fmtNum(totalUsed,1)}</div>
+      <div class="kpi-sub">kg (${found.reduce((a,r)=>a+r.outflows.length,0)} ครั้ง)</div></div>
+    <div class="kpi"><div class="kpi-label">ปัญหาที่บันทึก</div>
+      <div class="kpi-value" style="color:${totalIssues?'var(--danger)':'var(--success)'}">${totalIssues}</div></div>
   </div>`;
 
-  // each invoice as a card
-  for (const inv of invs) {
-    const coa = coas.find(c => c.paper_invoice_id === inv.id);
-    const usedRows = outs.filter(o => o.paper_invoice_id === inv.id);
-    const lotIssues = issues.filter(i => i.paper_invoice_id === inv.id);
+  if (notFound.length) {
+    html += `<div class="panel" style="background:var(--warning-bg); border-color:var(--warning);">
+      <div style="font-weight:700; color:var(--warning); margin-bottom:6px;">⚠ Lots ที่ไม่พบในระบบ (${notFound.length})</div>
+      <div style="font-family:var(--mono); font-size:13px;">
+        ${notFound.map(r => escapeHtml(r.input)).join(', ')}
+      </div>
+    </div>`;
+  }
+
+  if (withCoa.length >= 1) {
+    html += `<div class="panel">
+      <div class="panel-title">📊 เปรียบเทียบ COA ของ Lots ที่ค้นหา</div>
+      <div class="panel-sub">
+        <span style="color:#64748b;">●</span> จุดเทาเล็ก = COA ของทุก lot ใน paper_type เดียวกัน (baseline) ·
+        <span style="color:#dc2626;">●</span> จุดสีใหญ่ = lot ที่ค้นหา ·
+        <span style="color:#047857;">– – –</span> mean ·
+        <span style="color:#b91c1c;"><b>= = =</b></span> Min/Max Spec
+      </div>
+      <div id="l-charts"></div>
+    </div>`;
+  }
+
+  html += `<div class="panel">
+    <div class="panel-title">📋 รายละเอียดแต่ละ Lot</div>
+    <div id="l-cards"></div>
+  </div>`;
+
+  $('#l-results').innerHTML = html;
+
+  if (withCoa.length >= 1) {
+    await renderLookupComparison(withCoa);
+  }
+  renderLotCards(lotResults);
+}
+
+async function renderLookupComparison(lotResults) {
+  const container = $('#l-charts');
+  container.innerHTML = '<div class="loading"><div class="spinner"></div>กำลังสร้างกราฟ...</div>';
+
+  const typeMap = new Map();
+  for (const r of lotResults) {
+    const pt = r.invoice?.paper_type || r.coa?.paper_type;
+    if (!pt) continue;
+    if (!typeMap.has(pt)) typeMap.set(pt, []);
+    typeMap.get(pt).push(r);
+  }
+
+  if (!typeMap.size) {
+    container.innerHTML = '<div class="empty">ไม่พบ paper_type ของ lots ที่ค้นหา</div>';
+    return;
+  }
+
+  const specs = await loadSpecs();
+  container.innerHTML = '';
+
+  const HIGHLIGHT_COLORS = [
+    '#dc2626','#ea580c','#d97706','#ca8a04','#65a30d','#16a34a',
+    '#0891b2','#0284c7','#2563eb','#4f46e5','#7c3aed','#9333ea',
+    '#c026d3','#db2777','#e11d48','#9f1239','#7c2d12','#365314',
+    '#1e3a8a','#581c87'
+  ];
+
+  for (const [pt, results] of typeMap.entries()) {
+    const ptSection = document.createElement('div');
+    ptSection.style.cssText = 'margin-bottom:24px;';
+    ptSection.innerHTML = `
+      <div style="font-weight:700; font-size:15px; margin:14px 0 8px;">
+        ${escapeHtml(pt)}
+        <span style="color:var(--text-dim); font-size:13px; font-weight:500;">
+          — ${results.length} lot${results.length>1?'s':''} ที่ค้นหา
+        </span>
+      </div>
+      <div class="small-multiples"></div>
+    `;
+    container.appendChild(ptSection);
+    const smContainer = ptSection.querySelector('.small-multiples');
+
+    const baseline = await fetchAllRows(
+      supabase
+        .from('quality_tests')
+        .select('*, paper_invoices(paper_type, paper_category, paper_lot)')
+        .eq('paper_type', pt)
+        .order('production_date', { ascending: true })
+    );
+
+    if (!baseline.length) {
+      smContainer.innerHTML = '<div class="empty" style="padding:20px;">ไม่มี baseline สำหรับ paper_type นี้</div>';
+      continue;
+    }
+
+    let category = null;
+    for (const b of baseline) {
+      category = b.paper_invoices?.paper_category || b.paper_category;
+      if (category) break;
+    }
+
+    const activeParams = Object.entries(PARAMS).filter(([key]) =>
+      baseline.some(r => r[key] != null && !isNaN(+r[key]))
+    );
+
+    const lotColorMap = new Map();
+    results.forEach((r, i) => {
+      lotColorMap.set(r.norm, HIGHLIGHT_COLORS[i % HIGHLIGHT_COLORS.length]);
+    });
+
+    for (const [key, info] of activeParams) {
+      const baselinePoints = baseline
+        .filter(r => r[key] != null && r.production_date)
+        .map(r => ({
+          x: r.production_date,
+          y: +r[key],
+          lot: r.paper_invoices?.paper_lot || r.paper_lot,
+        }));
+
+      if (!baselinePoints.length) continue;
+
+      const searchedPoints = results
+        .filter(r => r.coa && r.coa[key] != null && r.coa.production_date)
+        .map(r => ({
+          x: r.coa.production_date,
+          y: +r.coa[key],
+          lot: r.input,
+          color: lotColorMap.get(r.norm),
+        }));
+
+      const stats = calcStats(baselinePoints.map(p => p.y));
+      const spec = findSpec(specs, category, pt, key);
+      const specMin = spec?.min_value != null ? +spec.min_value : null;
+      const specMax = spec?.max_value != null ? +spec.max_value : null;
+
+      let searchedBelow = 0, searchedAbove = 0, searchedHighSigma = 0;
+      for (const p of searchedPoints) {
+        if (specMin != null && p.y < specMin) searchedBelow++;
+        if (specMax != null && p.y > specMax) searchedAbove++;
+        if (Math.abs(p.y - stats.mean) > 3 * stats.sd) searchedHighSigma++;
+      }
+
+      const allY = [
+        ...baselinePoints.map(p => p.y),
+        ...searchedPoints.map(p => p.y),
+      ];
+      let yMin = Math.min(...allY);
+      let yMax = Math.max(...allY);
+      if (specMin != null) yMin = Math.min(yMin, specMin);
+      if (specMax != null) yMax = Math.max(yMax, specMax);
+      const pad = (yMax - yMin) * 0.05 || 1;
+
+      const wrap = document.createElement('div');
+      wrap.className = 'mini-chart';
+      wrap.innerHTML = `
+        <div class="mini-chart-head">
+          <span class="mini-chart-label">${info.label} <span style="color:var(--text-dim); font-weight:500; font-size:12px;">${info.unit}</span></span>
+          <span class="mini-chart-stat">
+            baseline μ ${fmtNum(stats.mean)} · σ ${fmtNum(stats.sd, 2)}
+            ${spec ? ` · spec ${specMin != null ? '≥' + fmtNum(specMin) : ''}${specMax != null ? ' ≤' + fmtNum(specMax) : ''}` : ''}
+            · ค้นหา ${searchedPoints.length} จุด${searchedBelow + searchedAbove ? ` · <span style="color:var(--danger)">⚠ ${searchedBelow + searchedAbove} หลุด spec</span>` : ''}${searchedHighSigma ? ` · <span style="color:var(--danger)">${searchedHighSigma} >3σ</span>` : ''}
+          </span>
+        </div>
+        <div class="mini-chart-canvas" style="height:240px;"><canvas></canvas></div>
+      `;
+      smContainer.appendChild(wrap);
+
+      const datasets = [
+        {
+          label: 'Baseline',
+          type: 'scatter',
+          data: baselinePoints.map(p => ({x: p.x, y: p.y, _lot: p.lot})),
+          backgroundColor: 'rgba(100, 116, 139, 0.35)',
+          borderColor: 'rgba(100, 116, 139, 0.5)',
+          borderWidth: 0.5,
+          pointRadius: 2,
+          pointHoverRadius: 4,
+        },
+        {
+          label: 'Mean',
+          type: 'line',
+          data: baselinePoints.map(p => ({x: p.x, y: stats.mean})),
+          borderColor: '#047857',
+          borderWidth: 1.5,
+          borderDash: [4,4],
+          pointRadius: 0,
+          fill: false,
+        },
+        {
+          label: 'ค้นหา',
+          type: 'scatter',
+          data: searchedPoints.map(p => ({x: p.x, y: p.y, _lot: p.lot})),
+          backgroundColor: searchedPoints.map(p => p.color),
+          borderColor: '#000',
+          borderWidth: 1.5,
+          pointRadius: 7,
+          pointHoverRadius: 10,
+        },
+      ];
+      if (specMin != null) {
+        datasets.push({
+          label: 'Min Spec',
+          type: 'line',
+          data: baselinePoints.map(p => ({x: p.x, y: specMin})),
+          borderColor: '#b91c1c', borderWidth: 2, borderDash: [10,4],
+          pointRadius: 0, fill: false,
+        });
+      }
+      if (specMax != null) {
+        datasets.push({
+          label: 'Max Spec',
+          type: 'line',
+          data: baselinePoints.map(p => ({x: p.x, y: specMax})),
+          borderColor: '#b91c1c', borderWidth: 2, borderDash: [10,4],
+          pointRadius: 0, fill: false,
+        });
+      }
+
+      new Chart(wrap.querySelector('canvas').getContext('2d'), {
+        type: 'scatter',
+        data: { datasets },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          interaction: { mode: 'nearest', intersect: false },
+          scales: {
+            x: { type: 'time', time: { unit: 'month' }, ticks: { font: { size: 10 } } },
+            y: {
+              ticks: { font: { size: 10 } },
+              min: yMin - pad,
+              max: yMax + pad,
+            },
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                title: items => items[0]?.raw?.x ? fmtDate(items[0].raw.x) : '',
+                label: c => {
+                  const r = c.raw;
+                  if (!r._lot) return `${c.dataset.label}: ${fmtNum(r.y)}`;
+                  return [`Lot: ${r._lot}`, `${info.label}: ${fmtNum(r.y)} ${info.unit}`];
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+  }
+}
+
+function renderLotCards(lotResults) {
+  const wrap = $('#l-cards');
+  let html = '';
+  for (const r of lotResults) {
+    if (!r.invoice && !r.coa) {
+      html += `<div class="lot-card" style="border-color:var(--warning);">
+        <div class="lot-card-head">
+          <div>
+            <div class="lot-lot">${escapeHtml(r.input)}</div>
+            <div style="color:var(--warning); font-size:13px;">⚠ ไม่พบในระบบ</div>
+          </div>
+        </div>
+      </div>`;
+      continue;
+    }
+    const inv = r.invoice;
+    const coa = r.coa;
 
     html += `<div class="lot-card">
       <div class="lot-card-head">
         <div>
-          <div class="lot-lot">${escapeHtml(inv.paper_lot)}</div>
+          <div class="lot-lot">${escapeHtml(inv?.paper_lot || r.input)}</div>
           <div style="color:var(--text-dim); font-size:14px; margin-top:4px;">
-            ${escapeHtml(inv.supplier || '—')} · ${escapeHtml(inv.paper_type || '—')}
-            
-            ${inv.width_mm ? ' · ' + inv.width_mm + ' mm' : ''}
+            ${escapeHtml((inv?.supplier || coa?.supplier) || '—')} · ${escapeHtml((inv?.paper_type || coa?.paper_type) || '—')}
+            ${inv?.width_mm ? ' · ' + inv.width_mm + ' mm' : ''}
           </div>
         </div>
         <div style="display:flex; gap:6px; flex-wrap:wrap;">
-          <span class="badge ${inv.status === 'in_stock' ? 'b-ok' : inv.status === 'used' ? 'b-neutral' : 'b-info'}">${escapeHtml(inv.status || '?')}</span>
+          ${inv ? `<span class="badge ${inv.status === 'in_stock' ? 'b-ok' : inv.status === 'used' ? 'b-neutral' : 'b-info'}">${escapeHtml(inv.status || '?')}</span>` : '<span class="badge b-warn">orphan</span>'}
           ${coa ? '<span class="badge b-info">📋 มี COA</span>' : '<span class="badge b-warn">⚠ ไม่มี COA</span>'}
-          ${lotIssues.length ? `<span class="badge b-bad">⚠ ${lotIssues.length} issues</span>` : ''}
+          ${r.issues.length ? `<span class="badge b-bad">⚠ ${r.issues.length} issues</span>` : ''}
         </div>
-      </div>
+      </div>`;
 
-      <div class="info-grid">
+    if (inv) {
+      html += `<div class="info-grid">
         <div class="info-cell"><div class="info-label">Invoice</div>
           <div class="info-value">${escapeHtml(inv.invoice_no || '—')}</div></div>
         <div class="info-cell"><div class="info-label">วันที่รับ</div>
@@ -1779,8 +2181,8 @@ function renderLookup(invs, coas, outs, issues, targetId) {
         ${inv.project_code ? `<div class="info-cell"><div class="info-label">Project</div>
           <div class="info-value">${escapeHtml(inv.project_code)}</div></div>` : ''}
       </div>`;
+    }
 
-    // COA panel
     if (coa) {
       html += `<div style="margin-top:14px; background:var(--accent-bg); border-radius:10px; padding:12px;">
         <div style="font-weight:700; font-size:14px; margin-bottom:8px;">📋 COA — ผลทดสอบคุณภาพ</div>
@@ -1797,29 +2199,27 @@ function renderLookup(invs, coas, outs, issues, targetId) {
       html += `</div></div>`;
     }
 
-    // Usage history
-    if (usedRows.length) {
+    if (r.outflows.length) {
       html += `<div style="margin-top:14px;">
-        <div style="font-weight:700; font-size:14px; margin-bottom:8px;">📤 ประวัติการใช้ (${usedRows.length} ครั้ง)</div>
+        <div style="font-weight:700; font-size:14px; margin-bottom:8px;">📤 ประวัติการใช้ (${r.outflows.length} ครั้ง)</div>
         <div style="overflow-x:auto"><table>
           <thead><tr><th>วันที่ใช้</th><th>เครื่อง</th><th>ที่มา</th><th class="num">น้ำหนัก (kg)</th></tr></thead>
           <tbody>`;
-      for (const o of usedRows.slice(0, 20)) {
+      for (const o of r.outflows.slice(0, 10)) {
         html += `<tr><td>${fmtDate(o.outflow_date)}</td>
                  <td>M${escapeHtml(o.machine_id ?? '—')}</td>
                  <td><span class="badge b-neutral">${escapeHtml(o.source || '—')}</span></td>
                  <td class="num">${fmtNum(o.weight_kg,2)}</td></tr>`;
       }
-      if (usedRows.length > 20)
-        html += `<tr><td colspan="4" style="color:var(--text-dim); text-align:center;">... และอีก ${usedRows.length - 20} แถว</td></tr>`;
+      if (r.outflows.length > 10)
+        html += `<tr><td colspan="4" style="color:var(--text-dim); text-align:center;">... และอีก ${r.outflows.length - 10} แถว</td></tr>`;
       html += `</tbody></table></div></div>`;
     }
 
-    // Quality issues for this lot
-    if (lotIssues.length) {
+    if (r.issues.length) {
       html += `<div style="margin-top:14px; background:var(--danger-bg); border-radius:10px; padding:12px;">
         <div style="font-weight:700; font-size:14px; margin-bottom:8px; color:var(--danger);">⚠ ปัญหาที่บันทึกไว้</div>`;
-      for (const iss of lotIssues) {
+      for (const iss of r.issues) {
         html += `<div style="background:var(--panel); border-radius:8px; padding:10px; margin-bottom:6px;">
           <div style="display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:4px;">
             <b>${escapeHtml(iss.issue_type || iss.description.slice(0,40))}</b>
@@ -1836,8 +2236,7 @@ function renderLookup(invs, coas, outs, issues, targetId) {
 
     html += `</div>`;
   }
-
-  $(targetId).innerHTML = html;
+  wrap.innerHTML = html;
 }
 
 // ============================================================
@@ -1855,55 +2254,69 @@ async function fetchLotForIssue() {
   $('#i-lot-info').style.display = 'block';
   $('#i-lot-info').innerHTML = '<div class="loading"><div class="spinner"></div>กำลังดึงข้อมูล...</div>';
 
-  const result = await doLookup(lot, '', true);
-  if (!result) {
-    $('#i-lot-info').innerHTML = `<div class="lot-card"><div class="empty" style="color:var(--danger)">ไม่พบ lot นี้ในระบบ</div></div>`;
-    state.currentLot = null;
-    return;
-  }
+  try {
+    const norm = normalizeLot(lot);
+    const { data: invs } = await supabase
+      .from('paper_invoices')
+      .select('*')
+      .eq('paper_lot_normalized', norm);
 
-  // เก็บ context
-  const inv = result.invoices[0];
-  const coa = result.coas.find(c => c.paper_invoice_id === inv.id);
-  state.currentLot = { invoice: inv, coa, allInvoices: result.invoices, allCoas: result.coas };
-
-  // mark lot field as auto-filled
-  $('#i-lot').classList.add('auto-filled');
-
-  // render context card
-  let html = `<div class="lot-card">
-    <div class="lot-card-head">
-      <div>
-        <div class="lot-lot">${escapeHtml(inv.paper_lot)}</div>
-        <div style="color:var(--text-dim); font-size:14px; margin-top:4px;">
-          ${escapeHtml(inv.supplier || '—')} · ${escapeHtml(inv.paper_type || '—')}
-          
-        </div>
-      </div>
-      ${coa ? '<span class="badge b-info">📋 มี COA</span>' : '<span class="badge b-warn">⚠ ไม่มี COA</span>'}
-    </div>
-    <div class="info-grid">
-      <div class="info-cell"><div class="info-label">Invoice</div>
-        <div class="info-value">${escapeHtml(inv.invoice_no || '—')}</div></div>
-      <div class="info-cell"><div class="info-label">วันที่รับ</div>
-        <div class="info-value">${fmtDate(inv.invoice_date)}</div></div>
-      <div class="info-cell"><div class="info-label">น้ำหนัก</div>
-        <div class="info-value">${fmtNum(inv.weight_kg,2)} kg</div></div>`;
-
-  if (coa) {
-    if (coa.production_date)
-      html += `<div class="info-cell"><div class="info-label">Production Date</div>
-               <div class="info-value">${fmtDate(coa.production_date)}</div></div>`;
-    for (const [k, info] of Object.entries(PARAMS)) {
-      if (coa[k] != null)
-        html += `<div class="info-cell"><div class="info-label">${info.label} (${info.unit})</div>
-                 <div class="info-value">${fmtNum(coa[k])}</div></div>`;
+    if (!invs || !invs.length) {
+      $('#i-lot-info').innerHTML = `<div class="lot-card"><div class="empty" style="color:var(--danger)">ไม่พบ lot นี้ในระบบ</div></div>`;
+      state.currentLot = null;
+      return;
     }
-  }
-  html += `</div></div>`;
 
-  $('#i-lot-info').innerHTML = html;
-  showToast('ดึงข้อมูล lot สำเร็จ ✅', 'success');
+    const inv = invs[0];
+    const { data: coas } = await supabase
+      .from('quality_tests')
+      .select('*')
+      .eq('paper_invoice_id', inv.id);
+    const coa = (coas || [])[0];
+
+    state.currentLot = { invoice: inv, coa, allInvoices: invs, allCoas: coas || [] };
+
+    // mark lot field as auto-filled
+    $('#i-lot').classList.add('auto-filled');
+
+    // render context card
+    let html = `<div class="lot-card">
+      <div class="lot-card-head">
+        <div>
+          <div class="lot-lot">${escapeHtml(inv.paper_lot)}</div>
+          <div style="color:var(--text-dim); font-size:14px; margin-top:4px;">
+            ${escapeHtml(inv.supplier || '—')} · ${escapeHtml(inv.paper_type || '—')}
+          </div>
+        </div>
+        ${coa ? '<span class="badge b-info">📋 มี COA</span>' : '<span class="badge b-warn">⚠ ไม่มี COA</span>'}
+      </div>
+      <div class="info-grid">
+        <div class="info-cell"><div class="info-label">Invoice</div>
+          <div class="info-value">${escapeHtml(inv.invoice_no || '—')}</div></div>
+        <div class="info-cell"><div class="info-label">วันที่รับ</div>
+          <div class="info-value">${fmtDate(inv.invoice_date)}</div></div>
+        <div class="info-cell"><div class="info-label">น้ำหนัก</div>
+          <div class="info-value">${fmtNum(inv.weight_kg,2)} kg</div></div>`;
+
+    if (coa) {
+      if (coa.production_date)
+        html += `<div class="info-cell"><div class="info-label">Production Date</div>
+                 <div class="info-value">${fmtDate(coa.production_date)}</div></div>`;
+      for (const [k, info] of Object.entries(PARAMS)) {
+        if (coa[k] != null)
+          html += `<div class="info-cell"><div class="info-label">${info.label} (${info.unit})</div>
+                   <div class="info-value">${fmtNum(coa[k])}</div></div>`;
+      }
+    }
+    html += `</div></div>`;
+
+    $('#i-lot-info').innerHTML = html;
+    showToast('ดึงข้อมูล lot สำเร็จ ✅', 'success');
+  } catch (e) {
+    console.error(e);
+    $('#i-lot-info').innerHTML = `<div class="lot-card"><div class="empty" style="color:var(--danger)">Error: ${escapeHtml(e.message || e)}</div></div>`;
+    state.currentLot = null;
+  }
 }
 
 function clearIssueForm() {
@@ -2105,9 +2518,10 @@ async function viewIssueDetail(id, lot) {
           <textarea id="il-d-action">${escapeHtml(iss.corrective_action || '')}</textarea>
         </div>
       </div>
-      <div style="margin-top:12px; display:flex; gap:8px;">
+      <div style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap;">
         <button class="btn success" id="il-d-save">💾 บันทึก</button>
         ${lot ? `<button class="btn outline" id="il-d-lot">🔍 ดูข้อมูล lot นี้</button>` : ''}
+        <button class="btn outline" id="il-d-compare" style="background:#fef3c7; border-color:#ca8a04;">⚖️ สร้าง/ดู Compare Case</button>
       </div>
     </div>
   </div>`;
@@ -2140,6 +2554,58 @@ async function viewIssueDetail(id, lot) {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     });
   }
+
+  // Compare button — open existing case or create new with this issue
+  $('#il-d-compare').addEventListener('click', async () => {
+    // check if a case already exists for this issue
+    const { data: existing } = await supabase
+      .from('lot_compare_groups')
+      .select('id, case_name')
+      .eq('issue_id', id)
+      .maybeSingle();
+
+    // switch to compare tab
+    $$('.tab').forEach(b => b.classList.remove('active'));
+    $$('.view').forEach(v => v.classList.remove('active'));
+    $('.tab[data-view="compare"]').classList.add('active');
+    $('#v-compare').classList.add('active');
+    await loadCmpCases();
+
+    // populate paper_type dropdown if not yet
+    const sel = $('#cmp-case-type');
+    if (sel.options.length <= 1) {
+      sel.innerHTML = '<option value="">— ทั้งหมด —</option>' +
+        state.paperTypes.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+    }
+
+    if (existing) {
+      // load it
+      $('#cmp-case-select').value = existing.id;
+      await loadCmpCase(existing.id);
+      showToast(`เปิด case ที่เชื่อมกับ Issue #${id} แล้ว`, 'info');
+    } else {
+      // pre-fill new case form
+      openCaseForm(null);
+      $('#cmp-case-name').value = `Issue #${id}: ${iss.issue_type || iss.description.slice(0,50)}`;
+      $('#cmp-case-by').value = iss.reported_by || '';
+      $('#cmp-case-desc').value = iss.description || '';
+      // wait for issue dropdown to populate, then set
+      setTimeout(() => { $('#cmp-case-issue').value = id; }, 100);
+      // try to set paper_type from issue's lot
+      if (iss.paper_lot) {
+        try {
+          const { data: inv } = await supabase
+            .from('paper_invoices')
+            .select('paper_type')
+            .eq('paper_lot_normalized', normalizeLot(iss.paper_lot))
+            .maybeSingle();
+          if (inv?.paper_type) $('#cmp-case-type').value = inv.paper_type;
+        } catch {}
+      }
+      showToast('สร้าง case ใหม่จาก Issue นี้ — กดบันทึกเพื่อเริ่ม', 'info');
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
 }
 
 // ============================================================
@@ -2882,6 +3348,591 @@ async function loadSpecList() {
   } catch (e) {
     console.error(e);
     wrap.innerHTML = `<div class="panel"><div class="empty" style="color:var(--danger)">${escapeHtml(e.message || e)}</div></div>`;
+  }
+}
+
+// ============================================================
+// TAB 4: COMPARE LOTS
+// ============================================================
+const CLASS_INFO = {
+  ng:      { label: '🔴 NG',     color: '#dc2626', bg: 'rgba(220,38,38,0.12)', badge: 'b-bad' },
+  normal:  { label: '🟢 Normal', color: '#16a34a', bg: 'rgba(22,163,74,0.10)', badge: 'b-ok'  },
+  suspect: { label: '🟡 Suspect',color: '#ca8a04', bg: 'rgba(202,138,4,0.10)', badge: 'b-warn'},
+};
+
+// auto-pick color for custom classifications (deterministic by string hash)
+const CUSTOM_COLORS = [
+  '#0891b2','#7c3aed','#db2777','#0284c7','#9333ea','#c026d3',
+  '#65a30d','#ea580c','#4f46e5','#e11d48','#1e3a8a','#581c87'
+];
+function classInfo(cls) {
+  if (CLASS_INFO[cls]) return CLASS_INFO[cls];
+  // hash-based color
+  let h = 0;
+  for (let i = 0; i < cls.length; i++) h = (h * 31 + cls.charCodeAt(i)) & 0xffffffff;
+  const color = CUSTOM_COLORS[Math.abs(h) % CUSTOM_COLORS.length];
+  return {
+    label: cls,
+    color,
+    bg: color + '22',  // 13% alpha hex
+    badge: 'b-info',
+  };
+}
+
+let cmpState = { currentGroupId: null, currentGroup: null, items: [] };
+
+$('#cmp-new-case').addEventListener('click', () => openCaseForm(null));
+$('#cmp-refresh-cases').addEventListener('click', loadCmpCases);
+$('#cmp-case-cancel').addEventListener('click', () => $('#cmp-case-form').style.display = 'none');
+$('#cmp-case-save').addEventListener('click', saveCmpCase);
+$('#cmp-case-delete').addEventListener('click', deleteCmpCase);
+$('#cmp-case-select').addEventListener('change', e => {
+  if (e.target.value) loadCmpCase(+e.target.value);
+});
+$('#cmp-item-add').addEventListener('click', addCmpItem);
+
+// load on tab open
+$$('.tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (btn.dataset.view === 'compare') {
+      loadCmpCases();
+      // populate paper_type dropdown
+      const sel = $('#cmp-case-type');
+      sel.innerHTML = '<option value="">— ทั้งหมด —</option>' +
+        state.paperTypes.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+    }
+  });
+});
+
+async function loadCmpCases() {
+  try {
+    const { data } = await supabase
+      .from('lot_compare_groups')
+      .select('id, case_name, paper_type, status, created_at, created_by')
+      .order('created_at', { ascending: false });
+    const sel = $('#cmp-case-select');
+    sel.innerHTML = '<option value="">— เลือก case หรือสร้างใหม่ —</option>' +
+      (data || []).map(c => `<option value="${c.id}">${escapeHtml(c.case_name)} ${c.paper_type ? `· ${escapeHtml(c.paper_type)}` : ''} · ${c.status}</option>`).join('');
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+async function openCaseForm(group) {
+  $('#cmp-case-form').style.display = 'block';
+  $('#cmp-case-form-title').textContent = group ? '✏️ แก้ไข Case' : '➕ Case ใหม่';
+  $('#cmp-case-name').value   = group?.case_name   || '';
+  $('#cmp-case-type').value   = group?.paper_type  || '';
+  $('#cmp-case-status').value = group?.status      || 'open';
+  $('#cmp-case-by').value     = group?.created_by  || '';
+  $('#cmp-case-desc').value   = group?.description || '';
+  $('#cmp-case-delete').style.display = group ? 'inline-block' : 'none';
+  $('#cmp-case-form').dataset.editId = group?.id || '';
+
+  // load issues dropdown
+  const sel = $('#cmp-case-issue');
+  sel.innerHTML = '<option value="">— ไม่เชื่อม —</option><option value="" disabled>กำลังโหลด...</option>';
+  try {
+    const { data: issues } = await supabase
+      .from('quality_issues')
+      .select('id, issue_type, paper_lot, issue_date, severity, status')
+      .order('issue_date', { ascending: false })
+      .limit(100);
+    sel.innerHTML = '<option value="">— ไม่เชื่อม —</option>' +
+      (issues || []).map(i =>
+        `<option value="${i.id}">[${fmtDate(i.issue_date)}] ${escapeHtml(i.issue_type || '—')} · ${escapeHtml(i.paper_lot || '—')} · ${i.severity}</option>`
+      ).join('');
+    sel.value = group?.issue_id || '';
+  } catch (e) {
+    console.error(e);
+    sel.innerHTML = '<option value="">— ไม่สามารถโหลดได้ —</option>';
+  }
+}
+
+async function saveCmpCase() {
+  const name = $('#cmp-case-name').value.trim();
+  if (!name) { showToast('กรุณากรอกชื่อ case', 'error'); return; }
+
+  const editId = $('#cmp-case-form').dataset.editId;
+  const issueId = $('#cmp-case-issue').value;
+  const payload = {
+    case_name:   name,
+    paper_type:  $('#cmp-case-type').value || null,
+    status:      $('#cmp-case-status').value,
+    created_by:  $('#cmp-case-by').value.trim() || null,
+    description: $('#cmp-case-desc').value.trim() || null,
+    issue_id:    issueId ? +issueId : null,
+  };
+
+  $('#cmp-case-save').disabled = true;
+  try {
+    if (editId) {
+      const { error } = await supabase.from('lot_compare_groups').update(payload).eq('id', +editId);
+      if (error) throw error;
+      showToast('แก้ไข case สำเร็จ ✅', 'success');
+    } else {
+      const { data, error } = await supabase.from('lot_compare_groups').insert(payload).select().single();
+      if (error) throw error;
+      showToast('สร้าง case สำเร็จ ✅', 'success');
+      $('#cmp-case-form').dataset.editId = data.id;
+      $('#cmp-case-select').value = data.id;
+    }
+    await loadCmpCases();
+    const id = +($('#cmp-case-form').dataset.editId);
+    $('#cmp-case-select').value = id;
+    await loadCmpCase(id);
+    $('#cmp-case-form').style.display = 'none';
+  } catch (e) {
+    console.error(e);
+    showToast('บันทึกไม่ได้: ' + (e.message || e), 'error');
+  } finally {
+    $('#cmp-case-save').disabled = false;
+  }
+}
+
+async function deleteCmpCase() {
+  const editId = $('#cmp-case-form').dataset.editId;
+  if (!editId) return;
+  if (!confirm('ลบ case นี้และ items ทั้งหมด? ไม่สามารถ undo ได้')) return;
+
+  try {
+    const { error } = await supabase.from('lot_compare_groups').delete().eq('id', +editId);
+    if (error) throw error;
+    showToast('ลบ case สำเร็จ', 'success');
+    cmpState = { currentGroupId: null, currentGroup: null, items: [] };
+    $('#cmp-case-form').style.display = 'none';
+    $('#cmp-items-panel').style.display = 'none';
+    $('#cmp-results').innerHTML = '';
+    $('#cmp-case-select').value = '';
+    await loadCmpCases();
+  } catch (e) {
+    showToast('ลบไม่ได้: ' + (e.message || e), 'error');
+  }
+}
+
+async function loadCmpCase(groupId) {
+  cmpState.currentGroupId = groupId;
+  $('#cmp-results').innerHTML = '<div class="panel"><div class="loading"><div class="spinner"></div>กำลังโหลด...</div></div>';
+
+  try {
+    // group + items
+    const { data: group } = await supabase
+      .from('lot_compare_groups').select('*').eq('id', groupId).single();
+    cmpState.currentGroup = group;
+
+    const items = await fetchAllRows(
+      supabase.from('v_compare_lots').select('*').eq('group_id', groupId)
+    );
+    cmpState.items = items;
+
+    // show items panel
+    $('#cmp-items-panel').style.display = 'block';
+
+    renderCmpCase();
+  } catch (e) {
+    console.error(e);
+    $('#cmp-results').innerHTML = `<div class="panel"><div class="empty" style="color:var(--danger)">Error: ${escapeHtml(e.message || e)}</div></div>`;
+  }
+}
+
+function renderCmpCase() {
+  const group = cmpState.currentGroup;
+  const items = cmpState.items;
+  if (!group) return;
+
+  // count by classification (group all custom under "other")
+  const classCounts = {};
+  for (const it of items) {
+    classCounts[it.classification] = (classCounts[it.classification] || 0) + 1;
+  }
+  const ngCount      = classCounts.ng      || 0;
+  const normalCount  = classCounts.normal  || 0;
+  const suspectCount = classCounts.suspect || 0;
+  const otherCount   = items.length - ngCount - normalCount - suspectCount;
+  const withCoa      = items.filter(i => i.coa_id).length;
+
+  let html = `
+    <div class="panel">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap; margin-bottom:12px;">
+        <div>
+          <div style="font-size:18px; font-weight:700;">📁 ${escapeHtml(group.case_name)}</div>
+          <div style="color:var(--text-dim); font-size:13px; margin-top:4px;">
+            ${group.paper_type ? `Type: <b>${escapeHtml(group.paper_type)}</b> · ` : ''}
+            Status: <span class="badge b-${group.status === 'open' ? 'warn' : group.status === 'closed' ? 'neutral' : 'info'}">${group.status}</span>
+            ${group.created_by ? ` · โดย ${escapeHtml(group.created_by)}` : ''}
+            ${group.issue_id ? ` · 🔗 <a href="#" id="cmp-link-issue" data-id="${group.issue_id}">เชื่อมกับ Issue #${group.issue_id}</a>` : ''}
+          </div>
+          ${group.description ? `<div style="margin-top:6px; font-size:14px;">${escapeHtml(group.description)}</div>` : ''}
+        </div>
+        <button class="btn outline" id="cmp-edit-case" style="font-size:13px;">✏️ แก้ไข case</button>
+      </div>
+
+      <div class="kpi-grid" style="grid-template-columns: repeat(${otherCount > 0 ? 5 : 4}, 1fr);">
+        <div class="kpi"><div class="kpi-label">Lots ใน case</div>
+          <div class="kpi-value">${items.length}</div>
+          <div class="kpi-sub">มี COA: ${withCoa}</div></div>
+        <div class="kpi"><div class="kpi-label">🔴 NG</div>
+          <div class="kpi-value" style="color:#dc2626;">${ngCount}</div></div>
+        <div class="kpi"><div class="kpi-label">🟢 Normal</div>
+          <div class="kpi-value" style="color:#16a34a;">${normalCount}</div></div>
+        <div class="kpi"><div class="kpi-label">🟡 Suspect</div>
+          <div class="kpi-value" style="color:#ca8a04;">${suspectCount}</div></div>
+        ${otherCount > 0 ? `<div class="kpi"><div class="kpi-label">อื่นๆ</div>
+          <div class="kpi-value">${otherCount}</div></div>` : ''}
+      </div>
+    </div>`;
+
+  // Items table
+  if (items.length) {
+    html += `<div class="panel">
+      <div class="panel-title">📋 Lots ใน Case (${items.length})</div>
+      <div style="overflow-x:auto"><table>
+        <thead><tr>
+          <th>Class</th><th>Paper Lot</th><th>Type</th><th>Production</th>
+          <th>วันที่ใช้ผลิต</th><th>Batch สินค้า</th><th>COA</th><th>Notes</th><th></th>
+        </tr></thead><tbody>`;
+    for (const it of items) {
+      const ci = classInfo(it.classification);
+      html += `<tr style="background:${ci.bg};">
+        <td><span class="badge ${ci.badge}" style="background:${ci.color}; color:white;">${escapeHtml(ci.label)}</span></td>
+        <td class="mono"><b>${escapeHtml(it.paper_lot)}</b></td>
+        <td>${escapeHtml(it.invoice_paper_type || '—')}</td>
+        <td>${fmtDate(it.production_date)}</td>
+        <td>${fmtDate(it.used_for_product_date)}</td>
+        <td>${escapeHtml(it.product_batch_no || '—')}</td>
+        <td>${it.coa_id ? '<span class="badge b-info">📋</span>' : '<span class="badge b-warn">—</span>'}</td>
+        <td style="font-size:12px;">${escapeHtml(it.item_notes || '')}</td>
+        <td><button class="btn outline" data-id="${it.item_id}" data-act="del-item" style="padding:4px 10px; font-size:12px; color:var(--danger);">ลบ</button></td>
+      </tr>`;
+    }
+    html += `</tbody></table></div></div>`;
+  } else {
+    html += `<div class="panel"><div class="empty">ยังไม่มี lots ใน case นี้ — เพิ่มจากฟอร์มด้านบน</div></div>`;
+  }
+
+  // Compare charts (need at least 1 item with COA)
+  const itemsWithCoa = items.filter(i => i.coa_id);
+  if (itemsWithCoa.length >= 1) {
+    html += `<div class="panel">
+      <div class="panel-title">📊 เปรียบเทียบกราฟ</div>
+      <div class="form-grid-2">
+        <div>
+          <label class="field-label">Parameter ที่ดู</label>
+          <select id="cmp-chart-param">
+            ${Object.entries(PARAMS).map(([k, info]) =>
+              `<option value="${k}">${info.label} (${info.unit})</option>`
+            ).join('')}
+          </select>
+        </div>
+        <div style="display:flex; align-items:flex-end; gap:14px; flex-wrap:wrap;">
+          <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:14px;">
+            <input type="checkbox" id="cmp-chart-baseline" checked style="width:auto; cursor:pointer;">
+            แสดง baseline (COA ทั้งหมดของ paper_type นี้)
+          </label>
+          <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:14px;">
+            <input type="checkbox" id="cmp-chart-spec" checked style="width:auto; cursor:pointer;">
+            แสดง Spec line
+          </label>
+        </div>
+      </div>
+
+      <div style="margin-top:14px;">
+        <div style="font-weight:700; font-size:14px; margin-bottom:6px;">
+          📅 กราฟ 1 — ตาม Production Date (วันผลิตกระดาษ)
+        </div>
+        <div style="font-size:12px; color:var(--text-dim); margin-bottom:8px;">
+          ดูว่า lot NG ผลิตจากกระดาษช่วงไหน — ปัญหาอยู่ที่ supplier?
+        </div>
+        <div class="chart-wrap"><canvas id="cmp-chart-prod"></canvas></div>
+      </div>
+
+      <div style="margin-top:18px;">
+        <div style="font-weight:700; font-size:14px; margin-bottom:6px;">
+          🏭 กราฟ 2 — ตามวันที่ใช้ผลิตสินค้า
+        </div>
+        <div style="font-size:12px; color:var(--text-dim); margin-bottom:8px;">
+          ดูว่าวันไหนเกิดปัญหา — ปัญหาอยู่ที่กระบวนการของเรา?
+        </div>
+        <div class="chart-wrap"><canvas id="cmp-chart-used"></canvas></div>
+      </div>
+    </div>`;
+  }
+
+  $('#cmp-results').innerHTML = html;
+
+  // wire up handlers
+  $('#cmp-edit-case')?.addEventListener('click', () => openCaseForm(group));
+  $$('button[data-act="del-item"]').forEach(b => {
+    b.addEventListener('click', () => deleteCmpItem(+b.dataset.id));
+  });
+  $('#cmp-link-issue')?.addEventListener('click', e => {
+    e.preventDefault();
+    showToast('ดู issue ได้ที่ Tab "รายการปัญหา"', 'info');
+  });
+
+  if (itemsWithCoa.length >= 1) {
+    $('#cmp-chart-param').addEventListener('change', renderCmpCharts);
+    $('#cmp-chart-baseline').addEventListener('change', renderCmpCharts);
+    $('#cmp-chart-spec').addEventListener('change', renderCmpCharts);
+    // pre-select sensible default param — first one with most data
+    const paramScores = Object.keys(PARAMS).map(k => ({
+      key: k,
+      count: itemsWithCoa.filter(it => it[k] != null).length,
+    })).sort((a,b) => b.count - a.count);
+    if (paramScores[0]?.count > 0) $('#cmp-chart-param').value = paramScores[0].key;
+    renderCmpCharts();
+  }
+}
+
+async function addCmpItem() {
+  const groupId = cmpState.currentGroupId;
+  if (!groupId) { showToast('กรุณาเลือกหรือสร้าง case ก่อน', 'error'); return; }
+
+  const lot = $('#cmp-item-lot').value.trim();
+  if (!lot) { showToast('กรุณาใส่ paper lot', 'error'); return; }
+
+  const payload = {
+    group_id:              groupId,
+    paper_lot:             lot,
+    classification:        $('#cmp-item-class').value,
+    used_for_product_date: $('#cmp-item-proddate').value || null,
+    product_batch_no:      $('#cmp-item-batch').value.trim() || null,
+    notes:                 $('#cmp-item-notes').value.trim() || null,
+  };
+
+  $('#cmp-item-add').disabled = true;
+  try {
+    const { error } = await supabase.from('lot_compare_items').insert(payload);
+    if (error) {
+      if (error.code === '23505') {
+        showToast('Lot นี้มีอยู่ใน case แล้ว', 'error');
+      } else throw error;
+      return;
+    }
+    showToast('เพิ่ม lot สำเร็จ ✅', 'success');
+    // clear form (keep classification + date)
+    $('#cmp-item-lot').value = '';
+    $('#cmp-item-batch').value = '';
+    $('#cmp-item-notes').value = '';
+    await loadCmpCase(groupId);
+  } catch (e) {
+    console.error(e);
+    showToast('เพิ่มไม่ได้: ' + (e.message || e), 'error');
+  } finally {
+    $('#cmp-item-add').disabled = false;
+  }
+}
+
+async function deleteCmpItem(itemId) {
+  if (!confirm('ลบ lot นี้ออกจาก case?')) return;
+  try {
+    const { error } = await supabase.from('lot_compare_items').delete().eq('id', itemId);
+    if (error) throw error;
+    showToast('ลบแล้ว', 'success');
+    await loadCmpCase(cmpState.currentGroupId);
+  } catch (e) {
+    showToast('ลบไม่ได้: ' + (e.message || e), 'error');
+  }
+}
+
+let cmpChartProd = null;
+let cmpChartUsed = null;
+
+async function renderCmpCharts() {
+  const param    = $('#cmp-chart-param').value;
+  const showBase = $('#cmp-chart-baseline').checked;
+  const showSpec = $('#cmp-chart-spec').checked;
+
+  const items = cmpState.items.filter(i => i.coa_id && i[param] != null);
+  if (!items.length) {
+    if (cmpChartProd) { cmpChartProd.destroy(); cmpChartProd = null; }
+    if (cmpChartUsed) { cmpChartUsed.destroy(); cmpChartUsed = null; }
+    return;
+  }
+
+  // group by classification (preserve insertion order for legend)
+  const classGroups = new Map();  // class → points[]
+  for (const it of items) {
+    const cls = it.classification;
+    if (!classGroups.has(cls)) classGroups.set(cls, []);
+    classGroups.get(cls).push(it);
+  }
+
+  // Load baseline/spec once if needed
+  let baselinePointsByX = { production_date: [], used_for_product_date: [] };
+  let stats = null;
+  let spec = null;
+  let category = null;
+  if (showBase || showSpec) {
+    const focusType = cmpState.currentGroup.paper_type || items[0]?.invoice_paper_type;
+    if (focusType) {
+      const baseline = await fetchAllRows(
+        supabase
+          .from('quality_tests')
+          .select('production_date, ' + param + ', paper_invoices(paper_category)')
+          .eq('paper_type', focusType)
+          .not(param, 'is', null)
+          .order('production_date', { ascending: true })
+      );
+      for (const b of baseline) {
+        if (!category) category = b.paper_invoices?.paper_category;
+        if (b.production_date) {
+          baselinePointsByX.production_date.push({ x: b.production_date, y: +b[param] });
+        }
+      }
+      if (baselinePointsByX.production_date.length) {
+        stats = calcStats(baselinePointsByX.production_date.map(p => p.y));
+      }
+      const specs = await loadSpecs();
+      spec = findSpec(specs, category, focusType, param);
+    }
+  }
+
+  const info = PARAMS[param];
+
+  // ----- helper: build datasets for a given x-axis -----
+  function buildDatasets(xAxis) {
+    const datasets = [];
+
+    // baseline scatter (only meaningful for production_date)
+    if (showBase && xAxis === 'production_date' && baselinePointsByX.production_date.length) {
+      datasets.push({
+        label: 'Baseline (COA ทั้งหมด)',
+        type: 'scatter',
+        data: baselinePointsByX.production_date,
+        backgroundColor: 'rgba(100, 116, 139, 0.25)',
+        borderColor: 'rgba(100, 116, 139, 0.4)',
+        borderWidth: 0.5,
+        pointRadius: 2,
+        pointHoverRadius: 4,
+      });
+      if (stats) {
+        datasets.push({
+          label: 'Mean',
+          type: 'line',
+          data: baselinePointsByX.production_date.map(p => ({ x: p.x, y: stats.mean })),
+          borderColor: '#047857', borderWidth: 1.5, borderDash: [4,4],
+          pointRadius: 0, fill: false,
+        });
+      }
+    }
+
+    // points by classification — sort: normal → suspect → ng (so ng on top)
+    const sortedClasses = [...classGroups.entries()].sort(([a], [b]) => {
+      const order = { normal: 1, suspect: 2, ng: 3 };
+      return (order[a] || 4) - (order[b] || 4);
+    });
+
+    for (const [cls, lots] of sortedClasses) {
+      const ci = classInfo(cls);
+      const points = lots
+        .map(it => {
+          const xRaw = xAxis === 'used_for_product_date' ? it.used_for_product_date : it.production_date;
+          if (!xRaw) return null;
+          return { x: xRaw, y: +it[param], lot: it.paper_lot, batch: it.product_batch_no, cls };
+        })
+        .filter(p => p);
+
+      if (!points.length) continue;
+      // size: ng > suspect > normal > custom
+      const radius = cls === 'ng' ? 10 : cls === 'suspect' ? 9 : cls === 'normal' ? 8 : 8;
+
+      datasets.push({
+        label: ci.label,
+        type: 'scatter',
+        data: points,
+        backgroundColor: ci.color,
+        borderColor: '#000',
+        borderWidth: 1.5,
+        pointRadius: radius,
+        pointHoverRadius: radius + 3,
+      });
+    }
+
+    // spec lines
+    if (showSpec && spec) {
+      // need x range: use all unique x values from this axis
+      const allX = new Set();
+      datasets.forEach(d => {
+        if (d.type === 'scatter') d.data.forEach(p => allX.add(p.x));
+      });
+      const sortedX = [...allX].sort();
+      if (sortedX.length >= 1) {
+        if (spec.min_value != null) {
+          datasets.push({
+            label: 'Min Spec',
+            type: 'line',
+            data: sortedX.map(x => ({ x, y: +spec.min_value })),
+            borderColor: '#b91c1c', borderWidth: 2.5, borderDash: [10,4],
+            pointRadius: 0, fill: false,
+          });
+        }
+        if (spec.max_value != null) {
+          datasets.push({
+            label: 'Max Spec',
+            type: 'line',
+            data: sortedX.map(x => ({ x, y: +spec.max_value })),
+            borderColor: '#b91c1c', borderWidth: 2.5, borderDash: [10,4],
+            pointRadius: 0, fill: false,
+          });
+        }
+      }
+    }
+
+    return datasets;
+  }
+
+  // ----- helper: chart options -----
+  function chartOptions(xLabel) {
+    return {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'nearest', intersect: false },
+      scales: {
+        x: { type: 'time', time: { unit: 'day' },
+             title: { display: true, text: xLabel } },
+        y: { title: { display: true, text: `${info.label} (${info.unit})` } },
+      },
+      plugins: {
+        legend: { position: 'bottom' },
+        tooltip: {
+          callbacks: {
+            title: items => items[0]?.raw?.x ? fmtDate(items[0].raw.x) : '',
+            label: c => {
+              const r = c.raw;
+              if (r.lot) {
+                const lines = [`Lot: ${r.lot}`, `${info.label}: ${fmtNum(r.y)} ${info.unit}`];
+                if (r.batch) lines.push(`Batch: ${r.batch}`);
+                if (r.cls) lines.push(`Class: ${r.cls}`);
+                return lines;
+              }
+              return `${c.dataset.label}: ${fmtNum(r.y)}`;
+            }
+          }
+        }
+      }
+    };
+  }
+
+  // Chart 1: Production Date
+  if (cmpChartProd) cmpChartProd.destroy();
+  const ctx1 = $('#cmp-chart-prod')?.getContext('2d');
+  if (ctx1) {
+    cmpChartProd = new Chart(ctx1, {
+      type: 'scatter',
+      data: { datasets: buildDatasets('production_date') },
+      options: chartOptions('Production Date (วันผลิตกระดาษ)'),
+    });
+  }
+
+  // Chart 2: Used-for-product Date
+  if (cmpChartUsed) cmpChartUsed.destroy();
+  const ctx2 = $('#cmp-chart-used')?.getContext('2d');
+  if (ctx2) {
+    cmpChartUsed = new Chart(ctx2, {
+      type: 'scatter',
+      data: { datasets: buildDatasets('used_for_product_date') },
+      options: chartOptions('วันที่ใช้ผลิตสินค้า'),
+    });
   }
 }
 
