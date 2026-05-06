@@ -434,6 +434,9 @@
     <!-- Form: New/Edit Case -->
     <div class="panel" id="cmp-case-form" style="display:none;">
       <div class="panel-title" id="cmp-case-form-title">➕ Case ใหม่</div>
+      <div style="background:var(--accent-bg); border-radius:8px; padding:10px 12px; margin-bottom:14px; font-size:13px; color:var(--text);">
+        💡 <b>ขั้นตอน:</b> 1) กรอกข้อมูล Case → 2) กด "💾 บันทึก Case" → 3) ฟอร์มเพิ่ม lots จะโผล่ด้านล่าง — เพิ่มทีละ lot
+      </div>
       <div class="form-grid-2">
         <div style="grid-column: span 2;">
           <label class="field-label">ชื่อ Case <span style="color:var(--danger)">*</span></label>
@@ -479,10 +482,15 @@
     <!-- Items: เพิ่ม lot เข้า case -->
     <div class="panel" id="cmp-items-panel" style="display:none;">
       <div class="panel-title">➕ เพิ่ม Lots เข้า Case</div>
+      <div style="background:var(--accent-bg); border-radius:8px; padding:10px 12px; margin-bottom:14px; font-size:13px;">
+        💡 ใส่หลาย lots พร้อมกันได้ <b>(คั่นด้วย comma หรือ enter)</b> — Classification + วันที่จะใช้กับทุก lot ที่ใส่ → กด <b>➕ เพิ่ม Lot</b> หรือ <b>Enter</b>
+      </div>
       <div class="form-grid-2">
-        <div>
-          <label class="field-label">Paper Lot <span style="color:var(--danger)">*</span></label>
-          <input type="text" id="cmp-item-lot" placeholder="เช่น 776A26862H">
+        <div style="grid-column: span 2;">
+          <label class="field-label">Paper Lots <span style="color:var(--danger)">*</span> <span style="color:var(--text-dim); font-weight:500; font-size:12px;">— ใส่ได้หลาย lots คั่นด้วย comma หรือบรรทัดใหม่</span></label>
+          <textarea id="cmp-item-lot" rows="2" placeholder="เช่น 776A26862H, 776A18655G&#10;หรือใส่บรรทัดละ 1 lot"
+            style="font-family: var(--mono); font-size: 14px;"></textarea>
+          <div id="cmp-item-chips" style="margin-top:6px;"></div>
         </div>
         <div>
           <label class="field-label">Classification <span style="color:var(--danger)">*</span></label>
@@ -514,6 +522,39 @@
 
     <!-- Result: Items list + Compare graph -->
     <div id="cmp-results"></div>
+
+    <!-- Edit Item Modal -->
+    <div id="cmp-edit-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center; padding:20px;">
+      <div style="background:var(--panel); border-radius:12px; padding:20px; max-width:600px; width:100%; max-height:90vh; overflow-y:auto;">
+        <div style="font-weight:700; font-size:16px; margin-bottom:14px;">✏️ แก้ไข Lot</div>
+        <div class="form-grid-2">
+          <div style="grid-column: span 2;">
+            <label class="field-label">Paper Lot</label>
+            <input type="text" id="cmp-edit-lot" disabled style="background:var(--panel-2); font-family:var(--mono);">
+          </div>
+          <div>
+            <label class="field-label">Classification <span style="color:var(--danger)">*</span></label>
+            <input type="text" id="cmp-edit-class" list="cmp-class-options" autocomplete="off">
+          </div>
+          <div>
+            <label class="field-label">วันที่ใช้ผลิตสินค้า</label>
+            <input type="date" id="cmp-edit-proddate">
+          </div>
+          <div>
+            <label class="field-label">เลข Batch สินค้า</label>
+            <input type="text" id="cmp-edit-batch">
+          </div>
+          <div style="grid-column: span 2;">
+            <label class="field-label">หมายเหตุ</label>
+            <input type="text" id="cmp-edit-notes">
+          </div>
+        </div>
+        <div style="margin-top:14px; display:flex; gap:8px; justify-content:flex-end;">
+          <button class="btn outline" id="cmp-edit-cancel">ยกเลิก</button>
+          <button class="btn success" id="cmp-edit-save">💾 บันทึก</button>
+        </div>
+      </div>
+    </div>
   </div>
   <div class="view" id="v-issue">
     <div class="panel">
@@ -3390,6 +3431,33 @@ $('#cmp-case-select').addEventListener('change', e => {
   if (e.target.value) loadCmpCase(+e.target.value);
 });
 $('#cmp-item-add').addEventListener('click', addCmpItem);
+$('#cmp-item-lot').addEventListener('input', updateCmpChips);
+// Enter (without Shift) in textarea = add lots
+$('#cmp-item-lot').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addCmpItem(); }
+});
+$('#cmp-item-batch').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); addCmpItem(); }
+});
+$('#cmp-item-notes').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); addCmpItem(); }
+});
+
+// Edit modal handlers
+$('#cmp-edit-cancel').addEventListener('click', () => $('#cmp-edit-modal').style.display = 'none');
+$('#cmp-edit-save').addEventListener('click', saveEditCmpItem);
+$('#cmp-edit-modal').addEventListener('click', e => {
+  if (e.target.id === 'cmp-edit-modal') $('#cmp-edit-modal').style.display = 'none';
+});
+
+function updateCmpChips() {
+  const lots = parseLotsInput($('#cmp-item-lot').value);
+  const wrap = $('#cmp-item-chips');
+  if (!lots.length) { wrap.innerHTML = ''; return; }
+  wrap.innerHTML = lots.map(l =>
+    `<span style="background:var(--accent-2-bg); color:var(--accent-2); padding:3px 9px; border-radius:999px; font-size:12px; font-family:var(--mono); font-weight:600; margin:2px 4px 2px 0; display:inline-block;">${escapeHtml(l)}</span>`
+  ).join('') + `<span style="margin-left:8px; font-size:12px; color:var(--text-dim);">${lots.length} lot${lots.length>1?'s':''}</span>`;
+}
 
 // load on tab open
 $$('.tab').forEach(btn => {
@@ -3482,6 +3550,13 @@ async function saveCmpCase() {
     $('#cmp-case-select').value = id;
     await loadCmpCase(id);
     $('#cmp-case-form').style.display = 'none';
+    // scroll to "add lot" panel
+    setTimeout(() => {
+      const panel = $('#cmp-items-panel');
+      if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      // focus input
+      $('#cmp-item-lot')?.focus();
+    }, 200);
   } catch (e) {
     console.error(e);
     showToast('บันทึกไม่ได้: ' + (e.message || e), 'error');
@@ -3602,7 +3677,10 @@ function renderCmpCase() {
         <td>${escapeHtml(it.product_batch_no || '—')}</td>
         <td>${it.coa_id ? '<span class="badge b-info">📋</span>' : '<span class="badge b-warn">—</span>'}</td>
         <td style="font-size:12px;">${escapeHtml(it.item_notes || '')}</td>
-        <td><button class="btn outline" data-id="${it.item_id}" data-act="del-item" style="padding:4px 10px; font-size:12px; color:var(--danger);">ลบ</button></td>
+        <td style="white-space:nowrap;">
+          <button class="btn outline" data-id="${it.item_id}" data-act="edit-item" style="padding:4px 10px; font-size:12px;">✏️</button>
+          <button class="btn outline" data-id="${it.item_id}" data-act="del-item" style="padding:4px 10px; font-size:12px; color:var(--danger);">🗑</button>
+        </td>
       </tr>`;
     }
     html += `</tbody></table></div></div>`;
@@ -3665,6 +3743,9 @@ function renderCmpCase() {
   $$('button[data-act="del-item"]').forEach(b => {
     b.addEventListener('click', () => deleteCmpItem(+b.dataset.id));
   });
+  $$('button[data-act="edit-item"]').forEach(b => {
+    b.addEventListener('click', () => openEditCmpItem(+b.dataset.id));
+  });
   $('#cmp-link-issue')?.addEventListener('click', e => {
     e.preventDefault();
     showToast('ดู issue ได้ที่ Tab "รายการปัญหา"', 'info');
@@ -3688,38 +3769,99 @@ async function addCmpItem() {
   const groupId = cmpState.currentGroupId;
   if (!groupId) { showToast('กรุณาเลือกหรือสร้าง case ก่อน', 'error'); return; }
 
-  const lot = $('#cmp-item-lot').value.trim();
-  if (!lot) { showToast('กรุณาใส่ paper lot', 'error'); return; }
+  const lots = parseLotsInput($('#cmp-item-lot').value);
+  if (!lots.length) { showToast('กรุณาใส่ paper lot อย่างน้อย 1 lot', 'error'); return; }
 
-  const payload = {
-    group_id:              groupId,
-    paper_lot:             lot,
-    classification:        $('#cmp-item-class').value,
-    used_for_product_date: $('#cmp-item-proddate').value || null,
-    product_batch_no:      $('#cmp-item-batch').value.trim() || null,
-    notes:                 $('#cmp-item-notes').value.trim() || null,
-  };
+  const classification = $('#cmp-item-class').value.trim() || 'normal';
+  const used_for_product_date = $('#cmp-item-proddate').value || null;
+  const product_batch_no = $('#cmp-item-batch').value.trim() || null;
+  const notes = $('#cmp-item-notes').value.trim() || null;
+
+  const records = lots.map(lot => ({
+    group_id: groupId,
+    paper_lot: lot,
+    classification,
+    used_for_product_date,
+    product_batch_no,
+    notes,
+  }));
 
   $('#cmp-item-add').disabled = true;
+  $('#cmp-item-add').textContent = `กำลังเพิ่ม ${lots.length} lot${lots.length>1?'s':''}...`;
+
   try {
-    const { error } = await supabase.from('lot_compare_items').insert(payload);
+    // upsert (เผื่อ duplicate ใน batch เดียว)
+    const { data, error } = await supabase
+      .from('lot_compare_items')
+      .insert(records)
+      .select();
+
     if (error) {
+      // อาจมี duplicate (unique constraint) — ลองใส่ทีละตัวเพื่อหา lot ที่ซ้ำ
       if (error.code === '23505') {
-        showToast('Lot นี้มีอยู่ใน case แล้ว', 'error');
+        let added = 0, dup = [];
+        for (const rec of records) {
+          const { error: e } = await supabase.from('lot_compare_items').insert(rec);
+          if (e) {
+            if (e.code === '23505') dup.push(rec.paper_lot);
+            else throw e;
+          } else added++;
+        }
+        if (added) showToast(`เพิ่ม ${added} lots สำเร็จ ✅${dup.length ? ` · ข้าม ${dup.length} lots ที่ซ้ำ: ${dup.join(', ')}` : ''}`, dup.length ? 'info' : 'success');
+        else showToast(`Lot ทั้งหมดมีอยู่แล้วใน case นี้: ${dup.join(', ')}`, 'error');
       } else throw error;
-      return;
+    } else {
+      showToast(`เพิ่ม ${data.length} lot${data.length>1?'s':''} สำเร็จ ✅`, 'success');
     }
-    showToast('เพิ่ม lot สำเร็จ ✅', 'success');
-    // clear form (keep classification + date)
+
+    // clear form (keep classification + date + batch)
     $('#cmp-item-lot').value = '';
-    $('#cmp-item-batch').value = '';
+    $('#cmp-item-chips').innerHTML = '';
     $('#cmp-item-notes').value = '';
     await loadCmpCase(groupId);
+    $('#cmp-item-lot')?.focus();
   } catch (e) {
     console.error(e);
     showToast('เพิ่มไม่ได้: ' + (e.message || e), 'error');
   } finally {
     $('#cmp-item-add').disabled = false;
+    $('#cmp-item-add').textContent = '➕ เพิ่ม Lot';
+  }
+}
+
+function openEditCmpItem(itemId) {
+  const item = cmpState.items.find(i => i.item_id === itemId);
+  if (!item) return;
+  $('#cmp-edit-modal').dataset.itemId = itemId;
+  $('#cmp-edit-lot').value      = item.paper_lot;
+  $('#cmp-edit-class').value    = item.classification;
+  $('#cmp-edit-proddate').value = item.used_for_product_date || '';
+  $('#cmp-edit-batch').value    = item.product_batch_no || '';
+  $('#cmp-edit-notes').value    = item.item_notes || '';
+  $('#cmp-edit-modal').style.display = 'flex';
+}
+
+async function saveEditCmpItem() {
+  const itemId = +$('#cmp-edit-modal').dataset.itemId;
+  if (!itemId) return;
+  const payload = {
+    classification:        $('#cmp-edit-class').value.trim() || 'normal',
+    used_for_product_date: $('#cmp-edit-proddate').value || null,
+    product_batch_no:      $('#cmp-edit-batch').value.trim() || null,
+    notes:                 $('#cmp-edit-notes').value.trim() || null,
+  };
+  $('#cmp-edit-save').disabled = true;
+  try {
+    const { error } = await supabase.from('lot_compare_items').update(payload).eq('id', itemId);
+    if (error) throw error;
+    showToast('แก้ไขสำเร็จ ✅', 'success');
+    $('#cmp-edit-modal').style.display = 'none';
+    await loadCmpCase(cmpState.currentGroupId);
+  } catch (e) {
+    console.error(e);
+    showToast('แก้ไขไม่ได้: ' + (e.message || e), 'error');
+  } finally {
+    $('#cmp-edit-save').disabled = false;
   }
 }
 
