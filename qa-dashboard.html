@@ -1218,6 +1218,18 @@ function renderSmallMultiples(containerId, rows, dateField, activeParams, specs,
     }
 
     const canvas = wrap.querySelector('canvas');
+
+    // คำนวณ y-axis range ให้ครอบคลุม spec lines (ถ้ามี)
+    const dataMin = Math.min(...aggPoints.map(p => p.min));
+    const dataMax = Math.max(...aggPoints.map(p => p.max));
+    let yMin = dataMin, yMax = dataMax;
+    if (specMin != null) yMin = Math.min(yMin, specMin);
+    if (specMax != null) yMax = Math.max(yMax, specMax);
+    // padding 5% ของ range
+    const pad = (yMax - yMin) * 0.08 || 1;
+    const yMinFinal = yMin - pad;
+    const yMaxFinal = yMax + pad;
+
     new Chart(canvas.getContext('2d'), {
       type: 'line',
       data: { datasets },
@@ -1227,7 +1239,8 @@ function renderSmallMultiples(containerId, rows, dateField, activeParams, specs,
         scales: {
           x: { type: 'time', time: { unit: 'day' },
                ticks: { font: { size: 10 }, maxRotation: 0, autoSkipPadding: 14 } },
-          y: { ticks: { font: { size: 10 } } },
+          y: { ticks: { font: { size: 10 } },
+               min: yMinFinal, max: yMaxFinal },
         },
         plugins: {
           legend: { display: false },
@@ -1501,7 +1514,25 @@ async function loadTrend() {
         scales: {
           x: { type: 'time', time: { unit: 'day' },
                title: { display: true, text: dateField === 'receive_date' ? 'Receive Date' : 'Production Date' } },
-          y: { title: { display: true, text: `${info.label} (${info.unit})` } },
+          y: {
+            title: { display: true, text: `${info.label} (${info.unit})` },
+            min: (() => {
+              const dataMin = Math.min(...aggPoints.map(p => p.min));
+              const candidates = [dataMin, lcl3];
+              if (specMin != null) candidates.push(specMin);
+              const yMin = Math.min(...candidates);
+              const yMax = Math.max(...aggPoints.map(p => p.max), ucl3, specMax ?? -Infinity);
+              return yMin - (yMax - yMin) * 0.05;
+            })(),
+            max: (() => {
+              const dataMax = Math.max(...aggPoints.map(p => p.max));
+              const candidates = [dataMax, ucl3];
+              if (specMax != null) candidates.push(specMax);
+              const yMax = Math.max(...candidates);
+              const yMin = Math.min(...aggPoints.map(p => p.min), lcl3, specMin ?? Infinity);
+              return yMax + (yMax - yMin) * 0.05;
+            })(),
+          },
         },
         plugins: {
           legend: {
