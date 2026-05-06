@@ -1336,7 +1336,7 @@ async function init() {
     }
     return;
   }
-  console.log(`[init] loaded ${distinct.length} quality_tests rows for dropdowns`);
+
 
   // get unique suppliers
   const supSet = new Set(distinct.map(d => d.supplier).filter(Boolean));
@@ -1359,7 +1359,7 @@ async function init() {
   // (only do this if some rows ไม่มี paper_type)
   const orphanRows = distinct.filter(d => !d.paper_type && d.paper_invoice_id);
   if (orphanRows.length) {
-    console.log(`[init] ${orphanRows.length} rows missing paper_type — looking up via paper_invoices`);
+
     const invIds = [...new Set(orphanRows.map(r => r.paper_invoice_id))];
     const invMap = {};
     for (let i = 0; i < invIds.length; i += 500) {
@@ -1466,19 +1466,13 @@ async function loadMonitor() {
       p_date_to:   (dateField === 'production_date' ? to   : null) || null,
     });
 
-    console.log('[Monitor] RPC returned', data.length, 'rows. Sample:', data[0]);
-    console.log('[Monitor] Filter:', { supplier, type, from, to, dateField });
-
     // filter by paper_type + receive_date (client-side)
     let filtered = type
       ? data.filter(r => (r.paper_invoices?.paper_type || r.paper_type) === type)
       : data;
-    console.log('[Monitor] After paper_type filter:', filtered.length);
-
     if (dateField === 'receive_date') {
       if (from) filtered = filtered.filter(r => (r.paper_invoices?.receive_date || '') >= from);
       if (to)   filtered = filtered.filter(r => (r.paper_invoices?.receive_date || '') <= to);
-      console.log('[Monitor] After receive_date filter:', filtered.length);
     }
 
     if (!filtered.length) {
