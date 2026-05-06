@@ -1847,34 +1847,30 @@ async function loadDetailPivot() {
       const width = inv.width_mm || '?';
       const weight = parseFloat(inv.weight_kg) || 0;
       const price = parseFloat(inv.price_per_kg) || 0;
+      const value = weight * price;
       const recDate = inv.receive_date || '';
       
       const cell = ensureGroup(sup, type, width);
       const outs = outflowsByInvoice.get(inv.id) || [];
       
-      // sum kg ที่ออกไปแล้วก่อน/ภายในแต่ละ checkpoint
-      const outKgByPrevEnd = outs.filter(o => o.date <= prevMonthEnd).reduce((s, o) => s + o.kg, 0);
-      const outKgByMonthEnd = outs.filter(o => o.date <= monthEnd).reduce((s, o) => s + o.kg, 0);
-      
-      // remaining ณ ปลายเดือนก่อน / สิ้นเดือนนี้
-      const remainingPrev = Math.max(0, weight - outKgByPrevEnd);
-      const remainingEnd = Math.max(0, weight - outKgByMonthEnd);
-      
-      // ยอดต้นเดือน — รับมาก่อน prevMonthEnd และยังเหลือ
-      if (recDate <= prevMonthEnd && remainingPrev > 0) {
-        cell.prev.rolls += 1;
-        cell.prev.kg += remainingPrev;
-        cell.prev.value += remainingPrev * price;
+      // ยอดต้นเดือน
+      if (recDate <= prevMonthEnd) {
+        const wasOutByPrev = outs.some(o => o.date <= prevMonthEnd);
+        if (!wasOutByPrev) {
+          cell.prev.rolls += 1;
+          cell.prev.kg += weight;
+          cell.prev.value += value;
+        }
       }
       
-      // รับเข้าเดือนนี้ — ใช้ weight เต็ม (ปริมาณรับเข้า ไม่ใช่ปริมาณคงเหลือ)
+      // รับเข้าเดือนนี้
       if (recDate >= monthStart && recDate <= monthEnd) {
         cell.in.rolls += 1;
         cell.in.kg += weight;
-        cell.in.value += weight * price;
+        cell.in.value += value;
       }
       
-      // จ่ายออกเดือนนี้ — sum outflow ที่อยู่ในเดือนนี้
+      // จ่ายออกเดือนนี้
       const outsThis = outs.filter(o => o.date >= monthStart && o.date <= monthEnd);
       if (outsThis.length > 0) {
         cell.out.rolls += outsThis.length;
@@ -1883,11 +1879,12 @@ async function loadDetailPivot() {
         cell.out.value += outKg * price;
       }
       
-      // คงเหลือสิ้นเดือน — รับมาก่อน monthEnd และยังเหลือ
-      if (recDate <= monthEnd && remainingEnd > 0) {
+      // คงเหลือสิ้นเดือน
+      const wasOutByEnd = outs.some(o => o.date <= monthEnd);
+      if (!wasOutByEnd) {
         cell.bal.rolls += 1;
-        cell.bal.kg += remainingEnd;
-        cell.bal.value += remainingEnd * price;
+        cell.bal.kg += weight;
+        cell.bal.value += value;
       }
     }
     
