@@ -442,6 +442,71 @@ body {
 }
 .pivot-row-grand .pivot-zero { color: #b45309 !important; opacity: 0.5; }
 
+/* Aging — sub category in bucket */
+.aging-bucket .aging-sub-rows {
+  margin-top: 10px; padding-top: 8px; border-top: 1px dashed currentColor;
+  font-size: 11px; font-family: var(--mono); opacity: 0.85;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.aging-bucket .aging-sub-row {
+  display: flex; justify-content: space-between; gap: 8px;
+}
+.aging-bucket .sub-cat-name { font-weight: 600; }
+
+/* Aging — KPI banner per category */
+.aging-kpi-cats {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px; margin-top: 14px;
+}
+.aging-kpi-cat {
+  background: rgba(255,255,255,0.6); border: 1px solid rgba(220,38,38,0.3);
+  border-radius: 8px; padding: 10px 12px;
+}
+.aging-kpi-cat .cat-name { font-size: 12px; font-weight: 700; color: #7f1d1d; margin-bottom: 4px; }
+.aging-kpi-cat .cat-rolls { font-size: 18px; font-weight: 700; font-family: var(--mono); color: #991b1b; }
+.aging-kpi-cat .cat-detail { font-size: 11px; color: #7c2d12; font-family: var(--mono); margin-top: 2px; }
+
+/* Aging — Matrix table */
+.aging-matrix-table {
+  width: 100%; border-collapse: collapse; font-size: 13px;
+}
+.aging-matrix-table th, .aging-matrix-table td {
+  padding: 10px 12px; border: 1px solid var(--border); text-align: right;
+  font-family: var(--mono);
+}
+.aging-matrix-table th {
+  background: var(--panel-2); font-weight: 700; text-align: center;
+  font-family: inherit;
+}
+.aging-matrix-table td.cat-name {
+  text-align: left; font-family: inherit; font-weight: 700; background: var(--panel);
+}
+.aging-matrix-table .cat-Liner       { background: #eff6ff; }
+.aging-matrix-table .cat-GreyBoard   { background: #f9fafb; }
+.aging-matrix-table .cat-CoreBoard   { background: #fffbeb; }
+.aging-matrix-table .col-0-30        { background: #f0fdf4; }
+.aging-matrix-table .col-31-60       { background: #fefce8; }
+.aging-matrix-table .col-61-90       { background: #fff7ed; }
+.aging-matrix-table .col-over90      { background: #fef2f2; color: #991b1b; font-weight: 700; }
+.aging-matrix-table .total-row td    { background: #fde68a; font-weight: 700; }
+.aging-matrix-table .total-col       { background: #fde68a; font-weight: 700; }
+.aging-matrix-table .matrix-sub {
+  display: block; font-size: 11px; color: var(--text-dim); margin-top: 2px;
+}
+
+/* Aging — category filter pills */
+.aging-filter-bar {
+  display: flex; gap: 8px; margin-bottom: 10px; align-items: center;
+  flex-wrap: wrap;
+}
+.aging-filter-bar .label { font-size: 12px; color: var(--text-dim); font-weight: 600; }
+.aging-cat-btn {
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px;
+  padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer;
+  color: var(--text);
+}
+.aging-cat-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
+
 .aging-buckets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
 .aging-bucket { padding: 16px; border-radius: 10px; text-align: center; }
 .aging-0-30 { background: #dcfce7; color: #14532d; }
@@ -1220,12 +1285,23 @@ body {
       <div id="agingKpiBanner"></div>
       <div class="aging-buckets" id="agingBuckets"><div class="loading-state"><span class="loading"></span></div></div>
     </div>
+    <div class="section" id="agingMatrixSection" style="display:none;">
+      <div class="section-title">📊 สรุป: ประเภทกระดาษ × ช่วงอายุ</div>
+      <div id="agingMatrix"></div>
+    </div>
     <div class="section aging-supplier-section" id="agingSupplierSection" style="display:none;">
       <div class="section-title">🏭 ม้วนค้าง > 90 วัน แยกตาม Supplier</div>
       <div id="agingSupplierBreakdown"></div>
     </div>
     <div class="section">
       <div class="section-title">🔝 Top 20 ม้วนที่ค้างนานที่สุด</div>
+      <div class="aging-filter-bar" id="agingFilterBar" style="display:none;">
+        <span class="label">ประเภท:</span>
+        <button class="aging-cat-btn active" data-cat="all">ทั้งหมด</button>
+        <button class="aging-cat-btn" data-cat="Liner">Liner</button>
+        <button class="aging-cat-btn" data-cat="Grey-Board">Grey-Board</button>
+        <button class="aging-cat-btn" data-cat="Core-Board">Core-Board</button>
+      </div>
       <div class="aging-sort-bar" id="agingSortBar" style="display:none;">
         <span class="label">เรียงตาม:</span>
         <button class="aging-sort-btn active" data-sort="days">วันที่ค้าง (มาก→น้อย)</button>
@@ -2170,8 +2246,31 @@ async function loadDetailPivot() {
 }
 
 // ===== TAB 3: AGING =====
-let _agingData = null;       // เก็บข้อมูลที่โหลดล่าสุด — สำหรับ sort + export
-let _agingSortMode = 'days'; // 'days' | 'value' | 'kg'
+let _agingData = null;          // เก็บข้อมูลที่โหลดล่าสุด — สำหรับ sort + export
+let _agingSortMode = 'days';    // 'days' | 'value' | 'kg'
+let _agingCatFilter = 'all';    // 'all' | 'Liner' | 'Grey-Board' | 'Core-Board'
+
+const AGING_CATS = ['Liner', 'Grey-Board', 'Core-Board'];
+const AGING_BUCKET_KEYS = ['0-30', '31-60', '61-90', 'over90'];
+const AGING_BUCKET_LABELS = {
+  '0-30':  '0–30 วัน',
+  '31-60': '31–60 วัน',
+  '61-90': '61–90 วัน',
+  'over90': '> 90 วัน ⚠️'
+};
+const AGING_BUCKET_CSS = {
+  '0-30':  'aging-0-30',
+  '31-60': 'aging-31-60',
+  '61-90': 'aging-61-90',
+  'over90': 'aging-over-90'
+};
+
+function bucketKeyOfDays(d) {
+  if (d <= 30) return '0-30';
+  if (d <= 60) return '31-60';
+  if (d <= 90) return '61-90';
+  return 'over90';
+}
 
 async function loadAging() {
   const myToken = newRequestToken('aging');
@@ -2179,28 +2278,34 @@ async function loadAging() {
   const tbl = $('#agingTable');
   const banner = $('#agingKpiBanner');
   const supSection = $('#agingSupplierSection');
+  const matrixSection = $('#agingMatrixSection');
   const sortBar = $('#agingSortBar');
+  const filterBar = $('#agingFilterBar');
   
   buckets.innerHTML = '<div class="loading-state"><span class="loading"></span></div>';
   tbl.innerHTML = '<div class="loading-state"><span class="loading"></span></div>';
   banner.innerHTML = '';
   supSection.style.display = 'none';
+  matrixSection.style.display = 'none';
   sortBar.style.display = 'none';
+  filterBar.style.display = 'none';
   
   try {
     const data = await fetchAllRows(() => supabase
       .from('paper_invoices')
-      .select('paper_lot, supplier, paper_type, width_mm, weight_kg, remaining_weight_kg, receive_date, price_per_kg')
+      .select('paper_lot, supplier, paper_type, paper_category, width_mm, weight_kg, remaining_weight_kg, receive_date, price_per_kg')
       .eq('status', 'in_stock').not('receive_date', 'is', null));
     if (!isRequestStillCurrent('aging', myToken)) return;
     
-    // === คำนวณ buckets แต่ละช่วง ===
-    const stats = {
-      '0-30':  { rolls: 0, kg: 0, value: 0 },
-      '31-60': { rolls: 0, kg: 0, value: 0 },
-      '61-90': { rolls: 0, kg: 0, value: 0 },
-      'over90':{ rolls: 0, kg: 0, value: 0 }
-    };
+    // === คำนวณ buckets แต่ละช่วง × ประเภท ===
+    // stats[bucket]['_total' | 'Liner' | 'Grey-Board' | 'Core-Board'] = { rolls, kg, value }
+    const blank = () => ({ rolls: 0, kg: 0, value: 0 });
+    const stats = {};
+    for (const k of AGING_BUCKET_KEYS) {
+      stats[k] = { _total: blank() };
+      for (const c of AGING_CATS) stats[k][c] = blank();
+    }
+    
     const withDays = [];
     
     for (const r of (data || [])) {
@@ -2210,17 +2315,19 @@ async function loadAging() {
       const kg = parseFloat(r.remaining_weight_kg) || 0;
       const price = parseFloat(r.price_per_kg) || 0;
       const value = kg * price;
+      const cat = AGING_CATS.includes(r.paper_category) ? r.paper_category : null;
       
-      withDays.push({ ...r, days: d, _kg: kg, _value: value });
+      withDays.push({ ...r, days: d, _kg: kg, _value: value, _cat: cat });
       
-      let key = 'over90';
-      if (d <= 30) key = '0-30';
-      else if (d <= 60) key = '31-60';
-      else if (d <= 90) key = '61-90';
-      
-      stats[key].rolls++;
-      stats[key].kg += kg;
-      stats[key].value += value;
+      const bk = bucketKeyOfDays(d);
+      stats[bk]._total.rolls++;
+      stats[bk]._total.kg += kg;
+      stats[bk]._total.value += value;
+      if (cat) {
+        stats[bk][cat].rolls++;
+        stats[bk][cat].kg += kg;
+        stats[bk][cat].value += value;
+      }
     }
     
     const total = withDays.length;
@@ -2229,29 +2336,36 @@ async function loadAging() {
     
     if (!isRequestStillCurrent('aging', myToken)) return;
     
-    // === [Feature 2] KPI Banner: เงินจม > 90 วัน ===
-    if (showMoney && stats.over90.rolls > 0) {
+    // === [Feature 2] KPI Banner: เงินจม > 90 วัน + แยกประเภท ===
+    const over90 = stats.over90._total;
+    if (over90.rolls > 0) {
+      const catCards = AGING_CATS.map(c => {
+        const s = stats.over90[c];
+        if (s.rolls === 0) return '';
+        const valueLine = showMoney ? `<div class="cat-detail">${fmtMoney(s.value)}</div>` : '';
+        return `
+          <div class="aging-kpi-cat">
+            <div class="cat-name">${c}</div>
+            <div class="cat-rolls">${fmtNum(s.rolls)} ม้วน</div>
+            <div class="cat-detail">${fmtNum(Math.round(s.kg))} kg</div>
+            ${valueLine}
+          </div>
+        `;
+      }).join('');
+      
+      const headerLeft = showMoney
+        ? `<div class="label">💸 เงินจมในของค้าง > 90 วัน</div>
+           <div class="value">${fmtMoney(over90.value)}</div>
+           <div class="sub">${fmtNum(over90.rolls)} ม้วน · ${fmtNum(Math.round(over90.kg))} kg · ${pct(over90.rolls)} ของ stock ทั้งหมด</div>`
+        : `<div class="label">⚠️ ม้วนค้าง > 90 วัน</div>
+           <div class="value">${fmtNum(over90.rolls)} ม้วน</div>
+           <div class="sub">${fmtNum(Math.round(over90.kg))} kg · ${pct(over90.rolls)} ของ stock ทั้งหมด</div>`;
+      
       banner.innerHTML = `
         <div class="aging-kpi-banner">
           <div class="left">
-            <div class="label">💸 เงินจมในของค้าง > 90 วัน</div>
-            <div class="value">${fmtMoney(stats.over90.value)}</div>
-            <div class="sub">${fmtNum(stats.over90.rolls)} ม้วน · ${fmtNum(Math.round(stats.over90.kg))} kg · ${pct(stats.over90.rolls)} ของ stock ทั้งหมด</div>
-          </div>
-          <div class="right-actions">
-            <button class="aging-export-btn" id="agingExportOver90Btn">📥 Export &gt; 90 วัน (CSV)</button>
-            <button class="aging-export-btn secondary" id="agingExportAllBtn">📥 Export ทั้งหมด</button>
-          </div>
-        </div>
-      `;
-    } else if (stats.over90.rolls > 0) {
-      // staff: ไม่แสดงเงินจม แสดงแค่ม้วน + ปุ่ม export
-      banner.innerHTML = `
-        <div class="aging-kpi-banner">
-          <div class="left">
-            <div class="label">⚠️ ม้วนค้าง > 90 วัน</div>
-            <div class="value">${fmtNum(stats.over90.rolls)} ม้วน</div>
-            <div class="sub">${fmtNum(Math.round(stats.over90.kg))} kg · ${pct(stats.over90.rolls)} ของ stock ทั้งหมด</div>
+            ${headerLeft}
+            <div class="aging-kpi-cats">${catCards}</div>
           </div>
           <div class="right-actions">
             <button class="aging-export-btn" id="agingExportOver90Btn">📥 Export &gt; 90 วัน (CSV)</button>
@@ -2261,31 +2375,108 @@ async function loadAging() {
       `;
     }
     
-    // === [Feature 1] Bucket แสดง kg + มูลค่า ===
-    const bucketCell = (label, key, cls) => {
-      const s = stats[key];
+    // === [Feature 1] Bucket แสดง kg + มูลค่า + แยกตามประเภท ===
+    const bucketCell = (key) => {
+      const s = stats[key]._total;
       const valueLine = showMoney ? `<div class="aging-value">${fmtMoney(s.value)}</div>` : '';
+      
+      const subRows = AGING_CATS.map(c => {
+        const cs = stats[key][c];
+        if (cs.rolls === 0) return '';
+        return `
+          <div class="aging-sub-row">
+            <span class="sub-cat-name">${c}</span>
+            <span>${fmtNum(cs.rolls)} ม้วน · ${fmtNum(Math.round(cs.kg))} kg</span>
+          </div>
+        `;
+      }).filter(x => x).join('');
+      
+      const subSection = subRows ? `<div class="aging-sub-rows">${subRows}</div>` : '';
+      
       return `
-        <div class="aging-bucket ${cls}">
-          <div class="aging-label">${label}</div>
+        <div class="aging-bucket ${AGING_BUCKET_CSS[key]}">
+          <div class="aging-label">${AGING_BUCKET_LABELS[key]}</div>
           <div class="aging-count">${fmtNum(s.rolls)}</div>
           <div class="aging-pct">${pct(s.rolls)}</div>
           <div class="aging-kg">${fmtNum(Math.round(s.kg))} kg</div>
           ${valueLine}
+          ${subSection}
         </div>
       `;
     };
-    buckets.innerHTML = 
-      bucketCell('0–30 วัน',  '0-30',   'aging-0-30') +
-      bucketCell('31–60 วัน', '31-60',  'aging-31-60') +
-      bucketCell('61–90 วัน', '61-90',  'aging-61-90') +
-      bucketCell('> 90 วัน ⚠️', 'over90', 'aging-over-90');
+    buckets.innerHTML = AGING_BUCKET_KEYS.map(bucketCell).join('');
+    
+    // === [Feature 3] Matrix: ประเภท × ช่วงอายุ ===
+    if (total > 0) {
+      const cellHTML = (s) => {
+        if (s.rolls === 0) return '<td>—</td>';
+        const moneyPart = showMoney 
+          ? `<span class="matrix-sub">${fmtMoney(s.value)}</span>` 
+          : '';
+        return `<td>
+          ${fmtNum(s.rolls)} ม้วน
+          <span class="matrix-sub">${fmtNum(Math.round(s.kg))} kg</span>
+          ${moneyPart}
+        </td>`;
+      };
+      
+      // Per-category rows (sum across buckets for grand total per cat)
+      const catRows = AGING_CATS.map(c => {
+        const cssC = c.replace(/[^A-Za-z]/g, '');  // GreyBoard, CoreBoard
+        let total_c = blank();
+        let cells = '';
+        for (const bk of AGING_BUCKET_KEYS) {
+          const s = stats[bk][c];
+          total_c.rolls += s.rolls;
+          total_c.kg += s.kg;
+          total_c.value += s.value;
+          // tag column with bucket key for color
+          const td = cellHTML(s).replace('<td>', `<td class="col-${bk}">`);
+          cells += td;
+        }
+        cells += cellHTML(total_c).replace('<td>', '<td class="total-col">');
+        return `<tr><td class="cat-name cat-${cssC}">${c}</td>${cells}</tr>`;
+      }).join('');
+      
+      // Total row (across categories — use bucket _total to include uncategorized too)
+      let cellsTotal = '';
+      let grand = blank();
+      for (const bk of AGING_BUCKET_KEYS) {
+        const s = stats[bk]._total;
+        grand.rolls += s.rolls;
+        grand.kg += s.kg;
+        grand.value += s.value;
+        cellsTotal += cellHTML(s).replace('<td>', `<td class="col-${bk}">`);
+      }
+      cellsTotal += cellHTML(grand).replace('<td>', '<td class="total-col">');
+      
+      const matrixHTML = `
+        <table class="aging-matrix-table">
+          <thead>
+            <tr>
+              <th>ประเภท</th>
+              <th>0–30 วัน</th>
+              <th>31–60 วัน</th>
+              <th>61–90 วัน</th>
+              <th>> 90 วัน</th>
+              <th>รวมทั้งหมด</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${catRows}
+            <tr class="total-row"><td class="cat-name">รวมทั้งหมด</td>${cellsTotal}</tr>
+          </tbody>
+        </table>
+      `;
+      $('#agingMatrix').innerHTML = matrixHTML;
+      matrixSection.style.display = '';
+    }
     
     // === [Feature 4] Group by Supplier (> 90 วัน) ===
-    const over90 = withDays.filter(r => r.days > 90);
-    if (over90.length > 0) {
+    const over90Rows = withDays.filter(r => r.days > 90);
+    if (over90Rows.length > 0) {
       const supMap = new Map();
-      for (const r of over90) {
+      for (const r of over90Rows) {
         const sup = r.supplier || '(ไม่ระบุ)';
         if (!supMap.has(sup)) supMap.set(sup, { rolls: 0, kg: 0, value: 0, maxDays: 0 });
         const s = supMap.get(sup);
@@ -2319,7 +2510,7 @@ async function loadAging() {
       supSection.style.display = '';
     }
     
-    // === [Feature 3] Top 20 — แสดง column มูลค่า + sort ได้ ===
+    // === [Feature 5] Top 20 — แสดง column มูลค่า + sort ได้ + filter ตามประเภท ===
     if (withDays.length === 0) {
       tbl.innerHTML = '<div class="empty-msg">ไม่มีข้อมูล</div>';
       _agingData = null;
@@ -2328,7 +2519,8 @@ async function loadAging() {
     
     _agingData = withDays;
     sortBar.style.display = '';
-    renderAgingTop20();  // render with current sort mode
+    filterBar.style.display = '';
+    renderAgingTop20();
     
     // wire export buttons
     const btnOver90 = document.getElementById('agingExportOver90Btn');
@@ -2345,6 +2537,16 @@ async function loadAging() {
         renderAgingTop20();
       };
     });
+    
+    // wire category filter
+    filterBar.querySelectorAll('.aging-cat-btn').forEach(btn => {
+      btn.onclick = () => {
+        _agingCatFilter = btn.dataset.cat;
+        filterBar.querySelectorAll('.aging-cat-btn').forEach(b => 
+          b.classList.toggle('active', b.dataset.cat === _agingCatFilter));
+        renderAgingTop20();
+      };
+    });
   } catch (err) {
     buckets.innerHTML = `<div class="loading-state" style="color:var(--danger);">❌ ${escapeHtml(err.message)}</div>`;
   }
@@ -2354,14 +2556,26 @@ function renderAgingTop20() {
   const tbl = $('#agingTable');
   if (!_agingData) return;
   
+  // 1) filter by category
+  let filtered = _agingData;
+  if (_agingCatFilter !== 'all') {
+    filtered = _agingData.filter(r => r._cat === _agingCatFilter);
+  }
+  
+  // 2) sort
   const sortFn = {
     days:  (a, b) => b.days - a.days,
     value: (a, b) => b._value - a._value,
     kg:    (a, b) => b._kg - a._kg
   }[_agingSortMode] || ((a, b) => b.days - a.days);
   
-  const top20 = [..._agingData].sort(sortFn).slice(0, 20);
+  const top20 = [...filtered].sort(sortFn).slice(0, 20);
   const showMoney = isManager();
+  
+  if (top20.length === 0) {
+    tbl.innerHTML = '<div class="empty-msg">ไม่มีข้อมูลในตัวกรองนี้</div>';
+    return;
+  }
   
   let html = `
     <table class="data-table">
@@ -2370,6 +2584,7 @@ function renderAgingTop20() {
           <th>Lot</th>
           <th class="thai-text">Supplier</th>
           <th class="thai-text">ประเภท</th>
+          <th class="thai-text">หมวด</th>
           <th class="right">หน้ากว้าง</th>
           <th class="right">น้ำหนัก (kg)</th>
           ${showMoney ? '<th class="right">฿/kg</th>' : ''}
@@ -2388,6 +2603,7 @@ function renderAgingTop20() {
         <td>${escapeHtml(r.paper_lot)}</td>
         <td class="thai-text">${escapeHtml(r.supplier || '—')}</td>
         <td>${escapeHtml(r.paper_type || '—')}</td>
+        <td>${escapeHtml(r._cat || '—')}</td>
         <td class="right">${escapeHtml(r.width_mm || '—')}</td>
         <td class="right">${fmtNum(r._kg)}</td>
         ${showMoney ? `<td class="right">${r.price_per_kg ? Number(r.price_per_kg).toFixed(2) : '—'}</td>` : ''}
@@ -2401,7 +2617,7 @@ function renderAgingTop20() {
   tbl.innerHTML = html;
 }
 
-// === [Feature 5] Export CSV ===
+// === Export CSV ===
 function exportAgingCSV(mode) {
   if (!_agingData || _agingData.length === 0) {
     alert('ไม่มีข้อมูลให้ export');
@@ -2419,7 +2635,7 @@ function exportAgingCSV(mode) {
   
   const showMoney = isManager();
   const headers = [
-    'Lot', 'Supplier', 'ประเภท', 'หน้ากว้าง (mm)', 'น้ำหนักคงเหลือ (kg)',
+    'Lot', 'Supplier', 'ประเภท', 'หมวด', 'หน้ากว้าง (mm)', 'น้ำหนักคงเหลือ (kg)',
     ...(showMoney ? ['฿/kg', 'มูลค่า (฿)'] : []),
     'วันรับเข้า', 'ค้าง (วัน)'
   ];
@@ -2430,6 +2646,7 @@ function exportAgingCSV(mode) {
       r.paper_lot || '',
       r.supplier || '',
       r.paper_type || '',
+      r._cat || '',
       r.width_mm || '',
       r._kg.toFixed(2),
       ...(showMoney ? [
@@ -2446,7 +2663,6 @@ function exportAgingCSV(mode) {
     }).join(','));
   }
   
-  // Add BOM สำหรับ Excel เปิดไทยถูก
   const blob = new Blob(['\uFEFF' + csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -2458,6 +2674,7 @@ function exportAgingCSV(mode) {
   a.click();
   URL.revokeObjectURL(url);
 }
+
 
 // ===== TAB 4: TREND =====
 async function loadTrend() {
