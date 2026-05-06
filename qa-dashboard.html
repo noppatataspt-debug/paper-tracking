@@ -337,11 +337,29 @@
           <select id="t-param">
             <option value="basis_weight">Basis Weight (g/m²)</option>
             <option value="burst">Burst (kPa)</option>
+            <option value="rct">RCT (N/152.4)</option>
+            <option value="cmt">CMT (N)</option>
             <option value="plybond">Plybond (J/m²)</option>
-            <option value="cobb_top">Cobb's Top (g/m²)</option>
-            <option value="cobb_bottom">Cobb's Bottom (g/m²)</option>
+            <option value="cobb_top">Cobb Top (g/m²)</option>
+            <option value="cobb_bottom">Cobb Bottom (g/m²)</option>
+            <option value="cobb_ts2">Cobb TS 2 (g/m²)</option>
+            <option value="cobb_bs2">Cobb BS 2 (g/m²)</option>
+            <option value="cobb_ts30">Cobb TS 30 (g/m²)</option>
             <option value="caliper">Caliper (μm)</option>
+            <option value="tear_md">Tear MD (mN)</option>
+            <option value="tear_cd">Tear CD (mN)</option>
+            <option value="tensile_md">Tensile MD (kN/m)</option>
+            <option value="tensile_cd">Tensile CD (kN/m)</option>
+            <option value="stretch_md">Stretch MD (%)</option>
+            <option value="stretch_cd">Stretch CD (%)</option>
             <option value="moisture">Moisture (%)</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label">ใช้วันที่ของ</label>
+          <select id="t-datefield">
+            <option value="production_date">Production Date (ผลิต)</option>
+            <option value="receive_date">Receive Date (รับเข้าคลัง)</option>
           </select>
         </div>
         <div>
@@ -538,6 +556,26 @@
         <button class="btn success" id="sp-save">💾 บันทึก Spec</button>
         <button class="btn outline" id="sp-clear">🗑 ล้าง</button>
       </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">📥 Bulk Import Spec จาก CSV</div>
+      <div class="panel-sub">Paste CSV หรือ upload ไฟล์ — รูปแบบ column: paper_category, paper_type, parameter, min_value, max_value, target_value, source</div>
+
+      <div style="margin-bottom:10px;">
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:6px;">
+          <button class="btn outline" id="sp-bulk-template" style="font-size:12px; padding:6px 12px;">📋 ใส่ตัวอย่างให้ดู</button>
+          <button class="btn outline" id="sp-bulk-file-btn" style="font-size:12px; padding:6px 12px;">📁 หรือเลือกจากไฟล์ CSV</button>
+          <input type="file" id="sp-bulk-file" accept=".csv" style="display:none;">
+        </div>
+        <textarea id="sp-bulk-text" rows="8" style="font-family: var(--mono); font-size: 13px;"
+          placeholder="paper_category,paper_type,parameter,min_value,max_value,target_value,source&#10;Core-Board,CBS350,basis_weight,336,364,350,SCG datasheet&#10;Core-Board,CBS350,burst,500,,,SCG datasheet&#10;..."></textarea>
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="btn" id="sp-bulk-preview">🔍 Preview</button>
+        <button class="btn success" id="sp-bulk-go" disabled>💾 Import ทั้งหมด</button>
+      </div>
+      <div id="sp-bulk-result" style="margin-top:10px;"></div>
     </div>
 
     <div id="sp-list-wrap"></div>
@@ -1210,39 +1248,55 @@ function renderSmallMultiples(containerId, rows, dateField, activeParams, specs,
 $('#t-go').addEventListener('click', loadTrend);
 
 async function loadTrend() {
-  const supplier = $('#t-supplier').value;
-  const type     = $('#t-type').value;
-  const param    = $('#t-param').value;
-  const days     = +$('#t-days').value;
+  const supplier  = $('#t-supplier').value;
+  const type      = $('#t-type').value;
+  const param     = $('#t-param').value;
+  const days      = +$('#t-days').value;
+  const dateField = $('#t-datefield').value;
 
   $('#t-results').innerHTML = '<div class="panel"><div class="loading"><div class="spinner"></div>กำลังโหลด...</div></div>';
 
   try {
+    // ดึง COA ทุก field — รองรับ orphan (paper_type column ใน qt) ด้วย
     let q = supabase
       .from('quality_tests')
-      .select(`id, supplier, production_date, ${param}, paper_invoices(paper_type, paper_lot)`)
-      .not('production_date', 'is', null)
+      .select(`*, paper_invoices(paper_type, paper_category, paper_lot, receive_date)`)
       .not(param, 'is', null)
       .order('production_date', { ascending: true });
 
     if (supplier) q = q.eq('supplier', supplier);
-    if (days > 0) {
+    // date filter — ใช้ production_date filter ใน server, ส่วน receive_date filter ทาง client
+    if (dateField === 'production_date' && days > 0) {
       const d = new Date();
       d.setDate(d.getDate() - days);
       q = q.gte('production_date', d.toISOString().slice(0,10));
     }
 
     const raw = await fetchAllRows(q);
-    const filtered = type ? raw.filter(r => r.paper_invoices?.paper_type === type) : raw;
+    let filtered = type
+      ? raw.filter(r => (r.paper_invoices?.paper_type || r.paper_type) === type)
+      : raw;
+    // receive_date filter (client-side)
+    if (dateField === 'receive_date' && days > 0) {
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - days);
+      const cutoffStr = cutoff.toISOString().slice(0,10);
+      filtered = filtered.filter(r => (r.paper_invoices?.receive_date || '') >= cutoffStr);
+    }
+    // also filter rows that don't have the chosen date field set
+    filtered = filtered.filter(r => {
+      const d = dateField === 'receive_date' ? r.paper_invoices?.receive_date : r.production_date;
+      return d && r[param] != null;
+    });
 
     if (!filtered.length) {
       $('#t-results').innerHTML = '<div class="panel"><div class="empty">ไม่พบข้อมูลในช่วงนี้</div></div>';
       return;
     }
 
-    // calc stats for control limits
-    const vals = filtered.map(r => +r[param]).filter(v => !isNaN(v));
-    const stats = calcStats(vals);
+    // overall stats (across all individual data points)
+    const allVals = filtered.map(r => +r[param]);
+    const stats = calcStats(allVals);
     const ucl3 = stats.mean + 3 * stats.sd;
     const lcl3 = stats.mean - 3 * stats.sd;
     const ucl2 = stats.mean + 2 * stats.sd;
@@ -1255,11 +1309,58 @@ async function loadTrend() {
       return dev > 2 * stats.sd && dev <= 3 * stats.sd;
     }).length;
 
+    // load specs
+    const specs = await loadSpecs();
+    // category for spec lookup
+    const sampleRow = filtered[0];
+    const category = sampleRow.paper_invoices?.paper_category || sampleRow.paper_category;
+    const paperType = type || null;
+    const spec = findSpec(specs || {}, category, paperType, param);
+    const specMin = spec?.min_value != null ? +spec.min_value : null;
+    const specMax = spec?.max_value != null ? +spec.max_value : null;
+
+    let belowMin = 0, aboveMax = 0;
+    if (specMin != null || specMax != null) {
+      for (const v of allVals) {
+        if (specMin != null && v < specMin) belowMin++;
+        if (specMax != null && v > specMax) aboveMax++;
+      }
+    }
+
+    // aggregate by date
+    const byDate = new Map();
+    for (const r of filtered) {
+      const d = dateField === 'receive_date' ? r.paper_invoices?.receive_date : r.production_date;
+      const v = +r[param];
+      if (!d || isNaN(v)) continue;
+      if (!byDate.has(d)) byDate.set(d, []);
+      byDate.get(d).push({
+        v,
+        lot: r.paper_invoices?.paper_lot || r.paper_lot,
+      });
+    }
+    const dates = [...byDate.keys()].sort();
+    const aggPoints = dates.map(d => {
+      const items = byDate.get(d);
+      const vals = items.map(x => x.v);
+      const min = Math.min(...vals);
+      const max = Math.max(...vals);
+      const mean = vals.reduce((a,b) => a+b, 0) / vals.length;
+      return {
+        x: d,
+        y: mean,
+        min, max, n: vals.length,
+        lots: items.map(x => x.lot).filter(Boolean).slice(0, 5),
+        moreLots: items.length > 5 ? items.length - 5 : 0,
+      };
+    });
+
     const info = PARAMS[param];
     $('#t-results').innerHTML = `
       <div class="kpi-grid">
         <div class="kpi"><div class="kpi-label">Data Points</div>
-          <div class="kpi-value">${stats.n}</div></div>
+          <div class="kpi-value">${stats.n}</div>
+          <div class="kpi-sub">${dates.length} days</div></div>
         <div class="kpi"><div class="kpi-label">Mean</div>
           <div class="kpi-value">${fmtNum(stats.mean)}</div>
           <div class="kpi-sub">${info.unit}</div></div>
@@ -1269,10 +1370,13 @@ async function loadTrend() {
         <div class="kpi"><div class="kpi-label">Out of Control</div>
           <div class="kpi-value" style="color:${outCount?'var(--danger)':'var(--success)'}">${outCount}</div>
           <div class="kpi-sub">เตือน (>2σ): ${warnCount}</div></div>
+        ${spec ? `<div class="kpi"><div class="kpi-label">Spec</div>
+          <div class="kpi-value" style="font-size:14px;">${specMin != null ? '≥' + fmtNum(specMin) : ''}<br>${specMax != null ? '≤' + fmtNum(specMax) : ''}</div>
+          <div class="kpi-sub" style="color:${belowMin || aboveMax ? 'var(--danger)' : 'var(--success)'}">หลุด: ${belowMin + aboveMax}</div></div>` : ''}
       </div>
       <div class="panel">
-        <div class="panel-title">${info.label} (${info.unit}) — Trend</div>
-        <div class="panel-sub">เส้นกลาง = mean, สีส้ม = ±2σ, สีแดง = ±3σ (control limit)</div>
+        <div class="panel-title">${info.label} (${info.unit}) — Trend (เฉลี่ยต่อวัน)</div>
+        <div class="panel-sub">เส้นน้ำเงิน = mean ของวัน · แถบฟ้าอ่อน = min-max ของวัน · เส้นเขียว = mean ทั้งช่วง · เส้นส้ม = ±2σ · เส้นแดง = ±3σ${spec ? ' · เส้นแดงทึบ = Min/Max Spec' : ''}</div>
         <div class="chart-wrap"><canvas id="t-chart"></canvas></div>
       </div>
     `;
@@ -1281,56 +1385,130 @@ async function loadTrend() {
     if (state.charts.trend) state.charts.trend.destroy();
     const ctx = $('#t-chart').getContext('2d');
 
-    const points = filtered.map(r => ({
-      x: r.production_date,
-      y: +r[param],
-      lot: r.paper_invoices?.paper_lot || '—',
-    }));
-    // line for mean / ucl / lcl
-    const mkLine = (label, val, color, dash=[]) => ({
-      label, data: points.map(p => ({x: p.x, y: val})),
-      borderColor: color, borderWidth: 1.5, borderDash: dash,
-      pointRadius: 0, fill: false, type: 'line',
-    });
+    const datasets = [
+      // Max boundary (band top) — invisible
+      {
+        label: 'Max',
+        data: aggPoints.map(p => ({x: p.x, y: p.max, _agg: p})),
+        borderColor: 'rgba(29, 78, 216, 0)',
+        backgroundColor: 'rgba(29, 78, 216, 0.13)',
+        borderWidth: 0, pointRadius: 0,
+        fill: '+1', tension: 0,
+      },
+      // Min boundary
+      {
+        label: 'Min',
+        data: aggPoints.map(p => ({x: p.x, y: p.min, _agg: p})),
+        borderColor: 'rgba(29, 78, 216, 0)',
+        borderWidth: 0, pointRadius: 0,
+        fill: false, tension: 0,
+      },
+      // Daily mean
+      {
+        label: info.label + ' (avg/day)',
+        data: aggPoints.map(p => ({x: p.x, y: p.y, _agg: p})),
+        borderColor: '#1d4ed8',
+        backgroundColor: aggPoints.map(p => {
+          if (specMin != null && p.min < specMin) return '#b91c1c';
+          if (specMax != null && p.max > specMax) return '#b91c1c';
+          if (Math.abs(p.y - stats.mean) > 3 * stats.sd) return '#b91c1c';
+          if (Math.abs(p.y - stats.mean) > 2 * stats.sd) return '#b45309';
+          return '#1d4ed8';
+        }),
+        borderWidth: 2,
+        pointRadius: aggPoints.map(p => p.n > 1 ? 5 : 4),
+        pointHoverRadius: 8,
+        tension: 0.15,
+        fill: false,
+      },
+      // Mean line
+      {
+        label: 'Overall μ',
+        data: aggPoints.map(p => ({x: p.x, y: stats.mean})),
+        borderColor: '#047857', borderWidth: 1.8, borderDash: [4,4],
+        pointRadius: 0, fill: false,
+      },
+      // ±2σ
+      {
+        label: '+2σ',
+        data: aggPoints.map(p => ({x: p.x, y: ucl2})),
+        borderColor: '#b45309', borderWidth: 1.5, borderDash: [4,3],
+        pointRadius: 0, fill: false,
+      },
+      {
+        label: '-2σ',
+        data: aggPoints.map(p => ({x: p.x, y: lcl2})),
+        borderColor: '#b45309', borderWidth: 1.5, borderDash: [4,3],
+        pointRadius: 0, fill: false,
+      },
+      // ±3σ
+      {
+        label: '+3σ',
+        data: aggPoints.map(p => ({x: p.x, y: ucl3})),
+        borderColor: '#dc2626', borderWidth: 1.5, borderDash: [2,2],
+        pointRadius: 0, fill: false,
+      },
+      {
+        label: '-3σ',
+        data: aggPoints.map(p => ({x: p.x, y: lcl3})),
+        borderColor: '#dc2626', borderWidth: 1.5, borderDash: [2,2],
+        pointRadius: 0, fill: false,
+      },
+    ];
+
+    // spec lines
+    if (specMin != null) {
+      datasets.push({
+        label: 'Min Spec',
+        data: aggPoints.map(p => ({x: p.x, y: specMin})),
+        borderColor: '#b91c1c', borderWidth: 2.5, borderDash: [10,4],
+        pointRadius: 0, fill: false,
+      });
+    }
+    if (specMax != null) {
+      datasets.push({
+        label: 'Max Spec',
+        data: aggPoints.map(p => ({x: p.x, y: specMax})),
+        borderColor: '#b91c1c', borderWidth: 2.5, borderDash: [10,4],
+        pointRadius: 0, fill: false,
+      });
+    }
 
     state.charts.trend = new Chart(ctx, {
-      type: 'scatter',
-      data: {
-        datasets: [
-          {
-            label: info.label,
-            data: points,
-            backgroundColor: points.map(p => {
-              const dev = Math.abs(p.y - stats.mean);
-              if (dev > 3 * stats.sd) return '#b91c1c';
-              if (dev > 2 * stats.sd) return '#b45309';
-              return '#1d4ed8';
-            }),
-            borderColor: '#1d4ed8',
-            pointRadius: 4, pointHoverRadius: 7,
-            showLine: true, borderWidth: 1, tension: 0,
-          },
-          mkLine('Mean', stats.mean, '#047857'),
-          mkLine('+2σ', ucl2, '#b45309', [4,3]),
-          mkLine('-2σ', lcl2, '#b45309', [4,3]),
-          mkLine('+3σ', ucl3, '#b91c1c', [2,2]),
-          mkLine('-3σ', lcl3, '#b91c1c', [2,2]),
-        ]
-      },
+      type: 'line',
+      data: { datasets },
       options: {
         responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'nearest', axis: 'x', intersect: false },
         scales: {
-          x: { type: 'time', time: { unit: 'day' }, title: { display: true, text: 'Production Date' } },
+          x: { type: 'time', time: { unit: 'day' },
+               title: { display: true, text: dateField === 'receive_date' ? 'Receive Date' : 'Production Date' } },
           y: { title: { display: true, text: `${info.label} (${info.unit})` } },
         },
         plugins: {
-          legend: { position: 'bottom' },
+          legend: {
+            position: 'bottom',
+            labels: {
+              filter: (item) => !['Max','Min'].includes(item.text),
+            }
+          },
           tooltip: {
+            filter: (ctx) => ctx.dataset.label && !ctx.dataset.label.startsWith('Max') && !ctx.dataset.label.startsWith('Min'),
             callbacks: {
-              label: (c) => {
-                const p = c.raw;
-                if (typeof p.lot === 'undefined') return `${c.dataset.label}: ${fmtNum(p.y)}`;
-                return [`Lot: ${p.lot}`, `${info.label}: ${fmtNum(p.y)} ${info.unit}`];
+              title: items => items[0]?.raw?.x ? fmtDate(items[0].raw.x) : '',
+              label: c => {
+                const p = c.raw?._agg;
+                if (!p) return `${c.dataset.label}: ${fmtNum(c.raw.y)}`;
+                const lines = [
+                  `n = ${p.n} lots`,
+                  `mean: ${fmtNum(p.y)} ${info.unit}`,
+                ];
+                if (p.n > 1) lines.push(`range: ${fmtNum(p.min)} – ${fmtNum(p.max)}`);
+                if (p.lots.length) {
+                  lines.push('');
+                  lines.push('Lots: ' + p.lots.join(', ') + (p.moreLots ? ` +${p.moreLots} more` : ''));
+                }
+                return lines;
               }
             }
           }
@@ -2386,6 +2564,138 @@ async function saveSpec() {
   } finally {
     $('#sp-save').disabled = false;
     $('#sp-save').textContent = '💾 บันทึก Spec';
+  }
+}
+
+// ---- Bulk import handlers ----
+$('#sp-bulk-template').addEventListener('click', () => {
+  $('#sp-bulk-text').value = `paper_category,paper_type,parameter,min_value,max_value,target_value,source
+Core-Board,CBS350,basis_weight,336,364,350,SCG datasheet
+Core-Board,CBS350,burst,500,,,SCG datasheet
+Core-Board,CBS350,plybond,280,,,SCG datasheet
+Core-Board,CBS350,moisture,5,8,,SCG datasheet
+Core-Board,CPS450,basis_weight,432,468,450,SCG datasheet
+Core-Board,CPS450,burst,650,,,SCG datasheet
+Core-Board,MF-450,basis_weight,432,468,450,SCG datasheet`;
+});
+$('#sp-bulk-file-btn').addEventListener('click', () => $('#sp-bulk-file').click());
+$('#sp-bulk-file').addEventListener('change', async (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  $('#sp-bulk-text').value = await f.text();
+});
+$('#sp-bulk-preview').addEventListener('click', previewBulkSpec);
+$('#sp-bulk-go').addEventListener('click', importBulkSpec);
+
+function parseBulkSpecCSV(text) {
+  // simple CSV parser (no quoted commas — spec values are simple)
+  const lines = text.trim().split(/\r?\n/);
+  if (!lines.length) return [];
+  const headerLine = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/[^a-z0-9_]/g, ''));
+  const colMap = {
+    'papercategory': 'paper_category',
+    'category':      'paper_category',
+    'papertype':     'paper_type',
+    'type':          'paper_type',
+    'parameter':     'parameter',
+    'param':         'parameter',
+    'minvalue':      'min_value',
+    'min':           'min_value',
+    'maxvalue':      'max_value',
+    'max':           'max_value',
+    'targetvalue':   'target_value',
+    'target':        'target_value',
+    'unit':          'unit',
+    'source':        'source',
+    'notes':         'notes',
+  };
+  const colIndices = headerLine.map(h => colMap[h] || null);
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cells = lines[i].split(',').map(c => c.trim());
+    if (!cells.length || cells.every(c => !c)) continue;
+    const obj = {};
+    for (let j = 0; j < colIndices.length; j++) {
+      const k = colIndices[j];
+      if (!k) continue;
+      const v = cells[j];
+      if (v == null || v === '') continue;
+      if (['min_value','max_value','target_value'].includes(k)) {
+        const n = parseFloat(v);
+        if (!isNaN(n)) obj[k] = n;
+      } else {
+        obj[k] = v;
+      }
+    }
+    if (obj.parameter) rows.push(obj);
+  }
+  return rows;
+}
+
+function previewBulkSpec() {
+  const text = $('#sp-bulk-text').value;
+  if (!text.trim()) { showToast('กรุณาใส่ CSV หรือ paste เนื้อหา', 'error'); return; }
+  const rows = parseBulkSpecCSV(text);
+  if (!rows.length) {
+    $('#sp-bulk-result').innerHTML = '<div style="color:var(--danger); padding:10px;">ไม่พบข้อมูลใน CSV</div>';
+    $('#sp-bulk-go').disabled = true;
+    return;
+  }
+  // validate parameters
+  const validParams = new Set(Object.keys(PARAMS));
+  const invalid = rows.filter(r => !validParams.has(r.parameter));
+
+  let html = `<div style="background:var(--panel-2); border-radius:8px; padding:10px;">
+    <div style="font-weight:700; margin-bottom:8px;">Preview ${rows.length} rows${invalid.length ? ' — ⚠ มี ' + invalid.length + ' rows ที่ parameter ไม่ valid' : ''}</div>
+    <div style="overflow-x:auto"><table>
+      <thead><tr><th>#</th><th>Cat</th><th>Type</th><th>Param</th><th class="num">Min</th><th class="num">Max</th><th class="num">Target</th><th>Source</th></tr></thead><tbody>`;
+  rows.forEach((r, i) => {
+    const bad = !validParams.has(r.parameter);
+    html += `<tr style="${bad ? 'background:var(--danger-bg);' : ''}">
+      <td>${i+1}</td>
+      <td>${escapeHtml(r.paper_category || '—')}</td>
+      <td>${escapeHtml(r.paper_type || '—')}</td>
+      <td>${escapeHtml(r.parameter)}${bad ? ' ❌' : ''}</td>
+      <td class="num">${fmtNum(r.min_value)}</td>
+      <td class="num">${fmtNum(r.max_value)}</td>
+      <td class="num">${fmtNum(r.target_value)}</td>
+      <td style="font-size:12px;">${escapeHtml(r.source || '')}</td>
+    </tr>`;
+  });
+  html += `</tbody></table></div></div>`;
+  $('#sp-bulk-result').innerHTML = html;
+  state.bulkSpecRows = rows.filter(r => validParams.has(r.parameter));
+  $('#sp-bulk-go').disabled = !state.bulkSpecRows.length;
+}
+
+async function importBulkSpec() {
+  if (!state.bulkSpecRows?.length) return;
+  $('#sp-bulk-go').disabled = true;
+  $('#sp-bulk-go').textContent = 'กำลัง import...';
+
+  // attach unit from PARAMS
+  const records = state.bulkSpecRows.map(r => ({
+    ...r,
+    unit: r.unit || PARAMS[r.parameter]?.unit || null,
+  }));
+
+  try {
+    const { error } = await supabase
+      .from('paper_type_specs')
+      .upsert(records, { onConflict: 'paper_category,paper_type,parameter' });
+    if (error) throw error;
+    showToast(`Import ${records.length} specs สำเร็จ ✅`, 'success');
+    state.specs = null;
+    $('#sp-bulk-text').value = '';
+    $('#sp-bulk-result').innerHTML = '';
+    state.bulkSpecRows = null;
+    loadSpecList();
+  } catch (e) {
+    console.error(e);
+    showToast('Import ไม่ได้: ' + (e.message || e), 'error');
+  } finally {
+    $('#sp-bulk-go').disabled = false;
+    $('#sp-bulk-go').textContent = '💾 Import ทั้งหมด';
   }
 }
 
