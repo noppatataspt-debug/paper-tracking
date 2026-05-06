@@ -273,6 +273,7 @@
     <button class="tab" data-view="issue">⚠️ บันทึกปัญหา</button>
     <button class="tab" data-view="issues-list">📋 รายการปัญหา</button>
     <button class="tab" data-view="import">📤 Import COA</button>
+    <button class="tab" data-view="specs">⚙️ Spec</button>
   </div>
 
   <!-- ============ TAB 1: MONITOR ============ -->
@@ -467,7 +468,80 @@
     </div>
   </div>
 
-  <!-- ============ TAB 6: IMPORT COA ============ -->
+  <!-- ============ TAB 7: SPEC MANAGEMENT ============ -->
+  <div class="view" id="v-specs">
+    <div class="panel">
+      <div class="panel-title">⚙️ Spec Management</div>
+      <div class="panel-sub">เก็บ Min/Max Spec ของแต่ละ paper_type หรือ category — ใช้ overlay บนกราฟ trend</div>
+
+      <div class="form-grid-2">
+        <div>
+          <label class="field-label">Paper Category</label>
+          <select id="sp-category">
+            <option value="">— ไม่ระบุ —</option>
+            <option value="Liner">Liner</option>
+            <option value="Core-Board">Core-Board</option>
+            <option value="Grey-Board">Grey-Board</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label">Paper Type (ใส่ถ้าต้องการ spec เฉพาะเจาะจง)</label>
+          <input type="text" id="sp-type" placeholder="เช่น CBS350 (ปล่อยว่าง = ใช้ทั้ง category)">
+        </div>
+        <div>
+          <label class="field-label">Parameter <span style="color:var(--danger)">*</span></label>
+          <select id="sp-param">
+            <option value="">— เลือก —</option>
+            <option value="basis_weight">Basis Weight (g/m²)</option>
+            <option value="burst">Burst (kPa)</option>
+            <option value="rct">RCT (N/152.4)</option>
+            <option value="cmt">CMT (N)</option>
+            <option value="plybond">Plybond (J/m²)</option>
+            <option value="cobb_top">Cobb Top (g/m²)</option>
+            <option value="cobb_bottom">Cobb Bottom (g/m²)</option>
+            <option value="cobb_ts2">Cobb TS 2 (g/m²)</option>
+            <option value="cobb_bs2">Cobb BS 2 (g/m²)</option>
+            <option value="cobb_ts30">Cobb TS 30 (g/m²)</option>
+            <option value="caliper">Caliper (μm)</option>
+            <option value="tear_md">Tear MD (mN)</option>
+            <option value="tear_cd">Tear CD (mN)</option>
+            <option value="tensile_md">Tensile MD (kN/m)</option>
+            <option value="tensile_cd">Tensile CD (kN/m)</option>
+            <option value="stretch_md">Stretch MD (%)</option>
+            <option value="stretch_cd">Stretch CD (%)</option>
+            <option value="moisture">Moisture (%)</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label">หน่วย (auto)</label>
+          <input type="text" id="sp-unit" disabled style="background:var(--panel-2);">
+        </div>
+        <div>
+          <label class="field-label">Min Value</label>
+          <input type="number" step="0.01" id="sp-min" placeholder="ค่าต่ำสุดที่ยอมรับได้">
+        </div>
+        <div>
+          <label class="field-label">Max Value</label>
+          <input type="number" step="0.01" id="sp-max" placeholder="ค่าสูงสุดที่ยอมรับได้">
+        </div>
+        <div>
+          <label class="field-label">Target (ค่าเป้าหมาย — optional)</label>
+          <input type="number" step="0.01" id="sp-target">
+        </div>
+        <div>
+          <label class="field-label">Source / Notes</label>
+          <input type="text" id="sp-source" placeholder="เช่น 'SCG datasheet', 'in-house spec'">
+        </div>
+      </div>
+
+      <div style="margin-top:14px; display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="btn success" id="sp-save">💾 บันทึก Spec</button>
+        <button class="btn outline" id="sp-clear">🗑 ล้าง</button>
+      </div>
+    </div>
+
+    <div id="sp-list-wrap"></div>
+  </div>
   <div class="view" id="v-import">
     <div class="panel">
       <div class="panel-title">📤 Import COA จาก CSV/Excel</div>
@@ -880,9 +954,9 @@ async function loadMonitor() {
       html += `</tbody></table></div>
 
         <div style="margin-top:18px;">
-          <div style="font-weight:700; font-size:14px; margin-bottom:8px;">📈 Trend ของแต่ละ Parameter</div>
+          <div style="font-weight:700; font-size:14px; margin-bottom:8px;">📈 Trend ของแต่ละ Parameter (เฉลี่ยต่อวัน)</div>
           <div style="font-size:12px; color:var(--text-dim); margin-bottom:10px;">
-            เส้นน้ำเงิน = ค่าจริง · เส้นเขียว = mean · แถบส้มอ่อน = ±1σ · เส้นแดง = Min Spec (ถ้ามี)
+            เส้นน้ำเงิน = ค่าเฉลี่ยของวัน · แถบฟ้าอ่อน = ช่วง min-max · เส้นเขียวประ = mean ทั้งช่วง · เส้นแดงประ = Min/Max Spec (ถ้ามี)
           </div>
           <div id="${chartId}" class="small-multiples"></div>
         </div>
@@ -946,25 +1020,49 @@ function findSpec(specs, category, paperType, parameter) {
   return null;
 }
 
-// ----------- small multiples renderer -----------
+// ----------- small multiples renderer (aggregate per day) -----------
 function renderSmallMultiples(containerId, rows, dateField, activeParams, specs, category, paperType) {
   const container = $('#' + containerId);
   if (!container) return;
   container.innerHTML = '';
 
   for (const [key, info] of activeParams) {
-    const points = rows
-      .map(r => ({
-        x: dateField === 'receive_date' ? r.paper_invoices?.receive_date : r.production_date,
-        y: r[key],
+    // group by date — aggregate min/mean/max per day
+    const byDate = new Map();
+    for (const r of rows) {
+      const d = dateField === 'receive_date' ? r.paper_invoices?.receive_date : r.production_date;
+      const v = r[key];
+      if (!d || v == null || isNaN(+v)) continue;
+      if (!byDate.has(d)) byDate.set(d, []);
+      byDate.get(d).push({
+        v: +v,
         lot: r.paper_invoices?.paper_lot || r.paper_lot,
-      }))
-      .filter(p => p.x && p.y != null && !isNaN(+p.y))
-      .sort((a,b) => a.x.localeCompare(b.x));
+      });
+    }
 
-    if (!points.length) continue;
+    if (!byDate.size) continue;
 
-    const stats = calcStats(points.map(p => p.y));
+    // sort dates ascending + build aggregated points
+    const dates = [...byDate.keys()].sort();
+    const aggPoints = dates.map(d => {
+      const items = byDate.get(d);
+      const vals = items.map(x => x.v);
+      const min = Math.min(...vals);
+      const max = Math.max(...vals);
+      const mean = vals.reduce((a,b) => a+b, 0) / vals.length;
+      return {
+        x: d,
+        y: mean,
+        min, max, n: vals.length,
+        lots: items.map(x => x.lot).filter(Boolean).slice(0, 5), // first 5 lots for tooltip
+        moreLots: items.length > 5 ? items.length - 5 : 0,
+      };
+    });
+
+    // overall stats (across all data points, not aggregated)
+    const allVals = [];
+    for (const items of byDate.values()) for (const it of items) allVals.push(it.v);
+    const stats = calcStats(allVals);
     const ucl1 = stats.mean + stats.sd;
     const lcl1 = stats.mean - stats.sd;
 
@@ -975,9 +1073,11 @@ function renderSmallMultiples(containerId, rows, dateField, activeParams, specs,
 
     // count violations vs spec
     let belowMin = 0, aboveMax = 0;
-    for (const p of points) {
-      if (specMin != null && p.y < specMin) belowMin++;
-      if (specMax != null && p.y > specMax) aboveMax++;
+    if (specMin != null || specMax != null) {
+      for (const v of allVals) {
+        if (specMin != null && v < specMin) belowMin++;
+        if (specMax != null && v > specMax) aboveMax++;
+      }
     }
 
     const wrap = document.createElement('div');
@@ -985,52 +1085,61 @@ function renderSmallMultiples(containerId, rows, dateField, activeParams, specs,
     wrap.innerHTML = `
       <div class="mini-chart-head">
         <span class="mini-chart-label">${info.label} <span style="color:var(--text-dim); font-weight:500; font-size:12px;">${info.unit}</span></span>
-        <span class="mini-chart-stat">μ ${fmtNum(stats.mean)} · σ ${fmtNum(stats.sd, 2)} · CV ${fmtNum(stats.cv,1)}%${
+        <span class="mini-chart-stat">μ ${fmtNum(stats.mean)} · σ ${fmtNum(stats.sd, 2)} · CV ${fmtNum(stats.cv,1)}% · n=${allVals.length} (${dates.length} days)${
           spec ? ` · spec ${specMin != null ? '≥' + fmtNum(specMin) : ''}${specMax != null ? ' ≤' + fmtNum(specMax) : ''}` : ''
-        }${belowMin || aboveMax ? ` · ⚠ ${belowMin + aboveMax} หลุด spec` : ''}</span>
+        }${belowMin || aboveMax ? ` · <span style="color:var(--danger)">⚠ ${belowMin + aboveMax} หลุด spec</span>` : ''}</span>
       </div>
       <div class="mini-chart-canvas"><canvas></canvas></div>
     `;
     container.appendChild(wrap);
 
+    // datasets order matters for fill — Chart.js fills "to next dataset"
+    // Order: max line (transparent), min line (fill +1 = upward to max?), mean line (visible)
     const datasets = [
-      // main line
+      // Max (upper boundary of band) — invisible line
       {
-        label: info.label,
-        data: points,
-        borderColor: '#1d4ed8',
-        backgroundColor: points.map(p => {
-          if (specMin != null && p.y < specMin) return '#b91c1c';
-          if (specMax != null && p.y > specMax) return '#b91c1c';
-          return '#1d4ed8';
-        }),
-        borderWidth: 1.8,
-        pointRadius: 3.5,
-        pointHoverRadius: 6,
+        label: 'Max',
+        data: aggPoints.map(p => ({x: p.x, y: p.max, _agg: p})),
+        borderColor: 'rgba(29, 78, 216, 0)',
+        backgroundColor: 'rgba(29, 78, 216, 0.12)',
+        borderWidth: 0,
+        pointRadius: 0,
+        fill: '+1', // fill down to next dataset (Min)
         tension: 0,
+      },
+      // Min (lower boundary of band) — invisible line
+      {
+        label: 'Min',
+        data: aggPoints.map(p => ({x: p.x, y: p.min, _agg: p})),
+        borderColor: 'rgba(29, 78, 216, 0)',
+        borderWidth: 0,
+        pointRadius: 0,
+        fill: false,
+        tension: 0,
+      },
+      // Daily mean line — solid blue
+      {
+        label: info.label + ' (avg)',
+        data: aggPoints.map(p => ({x: p.x, y: p.y, _agg: p})),
+        borderColor: '#1d4ed8',
+        backgroundColor: aggPoints.map(p => {
+          if (specMin != null && p.min < specMin) return '#b91c1c';
+          if (specMax != null && p.max > specMax) return '#b91c1c';
+          if (p.n > 1) return '#1d4ed8';
+          return '#60a5fa';
+        }),
+        borderWidth: 2,
+        pointRadius: aggPoints.map(p => p.n > 1 ? 4 : 3),
+        pointHoverRadius: 7,
+        tension: 0.15,
         fill: false,
       },
-      // mean
+      // overall mean (horizontal dashed)
       {
-        label: 'Mean',
-        data: points.map(p => ({x: p.x, y: stats.mean})),
-        borderColor: '#047857', borderWidth: 1.5, borderDash: [3,3],
+        label: 'Overall μ',
+        data: aggPoints.map(p => ({x: p.x, y: stats.mean})),
+        borderColor: '#047857', borderWidth: 1.5, borderDash: [4,4],
         pointRadius: 0, fill: false,
-      },
-      // ±1σ band
-      {
-        label: '+1σ',
-        data: points.map(p => ({x: p.x, y: ucl1})),
-        borderColor: 'rgba(180, 83, 9, 0.4)',
-        backgroundColor: 'rgba(180, 83, 9, 0.08)',
-        borderWidth: 1, borderDash: [2,2], pointRadius: 0,
-        fill: '+1',
-      },
-      {
-        label: '-1σ',
-        data: points.map(p => ({x: p.x, y: lcl1})),
-        borderColor: 'rgba(180, 83, 9, 0.4)',
-        borderWidth: 1, borderDash: [2,2], pointRadius: 0, fill: false,
       },
     ];
 
@@ -1038,16 +1147,16 @@ function renderSmallMultiples(containerId, rows, dateField, activeParams, specs,
     if (specMin != null) {
       datasets.push({
         label: 'Min Spec',
-        data: points.map(p => ({x: p.x, y: specMin})),
-        borderColor: '#b91c1c', borderWidth: 1.5, borderDash: [6,4],
+        data: aggPoints.map(p => ({x: p.x, y: specMin})),
+        borderColor: '#b91c1c', borderWidth: 1.8, borderDash: [8,4],
         pointRadius: 0, fill: false,
       });
     }
     if (specMax != null) {
       datasets.push({
         label: 'Max Spec',
-        data: points.map(p => ({x: p.x, y: specMax})),
-        borderColor: '#b91c1c', borderWidth: 1.5, borderDash: [6,4],
+        data: aggPoints.map(p => ({x: p.x, y: specMax})),
+        borderColor: '#b91c1c', borderWidth: 1.8, borderDash: [8,4],
         pointRadius: 0, fill: false,
       });
     }
@@ -1058,6 +1167,7 @@ function renderSmallMultiples(containerId, rows, dateField, activeParams, specs,
       data: { datasets },
       options: {
         responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'nearest', axis: 'x', intersect: false },
         scales: {
           x: { type: 'time', time: { unit: 'day' },
                ticks: { font: { size: 10 }, maxRotation: 0, autoSkipPadding: 14 } },
@@ -1066,12 +1176,25 @@ function renderSmallMultiples(containerId, rows, dateField, activeParams, specs,
         plugins: {
           legend: { display: false },
           tooltip: {
+            filter: (ctx) => ctx.dataset.label && !ctx.dataset.label.startsWith('Max') && !ctx.dataset.label.startsWith('Min Spec') && !ctx.dataset.label.startsWith('Max Spec'),
             callbacks: {
               title: items => items[0]?.raw?.x ? fmtDate(items[0].raw.x) : '',
               label: c => {
-                const p = c.raw;
-                if (typeof p.lot === 'undefined') return `${c.dataset.label}: ${fmtNum(p.y)}`;
-                return [`Lot: ${p.lot}`, `${info.label}: ${fmtNum(p.y)} ${info.unit}`];
+                const p = c.raw?._agg;
+                if (!p) {
+                  // overall mean / spec lines
+                  return `${c.dataset.label}: ${fmtNum(c.raw.y)}`;
+                }
+                const lines = [
+                  `n = ${p.n} lots`,
+                  `mean: ${fmtNum(p.y)} ${info.unit}`,
+                ];
+                if (p.n > 1) lines.push(`range: ${fmtNum(p.min)} – ${fmtNum(p.max)}`);
+                if (p.lots.length) {
+                  lines.push('');
+                  lines.push('Lots: ' + p.lots.join(', ') + (p.moreLots ? ` +${p.moreLots} more` : ''));
+                }
+                return lines;
               }
             }
           }
@@ -2206,6 +2329,125 @@ async function runImport() {
   state.specs = null; // invalidate cache
   init();
 }
+// ============================================================
+// TAB 7: SPEC MANAGEMENT
+// ============================================================
+$('#sp-param').addEventListener('change', e => {
+  const info = PARAMS[e.target.value];
+  $('#sp-unit').value = info?.unit || '';
+});
+$('#sp-clear').addEventListener('click', () => {
+  ['#sp-category','#sp-type','#sp-param','#sp-unit','#sp-min','#sp-max','#sp-target','#sp-source'].forEach(id => {
+    const el = $(id); if (el) el.value = '';
+  });
+});
+$('#sp-save').addEventListener('click', saveSpec);
+
+// load list when tab opened
+$$('.tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (btn.dataset.view === 'specs') loadSpecList();
+  });
+});
+
+async function saveSpec() {
+  const param = $('#sp-param').value;
+  if (!param) { showToast('เลือก parameter ก่อน', 'error'); return; }
+  const min = $('#sp-min').value, max = $('#sp-max').value, target = $('#sp-target').value;
+  if (!min && !max && !target) { showToast('ใส่ Min, Max, หรือ Target อย่างน้อย 1 ค่า', 'error'); return; }
+
+  const payload = {
+    paper_category: $('#sp-category').value || null,
+    paper_type:     $('#sp-type').value.trim() || null,
+    parameter:      param,
+    min_value:      min !== '' ? parseFloat(min) : null,
+    max_value:      max !== '' ? parseFloat(max) : null,
+    target_value:   target !== '' ? parseFloat(target) : null,
+    unit:           PARAMS[param]?.unit || null,
+    source:         $('#sp-source').value.trim() || null,
+  };
+
+  $('#sp-save').disabled = true;
+  $('#sp-save').textContent = 'กำลังบันทึก...';
+
+  try {
+    // upsert by unique (category, type, parameter)
+    const { error } = await supabase
+      .from('paper_type_specs')
+      .upsert(payload, { onConflict: 'paper_category,paper_type,parameter' });
+    if (error) throw error;
+    showToast('บันทึก spec สำเร็จ ✅', 'success');
+    state.specs = null; // invalidate cache
+    $('#sp-clear').click();
+    loadSpecList();
+  } catch (e) {
+    console.error(e);
+    showToast('บันทึกไม่ได้: ' + (e.message || e), 'error');
+  } finally {
+    $('#sp-save').disabled = false;
+    $('#sp-save').textContent = '💾 บันทึก Spec';
+  }
+}
+
+async function loadSpecList() {
+  const wrap = $('#sp-list-wrap');
+  if (!wrap) return;
+  wrap.innerHTML = '<div class="panel"><div class="loading"><div class="spinner"></div>กำลังโหลด...</div></div>';
+
+  try {
+    const { data } = await supabase
+      .from('paper_type_specs')
+      .select('*')
+      .order('paper_category', { ascending: true })
+      .order('paper_type',     { ascending: true })
+      .order('parameter',      { ascending: true });
+
+    if (!data?.length) {
+      wrap.innerHTML = '<div class="panel"><div class="empty">ยังไม่มี spec — เพิ่มได้ที่ฟอร์มด้านบน</div></div>';
+      return;
+    }
+
+    let html = `<div class="panel">
+      <div class="panel-title">📋 Specs ที่บันทึกไว้ (${data.length})</div>
+      <div style="overflow-x:auto"><table>
+        <thead><tr>
+          <th>Category</th><th>Type</th><th>Parameter</th>
+          <th class="num">Min</th><th class="num">Max</th><th class="num">Target</th>
+          <th>Unit</th><th>Source</th><th></th>
+        </tr></thead><tbody>`;
+    for (const s of data) {
+      const info = PARAMS[s.parameter] || {};
+      html += `<tr>
+        <td>${escapeHtml(s.paper_category || '—')}</td>
+        <td>${escapeHtml(s.paper_type || '— ทั้ง category —')}</td>
+        <td><b>${escapeHtml(info.label || s.parameter)}</b></td>
+        <td class="num">${fmtNum(s.min_value)}</td>
+        <td class="num">${fmtNum(s.max_value)}</td>
+        <td class="num">${fmtNum(s.target_value)}</td>
+        <td>${escapeHtml(s.unit || info.unit || '')}</td>
+        <td style="font-size:12px; color:var(--text-dim);">${escapeHtml(s.source || '')}</td>
+        <td><button class="btn outline" data-id="${s.id}" data-act="del" style="padding:4px 10px; font-size:12px; color:var(--danger);">ลบ</button></td>
+      </tr>`;
+    }
+    html += `</tbody></table></div></div>`;
+    wrap.innerHTML = html;
+
+    $$('button[data-act="del"]', wrap).forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('ลบ spec นี้?')) return;
+        const { error } = await supabase.from('paper_type_specs').delete().eq('id', +btn.dataset.id);
+        if (error) { showToast('ลบไม่ได้: ' + error.message, 'error'); return; }
+        state.specs = null;
+        showToast('ลบแล้ว ✅', 'success');
+        loadSpecList();
+      });
+    });
+  } catch (e) {
+    console.error(e);
+    wrap.innerHTML = `<div class="panel"><div class="empty" style="color:var(--danger)">${escapeHtml(e.message || e)}</div></div>`;
+  }
+}
+
 // ============================================================
 // Boot
 // ============================================================
