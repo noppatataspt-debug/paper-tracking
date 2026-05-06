@@ -2822,8 +2822,8 @@ function renderGroupedList(rows, totalCount) {
                 <th style="text-align:left;">โครงการ</th>
                 <th class="td-right">กว้าง</th>
                 <th class="td-right manager-only-cell">น้ำหนัก</th>
-                <th class="td-right">คงเหลือ</th>
-                <th class="td-right">ราคา/kg</th>
+                <th class="td-right manager-only-cell">คงเหลือ</th>
+                <th class="td-right manager-only-cell">ราคา/kg</th>
                 <th>Status</th>
                 ${currentAdmin ? '<th style="text-align:right;">Actions</th>' : ''}
               </tr>
@@ -2838,7 +2838,7 @@ function renderGroupedList(rows, totalCount) {
                   <td class="td-mono td-right">${r.width_mm || '—'}</td>
                   <td class="td-mono td-right manager-only-cell">${formatNumber(r.weight_kg)}</td>
                   <td class="td-mono td-right manager-only-cell">${formatNumber(r.remaining_weight_kg)}</td>
-                  <td class="td-right price-cell ${r.price_per_kg ? '' : 'no-price'}">${r.price_per_kg ? formatPrice(r.price_per_kg) : '—'}</td>
+                  <td class="td-right price-cell manager-only-cell ${r.price_per_kg ? '' : 'no-price'}">${r.price_per_kg ? formatPrice(r.price_per_kg) : '—'}</td>
                   <td><span class="status-badge status-${r.status || 'in_stock'}">${escapeHtml(r.status || 'in_stock')}</span></td>
                   ${currentAdmin ? `
                     <td>
