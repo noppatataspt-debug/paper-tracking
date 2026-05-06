@@ -53,6 +53,7 @@
     transition: all 0.15s;
   }
   .nav-link:hover { background: var(--accent); color: white; border-color: var(--accent); }
+  .nav-link.active { background: var(--accent); color: white; border-color: var(--accent); }
 
   /* Tabs */
   .tabs {
@@ -1247,10 +1248,12 @@
         <p>สำหรับหัวหน้างาน — ค้นหาข้อมูลการใช้กระดาษ และสอบกลับจาก Jumbo Lot</p>
       </div>
       <div style="display:flex; gap:8px; flex-wrap:wrap;" id="header-actions">
-        <a href="./" class="nav-link">🏠 Home</a>
-        <a href="paper-in.html" class="nav-link">📥 Paper-In</a>
-        <a href="paper-out.html" class="nav-link">📤 Paper-Out</a>
+        <a href="index.html" class="nav-link">📝 บันทึกใช้กระดาษ (Record)</a>
+        <a href="paper-in.html" class="nav-link">📥 รับเข้า (IN)</a>
+        <a href="paper-out.html" class="nav-link">📤 ตัดออก (Out)</a>
+        <a href="dashboard.html" class="nav-link active">🔍 สอบกลับวัตถุดิบ (Tracking)</a>
         <a href="stock-dashboard.html" class="nav-link">📦 Stock</a>
+        <a href="qa-dashboard.html" class="nav-link">🧪 คุณภาพ (QA)</a>
         <button class="nav-link" id="btn-admin-login" style="border:none;cursor:pointer;background:var(--panel);">🔐 Admin</button>
         <button class="nav-link" id="btn-logout" style="border:none;cursor:pointer;background:var(--panel);">🚪 ออก</button>
       </div>

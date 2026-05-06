@@ -44,6 +44,17 @@
   .header h1 span { color: var(--accent); }
   .header p { color: var(--text-dim); font-size: 16px; margin-top: 6px; font-weight: 500; }
 
+  .header-nav-wrap { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-bottom: 18px; }
+  .nav-link {
+    padding: 8px 14px; border-radius: 8px;
+    background: var(--panel); border: 1.5px solid var(--border);
+    font-size: 13px; font-weight: 600; color: var(--text);
+    text-decoration: none; transition: all 0.15s; cursor: pointer;
+    font-family: inherit; display: inline-flex; align-items: center; gap: 4px;
+  }
+  .nav-link:hover { background: var(--panel-2); border-color: var(--accent); color: var(--accent); }
+  .nav-link.active { background: var(--accent); color: white; border-color: var(--accent); }
+
   .stepper { display: flex; justify-content: center; gap: 10px; margin-bottom: 28px; }
   .step {
     display: flex; align-items: center; gap: 10px;
@@ -701,7 +712,15 @@
   <div class="header" style="position: relative;">
     <h1>ระบบบันทึก<span>กระดาษ</span></h1>
     <p>สแกน QR ต่อเนื่องได้เหมือนแคชเชียร์ ⚡</p>
-    <a href="./dashboard.html" style="position: absolute; top: 0; right: 0; padding: 10px 18px; background: white; color: var(--text); border: 1.5px solid var(--border); border-radius: 10px; font-size: 13px; font-weight: 700; text-decoration: none; transition: all 0.15s;" onmouseover="this.style.background='var(--accent)';this.style.color='white';this.style.borderColor='var(--accent)';" onmouseout="this.style.background='white';this.style.color='var(--text)';this.style.borderColor='var(--border)';">📊 Dashboard</a>
+  </div>
+
+  <div class="header-nav-wrap">
+    <a href="index.html" class="nav-link active">📝 บันทึกใช้กระดาษ (Record)</a>
+    <a href="paper-in.html" class="nav-link">📥 รับเข้า (IN)</a>
+    <a href="paper-out.html" class="nav-link">📤 ตัดออก (Out)</a>
+    <a href="dashboard.html" class="nav-link">🔍 สอบกลับวัตถุดิบ (Tracking)</a>
+    <a href="stock-dashboard.html" class="nav-link">📦 Stock</a>
+    <a href="qa-dashboard.html" class="nav-link">🧪 คุณภาพ (QA)</a>
   </div>
 
   <div class="stepper">

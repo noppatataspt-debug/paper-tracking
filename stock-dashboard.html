@@ -44,6 +44,7 @@ body {
   font-size: 13px; font-weight: 600;
 }
 .nav-link:hover { background: var(--panel); border-color: var(--accent); }
+.nav-link.active { background: var(--accent); color: white; border-color: var(--accent); }
 
 .container { max-width: 1800px; margin: 0 auto; padding: 16px 24px; }
 
@@ -1035,10 +1036,12 @@ body {
     <p class="subtitle">Asia Paper Tube · ภาพรวมคลังกระดาษ</p>
   </div>
   <div class="nav-links">
-    <a href="paper-in.html" class="nav-link">📝 Paper-In</a>
-    <a href="paper-out.html" class="nav-link">📤 Paper-Out</a>
-    <a href="dashboard.html" class="nav-link">🏭 Production</a>
-    <a href="index.html" class="nav-link">🏠 Home</a>
+    <a href="index.html" class="nav-link">📝 บันทึกใช้กระดาษ (Record)</a>
+    <a href="paper-in.html" class="nav-link">📥 รับเข้า (IN)</a>
+    <a href="paper-out.html" class="nav-link">📤 ตัดออก (Out)</a>
+    <a href="dashboard.html" class="nav-link">🔍 สอบกลับวัตถุดิบ (Tracking)</a>
+    <a href="stock-dashboard.html" class="nav-link active">📦 Stock</a>
+    <a href="qa-dashboard.html" class="nav-link">🧪 คุณภาพ (QA)</a>
   </div>
 </header>
 

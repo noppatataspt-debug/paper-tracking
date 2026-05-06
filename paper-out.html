@@ -55,6 +55,7 @@ body {
   transition: all 0.15s;
 }
 .nav-btn:hover { background: white; color: var(--text); border-color: var(--border-strong); }
+.nav-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
 
 .tabs {
   display: flex; gap: 4px; margin-bottom: 12px;
@@ -577,10 +578,12 @@ body {
   <div class="header">
     <h1>📤 Paper-Out</h1>
     <div class="header-nav">
-      <a href="/" class="nav-btn">🏠 Home</a>
-      <a href="/paper-in.html" class="nav-btn">📥 Paper-In</a>
-      <a href="/stock-dashboard.html" class="nav-btn">📦 Stock</a>
-      <a href="/dashboard.html" class="nav-btn">📊 Dashboard</a>
+      <a href="index.html" class="nav-btn">📝 บันทึกใช้กระดาษ (Record)</a>
+      <a href="paper-in.html" class="nav-btn">📥 รับเข้า (IN)</a>
+      <a href="paper-out.html" class="nav-btn active">📤 ตัดออก (Out)</a>
+      <a href="dashboard.html" class="nav-btn">🔍 สอบกลับวัตถุดิบ (Tracking)</a>
+      <a href="stock-dashboard.html" class="nav-btn">📦 Stock</a>
+      <a href="qa-dashboard.html" class="nav-btn">🧪 คุณภาพ (QA)</a>
     </div>
   </div>
 

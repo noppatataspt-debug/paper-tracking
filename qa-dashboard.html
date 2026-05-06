@@ -43,6 +43,7 @@
     transition: all 0.15s; display: inline-block;
   }
   .nav-link:hover { background: var(--accent); color: white; border-color: var(--accent); }
+  .nav-link.active { background: var(--accent); color: white; border-color: var(--accent); }
 
   /* Tabs */
   .tabs {
@@ -383,12 +384,12 @@
         <p>Monitor คุณภาพกระดาษ + สอบกลับ lot ที่พบปัญหา</p>
       </div>
       <div class="header-nav-wrap" style="display:flex; gap:8px; flex-wrap:wrap;">
-        <a href="./" class="nav-link">🏠 Home</a>
-        <a href="paper-in.html" class="nav-link">📥 Paper-In</a>
-        <a href="paper-out.html" class="nav-link">📤 Paper-Out</a>
-        <a href="dashboard.html" class="nav-link">📊 Trace</a>
+        <a href="index.html" class="nav-link">📝 บันทึกใช้กระดาษ (Record)</a>
+        <a href="paper-in.html" class="nav-link">📥 รับเข้า (IN)</a>
+        <a href="paper-out.html" class="nav-link">📤 ตัดออก (Out)</a>
+        <a href="dashboard.html" class="nav-link">🔍 สอบกลับวัตถุดิบ (Tracking)</a>
         <a href="stock-dashboard.html" class="nav-link">📦 Stock</a>
-        <a href="qa-dashboard.html" class="nav-link" style="background:var(--accent); color:white;">🧪 QA</a>
+        <a href="qa-dashboard.html" class="nav-link active">🧪 คุณภาพ (QA)</a>
         <button class="nav-link" id="btn-open-print" style="border:1px solid var(--border); cursor:pointer; background:transparent; font: inherit;">🖨 พิมพ์</button>
       </div>
     </div>
