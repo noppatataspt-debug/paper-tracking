@@ -1031,8 +1031,13 @@ async function loadMonitor() {
       );
       if (!activeParams.length) continue;
       const chartId = `m-chart-${pt.replace(/[^a-zA-Z0-9]/g,'_')}`;
-      const cat = rows[0]?.paper_invoices?.paper_category
-               || rows[0]?.paper_category;
+      // scan ทุก row เพื่อหา category ตัวแรกที่เจอ (row แรกอาจเป็น orphan ไม่มี category)
+      let cat = null;
+      for (const r of rows) {
+        cat = r.paper_invoices?.paper_category || r.paper_category;
+        if (cat) break;
+      }
+      console.log(`[Monitor] ${pt}: category=${cat}, rows=${rows.length}, specsKeys=${Object.keys(specs||{}).length}`);
       renderSmallMultiples(chartId, rows, dateField, activeParams, specs, cat, pt);
     }
   } catch (e) {
@@ -1126,6 +1131,14 @@ function renderSmallMultiples(containerId, rows, dateField, activeParams, specs,
     const spec = findSpec(specs || {}, category, paperType, key);
     const specMin = spec?.min_value != null ? +spec.min_value : null;
     const specMax = spec?.max_value != null ? +spec.max_value : null;
+    if (spec) {
+      console.log(`  ✓ Found spec for ${paperType}/${key}: min=${specMin}, max=${specMax}`);
+    } else {
+      const lookupKeys = paperType
+        ? [`${category||''}|${paperType}|${key}`, `|${paperType}|${key}`, `${category||''}||${key}`]
+        : [`${category||''}||${key}`];
+      console.log(`  ✗ No spec for ${paperType}/${key} — tried keys:`, lookupKeys);
+    }
 
     // count violations vs spec
     let belowMin = 0, aboveMax = 0;
