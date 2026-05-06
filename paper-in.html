@@ -3059,12 +3059,30 @@ async function doLogin() {
     if (error) throw error;
     
     if (data && data.length > 0) {
+      const u = data[0];
+
+      // ===== Check rate limit lockout =====
+      if (u.out_lockout_seconds > 0) {
+        const min = Math.ceil(u.out_lockout_seconds / 60);
+        errorDiv.textContent = `🔒 Login ผิดเกิน 5 ครั้ง — ถูก block อีก ${min} นาที กรุณารอแล้วลองใหม่`;
+        errorDiv.style.display = 'block';
+        return;
+      }
+
+      // ===== Login fail (no user_id returned) =====
+      if (!u.out_id) {
+        errorDiv.textContent = '❌ Username หรือ Password ไม่ถูกต้อง';
+        errorDiv.style.display = 'block';
+        return;
+      }
+
+      // ===== Login success =====
       currentAdmin = {
-        id: data[0].out_id,
-        username: data[0].out_username,
-        full_name: data[0].out_full_name,
-        role: data[0].out_role,
-        session_token: data[0].out_session_token
+        id: u.out_id,
+        username: u.out_username,
+        full_name: u.out_full_name,
+        role: u.out_role,
+        session_token: u.out_session_token
       };
       sessionStorage.setItem('paper_admin', JSON.stringify(currentAdmin));
       $('#modalAdminLogin').classList.remove('show');
