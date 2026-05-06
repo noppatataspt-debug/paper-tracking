@@ -603,37 +603,37 @@ body {
       <div class="form-group">
         <label class="form-label required">ฝั่งที่ตัดกระดาษ</label>
         <div class="machine-side-grid">
-          <button class="machine-btn machine-side" data-machine="winder">
+          <button class="machine-btn machine-side" data-mode="winder">
             🌀 เครื่องพัน
           </button>
-          <button class="machine-btn machine-side" data-machine="sheeter">
+          <button class="machine-btn machine-side" data-mode="sheeter">
             📐 เครื่องฉาก
           </button>
         </div>
 
         <div class="section-sub-label">หมายเลขเครื่อง Slitter</div>
         <div class="machine-slitter-grid">
-          <button class="machine-btn" data-machine="slitter_1">
+          <button class="machine-btn" data-slitter="1">
             <span class="machine-num">1</span>
             <span class="machine-label">Slitter</span>
           </button>
-          <button class="machine-btn" data-machine="slitter_2">
+          <button class="machine-btn" data-slitter="2">
             <span class="machine-num">2</span>
             <span class="machine-label">Slitter</span>
           </button>
-          <button class="machine-btn" data-machine="slitter_3">
+          <button class="machine-btn" data-slitter="3">
             <span class="machine-num">3</span>
             <span class="machine-label">Slitter</span>
           </button>
-          <button class="machine-btn" data-machine="slitter_4">
+          <button class="machine-btn" data-slitter="4">
             <span class="machine-num">4</span>
             <span class="machine-label">Slitter</span>
           </button>
-          <button class="machine-btn" data-machine="slitter_5">
+          <button class="machine-btn" data-slitter="5">
             <span class="machine-num">5</span>
             <span class="machine-label">Slitter</span>
           </button>
-          <button class="machine-btn" data-machine="slitter_6">
+          <button class="machine-btn" data-slitter="6">
             <span class="machine-num">6</span>
             <span class="machine-label">Slitter</span>
           </button>
@@ -865,15 +865,31 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ====== Machine labels ======
+// New format: 'winder_1' ... 'sheeter_6' (mode + slitter no.)
+// Legacy:     'slitter_1'..'slitter_6', 'winder', 'sheeter' (data เก่า)
 const MACHINE_LABELS = {
+  // Legacy
   slitter_1: '🔧 Slitter 1',
   slitter_2: '🔧 Slitter 2',
   slitter_3: '🔧 Slitter 3',
   slitter_4: '🔧 Slitter 4',
   slitter_5: '🔧 Slitter 5',
   slitter_6: '🔧 Slitter 6',
-  winder: '🌀 เครื่องพัน',
-  sheeter: '📐 เครื่องฉาก'
+  winder:   '🌀 เครื่องพัน',
+  sheeter:  '📐 เครื่องฉาก',
+  // New format
+  winder_1:  '🌀 พัน · Slitter 1',
+  winder_2:  '🌀 พัน · Slitter 2',
+  winder_3:  '🌀 พัน · Slitter 3',
+  winder_4:  '🌀 พัน · Slitter 4',
+  winder_5:  '🌀 พัน · Slitter 5',
+  winder_6:  '🌀 พัน · Slitter 6',
+  sheeter_1: '📐 ฉาก · Slitter 1',
+  sheeter_2: '📐 ฉาก · Slitter 2',
+  sheeter_3: '📐 ฉาก · Slitter 3',
+  sheeter_4: '📐 ฉาก · Slitter 4',
+  sheeter_5: '📐 ฉาก · Slitter 5',
+  sheeter_6: '📐 ฉาก · Slitter 6'
 };
 
 // ====== Supplier patterns (จาก qr_printer.py) ======
@@ -926,9 +942,16 @@ function validateLot(lot, supplier) {
 let currentLot = null;
 let currentInvoice = null;
 let isPreStock = false;
-let currentMachine = null;
+let currentMode = null;     // 'winder' | 'sheeter'
+let currentSlitter = null;  // '1' | '2' | ... | '6'
 let allOutflows = [];
 let pendingPreStockLot = null;
+
+// คำนวณ machine_id จาก mode + slitter (เช่น 'winder_3')
+function getCurrentMachine() {
+  if (!currentMode || !currentSlitter) return null;
+  return `${currentMode}_${currentSlitter}`;
+}
 
 // ====== Helpers ======
 function normalize(lot) {
@@ -979,11 +1002,22 @@ document.querySelectorAll('.tab').forEach(btn => {
 });
 
 // ====== Machine selection ======
-document.querySelectorAll('.machine-btn').forEach(btn => {
+// ฝั่ง (winder/sheeter) — เลือกได้ 1 ใน 2
+document.querySelectorAll('.machine-btn[data-mode]').forEach(btn => {
   btn.addEventListener('click', () => {
-    document.querySelectorAll('.machine-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.machine-btn[data-mode]').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    currentMachine = btn.dataset.machine;
+    currentMode = btn.dataset.mode;
+    updateSubmitState();
+  });
+});
+
+// Slitter (1-6) — เลือกได้ 1 ใน 6
+document.querySelectorAll('.machine-btn[data-slitter]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.machine-btn[data-slitter]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentSlitter = btn.dataset.slitter;
     updateSubmitState();
   });
 });
@@ -1286,8 +1320,8 @@ function clearLookup() {
 function updateSubmitState() {
   const btn = document.getElementById('btnSubmit');
   const lotValue = document.getElementById('lotInput').value.trim();
-  // Enable ถ้ามี lot ในช่อง + เลือกเครื่อง (ไม่จำเป็นต้อง lookup ก่อน)
-  btn.disabled = !lotValue || !currentMachine;
+  // Enable ถ้ามี lot ในช่อง + เลือกครบทั้ง mode + slitter
+  btn.disabled = !lotValue || !getCurrentMachine();
   btn.textContent = isPreStock ? '📦 บันทึก Pre-stock' : '✓ ตัดออกจาก Stock';
 }
 
@@ -1341,7 +1375,7 @@ document.getElementById('btnSubmit').addEventListener('click', async () => {
     paper_lot: lotRaw,
     outflow_date: date,
     outflow_reason: isPreStock ? 'pre_stock' : 'sale',
-    machine_id: currentMachine,
+    machine_id: getCurrentMachine(),
     source: 'paper-out'
   };
   
@@ -1465,8 +1499,13 @@ function renderList() {
     const totalRolls = allRows.filter(o => !o.voided).length;
     const totalKg = Math.round(allRows.filter(o => !o.voided).reduce((s, o) => s + (Number(o.weight_kg) || 0), 0));
     
-    // Sort machines: slitter_1..6, winder, sheeter, unknown
-    const machineOrder = ['slitter_1', 'slitter_2', 'slitter_3', 'slitter_4', 'slitter_5', 'slitter_6', 'winder', 'sheeter', 'unknown'];
+    // Sort machines: new format (winder_1..6, sheeter_1..6) first, then legacy
+    const machineOrder = [
+      'winder_1','winder_2','winder_3','winder_4','winder_5','winder_6',
+      'sheeter_1','sheeter_2','sheeter_3','sheeter_4','sheeter_5','sheeter_6',
+      'slitter_1','slitter_2','slitter_3','slitter_4','slitter_5','slitter_6',
+      'winder','sheeter','unknown'
+    ];
     const sortedMachines = Object.keys(machines).sort((a, b) => {
       const ai = machineOrder.indexOf(a);
       const bi = machineOrder.indexOf(b);
@@ -1648,16 +1687,15 @@ function scanLoop(video) {
         const parts = code.data.split('_');
         const lot = parts.length >= 5 ? parts[parts.length - 1] : code.data;
         
-        // ถ้า QR มีข้อมูล slitter → auto-select machine
+        // ถ้า QR มีข้อมูล slitter → auto-select slitter (mode พนักงานต้องเลือกเอง)
         if (parts.length >= 4) {
           const slitterNum = parts[3];
           if (['1','2','3','4','5','6'].includes(slitterNum)) {
-            const machineKey = `slitter_${slitterNum}`;
-            const btn = document.querySelector(`.machine-btn[data-machine="${machineKey}"]`);
+            const btn = document.querySelector(`.machine-btn[data-slitter="${slitterNum}"]`);
             if (btn) {
-              document.querySelectorAll('.machine-btn').forEach(b => b.classList.remove('active'));
+              document.querySelectorAll('.machine-btn[data-slitter]').forEach(b => b.classList.remove('active'));
               btn.classList.add('active');
-              currentMachine = machineKey;
+              currentSlitter = slitterNum;
             }
           }
         }
@@ -1868,14 +1906,28 @@ let editingId = null;
 let editingMachine = null;
 
 const ALL_MACHINES = [
-  { id: 'winder',    label: '🌀 เครื่องพัน' },
-  { id: 'sheeter',   label: '📐 เครื่องฉาก' },
-  { id: 'slitter_1', label: '🔧 Slitter 1' },
-  { id: 'slitter_2', label: '🔧 Slitter 2' },
-  { id: 'slitter_3', label: '🔧 Slitter 3' },
-  { id: 'slitter_4', label: '🔧 Slitter 4' },
-  { id: 'slitter_5', label: '🔧 Slitter 5' },
-  { id: 'slitter_6', label: '🔧 Slitter 6' }
+  // New format (12 combinations)
+  { id: 'winder_1',  label: '🌀 พัน · Slitter 1' },
+  { id: 'winder_2',  label: '🌀 พัน · Slitter 2' },
+  { id: 'winder_3',  label: '🌀 พัน · Slitter 3' },
+  { id: 'winder_4',  label: '🌀 พัน · Slitter 4' },
+  { id: 'winder_5',  label: '🌀 พัน · Slitter 5' },
+  { id: 'winder_6',  label: '🌀 พัน · Slitter 6' },
+  { id: 'sheeter_1', label: '📐 ฉาก · Slitter 1' },
+  { id: 'sheeter_2', label: '📐 ฉาก · Slitter 2' },
+  { id: 'sheeter_3', label: '📐 ฉาก · Slitter 3' },
+  { id: 'sheeter_4', label: '📐 ฉาก · Slitter 4' },
+  { id: 'sheeter_5', label: '📐 ฉาก · Slitter 5' },
+  { id: 'sheeter_6', label: '📐 ฉาก · Slitter 6' },
+  // Legacy (data เก่า)
+  { id: 'winder',    label: '🌀 เครื่องพัน (เก่า)' },
+  { id: 'sheeter',   label: '📐 เครื่องฉาก (เก่า)' },
+  { id: 'slitter_1', label: '🔧 Slitter 1 (เก่า)' },
+  { id: 'slitter_2', label: '🔧 Slitter 2 (เก่า)' },
+  { id: 'slitter_3', label: '🔧 Slitter 3 (เก่า)' },
+  { id: 'slitter_4', label: '🔧 Slitter 4 (เก่า)' },
+  { id: 'slitter_5', label: '🔧 Slitter 5 (เก่า)' },
+  { id: 'slitter_6', label: '🔧 Slitter 6 (เก่า)' }
 ];
 
 window.openEditModal = function(id) {
