@@ -773,53 +773,69 @@ const state = {
 };
 
 async function init() {
-  // โหลด suppliers + paper types ที่มี COA
+  // ขั้น 1: load suppliers (ใช้ count = small) — แสดง UI ก่อน
+  // ใช้วิธี select ทั้ง columns แต่ filter เฉพาะที่ต้องการ + page-through
   let distinct;
   try {
     distinct = await fetchAllRows(
-      supabase.from('quality_tests').select('supplier, paper_invoice_id')
+      supabase.from('quality_tests')
+        .select('supplier, paper_type, paper_invoice_id')
+        .not('supplier', 'is', null)
     );
   } catch (error) {
-    console.error(error);
+    console.error('init load failed:', error);
     showToast('โหลด suppliers ไม่สำเร็จ — ดู console', 'error');
     return;
   }
+  console.log(`[init] loaded ${distinct.length} quality_tests rows for dropdowns`);
+
   // get unique suppliers
   const supSet = new Set(distinct.map(d => d.supplier).filter(Boolean));
   state.suppliers = [...supSet].sort();
 
-  // โหลด paper_types ที่มี COA — ต้อง join กับ paper_invoices
-  const invIds = [...new Set(distinct.map(d => d.paper_invoice_id).filter(Boolean))];
-  if (invIds.length) {
-    // page through (in() limit ~1000 ids ใน 1 call)
-    const allPt = [];
+  // build supplier → paper_types map (จาก qt.paper_type ก่อน — ไม่ต้อง join paper_invoices แล้ว
+  // เพราะ data ที่ import มามี qt.paper_type ตรงๆ)
+  const supplierTypeCount = {};
+  const allTypeCount = {};
+  for (const d of distinct) {
+    const sup = d.supplier;
+    const pt = d.paper_type;
+    if (!pt) continue;
+    supplierTypeCount[sup] = supplierTypeCount[sup] || {};
+    supplierTypeCount[sup][pt] = (supplierTypeCount[sup][pt] || 0) + 1;
+    allTypeCount[pt] = (allTypeCount[pt] || 0) + 1;
+  }
+
+  // backup: ถ้า paper_type ใน qt ว่าง — fallback ไปดูจาก paper_invoices
+  // (only do this if some rows ไม่มี paper_type)
+  const orphanRows = distinct.filter(d => !d.paper_type && d.paper_invoice_id);
+  if (orphanRows.length) {
+    console.log(`[init] ${orphanRows.length} rows missing paper_type — looking up via paper_invoices`);
+    const invIds = [...new Set(orphanRows.map(r => r.paper_invoice_id))];
+    const invMap = {};
     for (let i = 0; i < invIds.length; i += 500) {
-      const slice = invIds.slice(i, i+500);
+      const slice = invIds.slice(i, i + 500);
       const { data: invs } = await supabase
         .from('paper_invoices')
-        .select('id, supplier, paper_type')
+        .select('id, paper_type, supplier')
         .in('id', slice);
-      if (invs) allPt.push(...invs);
+      for (const inv of (invs || [])) invMap[inv.id] = inv;
     }
-    // count COA rows per paper_type (per supplier)
-    const supplierTypeCount = {};   // { supplier: { type: count } }
-    const allTypeCount = {};        // { type: count }
-    // build invId → paper_type map
-    const invMap = {};
-    for (const r of allPt) invMap[r.id] = r;
-    for (const d of distinct) {
-      const inv = invMap[d.paper_invoice_id];
+    for (const r of orphanRows) {
+      const inv = invMap[r.paper_invoice_id];
       if (!inv?.paper_type) continue;
-      const sup = inv.supplier;
+      const sup = inv.supplier || r.supplier;
       const pt = inv.paper_type;
+      if (!sup) continue;
       supplierTypeCount[sup] = supplierTypeCount[sup] || {};
       supplierTypeCount[sup][pt] = (supplierTypeCount[sup][pt] || 0) + 1;
       allTypeCount[pt] = (allTypeCount[pt] || 0) + 1;
     }
-    state.cachedSupplierTypes = supplierTypeCount;
-    state.allTypeCount = allTypeCount;
-    state.paperTypes = Object.keys(allTypeCount).sort();
   }
+
+  state.cachedSupplierTypes = supplierTypeCount;
+  state.allTypeCount = allTypeCount;
+  state.paperTypes = Object.keys(allTypeCount).sort();
 
   // populate selects
   populateSupplierSelects();
@@ -827,6 +843,8 @@ async function init() {
 
   // default issue date = today
   $('#i-date').value = new Date().toISOString().slice(0,10);
+
+  showToast(`โหลดข้อมูลเสร็จ ${distinct.length.toLocaleString()} COA, ${state.suppliers.length} suppliers, ${state.paperTypes.length} types`, 'success');
 }
 
 function populateSupplierSelects() {
