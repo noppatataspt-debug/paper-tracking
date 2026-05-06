@@ -335,6 +335,42 @@
 </head>
 <body>
 
+<!-- ===== Login Overlay ===== -->
+<div id="login-overlay" style="display:flex; position:fixed; inset:0; background:linear-gradient(135deg, #1e293b 0%, #334155 100%); z-index:10000; align-items:center; justify-content:center; padding:20px;">
+  <div style="background:white; border-radius:16px; padding:32px; max-width:420px; width:100%; box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+    <div style="text-align:center; margin-bottom:24px;">
+      <div style="font-size:42px;">🧪</div>
+      <h2 style="font-size:22px; font-weight:700; margin-top:8px; color:#1e293b;">QA Dashboard</h2>
+      <p style="color:#64748b; font-size:14px; margin-top:4px;">กรุณา login เพื่อเข้าใช้งาน</p>
+    </div>
+
+    <div style="margin-bottom:14px;">
+      <label style="display:block; font-weight:600; font-size:13px; margin-bottom:6px; color:#334155;">Username</label>
+      <input type="text" id="login-username" placeholder="manager / staff" autocomplete="username"
+        style="width:100%; padding:12px 14px; border:1.5px solid #e2e8f0; border-radius:8px; font-size:15px; background:#f8fafc; color:#1e293b; box-sizing:border-box;">
+    </div>
+
+    <div style="margin-bottom:14px;">
+      <label style="display:block; font-weight:600; font-size:13px; margin-bottom:6px; color:#334155;">Password</label>
+      <input type="password" id="login-password" autocomplete="current-password"
+        style="width:100%; padding:12px 14px; border:1.5px solid #e2e8f0; border-radius:8px; font-size:15px; background:#f8fafc; color:#1e293b; box-sizing:border-box;">
+    </div>
+
+    <div id="login-error" style="display:none; background:#fee2e2; color:#b91c1c; padding:10px 12px; border-radius:8px; font-size:13px; margin-bottom:14px;"></div>
+
+    <button id="login-btn" style="width:100%; padding:13px; background:#3b82f6; color:white; border:none; border-radius:8px; font-size:15px; font-weight:700; cursor:pointer;">
+      🔐 เข้าสู่ระบบ
+    </button>
+
+    <div style="margin-top:18px; text-align:center;">
+      <a href="index.html" style="font-size:13px; color:#64748b; text-decoration:none;">← กลับหน้า Record</a>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Main App (hidden until login) ===== -->
+<div id="main-app" style="display:none;">
+
 <!-- ===== Universal Print Modal ===== -->
 <div id="print-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center;">
   <div style="background:white; border-radius:12px; padding:24px; max-width:480px; width:90%; box-shadow:0 10px 40px rgba(0,0,0,0.3);">
@@ -383,7 +419,7 @@
         <h1>🧪 QA <span>Dashboard</span></h1>
         <p>Monitor คุณภาพกระดาษ + สอบกลับ lot ที่พบปัญหา</p>
       </div>
-      <div class="header-nav-wrap" style="display:flex; gap:8px; flex-wrap:wrap;">
+      <div class="header-nav-wrap" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
         <a href="index.html" class="nav-link">📝 บันทึกใช้กระดาษ (Record)</a>
         <a href="paper-in.html" class="nav-link">📥 รับเข้า (IN)</a>
         <a href="paper-out.html" class="nav-link">📤 ตัดออก (Out)</a>
@@ -391,6 +427,8 @@
         <a href="stock-dashboard.html" class="nav-link">📦 Stock</a>
         <a href="qa-dashboard.html" class="nav-link active">🧪 คุณภาพ (QA)</a>
         <button class="nav-link" id="btn-open-print" style="border:1px solid var(--border); cursor:pointer; background:transparent; font: inherit;">🖨 พิมพ์</button>
+        <span id="user-badge" style="padding:6px 12px; background:var(--panel-2); border-radius:8px; font-size:13px;"></span>
+        <button class="nav-link" id="btn-logout" style="border:1px solid var(--danger); color:var(--danger); cursor:pointer; background:transparent; font: inherit;">🚪 ออก</button>
       </div>
     </div>
   </div>
@@ -1029,6 +1067,170 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ============================================================
+// Auth — Session token management (ใช้ key เดียวกับระบบเดิม)
+// ============================================================
+const SESSION_STORAGE_KEY = 'paper_admin';
+
+function getStoredAuth() {
+  try {
+    const raw = sessionStorage.getItem(SESSION_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+function setStoredAuth(auth) {
+  sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(auth));
+}
+
+function clearStoredAuth() {
+  sessionStorage.removeItem(SESSION_STORAGE_KEY);
+}
+
+function getToken() {
+  const auth = getStoredAuth();
+  return auth?.token || null;
+}
+
+// Wrap RPC calls — auto-handle session expiry
+async function callRPC(fnName, params = {}) {
+  const token = getToken();
+  if (!token) {
+    showLogin();
+    throw new Error('NOT_LOGGED_IN');
+  }
+  const { data, error } = await supabase.rpc(fnName, { p_token: token, ...params });
+  if (error) {
+    // Session expired or invalid → kick to login
+    if (error.message && /session/i.test(error.message)) {
+      clearStoredAuth();
+      showLogin();
+      throw new Error('SESSION_EXPIRED');
+    }
+    throw error;
+  }
+  return data;
+}
+
+// fetch ทั้งหมดผ่าน RPC ที่ return SETOF
+// (ไม่ต้อง paginate เหมือน fetchAllRows เพราะ RPC ตั้ง limit ใน param)
+async function callRPCList(fnName, params = {}) {
+  const data = await callRPC(fnName, params);
+  return Array.isArray(data) ? data : [];
+}
+
+// ============================================================
+// Login Flow
+// ============================================================
+function showLogin() {
+  $('#login-overlay').style.display = 'flex';
+  $('#main-app').style.display = 'none';
+  $('#login-username').focus();
+}
+
+function hideLogin() {
+  $('#login-overlay').style.display = 'none';
+  $('#main-app').style.display = 'block';
+}
+
+async function doLogin() {
+  const username = $('#login-username').value.trim();
+  const password = $('#login-password').value;
+  if (!username || !password) {
+    $('#login-error').textContent = 'กรุณากรอก username และ password';
+    $('#login-error').style.display = 'block';
+    return;
+  }
+
+  $('#login-btn').disabled = true;
+  $('#login-btn').textContent = 'กำลังเข้าสู่ระบบ...';
+  $('#login-error').style.display = 'none';
+
+  try {
+    const { data, error } = await supabase.rpc('verify_admin_login', {
+      p_username: username,
+      p_password: password
+    });
+    if (error) throw error;
+
+    if (!data || data.length === 0) {
+      $('#login-error').textContent = '❌ Username หรือ password ไม่ถูกต้อง';
+      $('#login-error').style.display = 'block';
+      return;
+    }
+
+    const u = data[0];
+    setStoredAuth({
+      id: u.out_id,
+      username: u.out_username,
+      full_name: u.out_full_name,
+      role: u.out_role,
+      token: u.out_session_token,
+    });
+
+    // clear form
+    $('#login-username').value = '';
+    $('#login-password').value = '';
+
+    // show app + render user badge
+    hideLogin();
+    renderUserBadge();
+    boot();
+  } catch (e) {
+    console.error(e);
+    $('#login-error').textContent = 'Login ไม่ได้: ' + (e.message || e);
+    $('#login-error').style.display = 'block';
+  } finally {
+    $('#login-btn').disabled = false;
+    $('#login-btn').textContent = '🔐 เข้าสู่ระบบ';
+  }
+}
+
+async function doLogout() {
+  const token = getToken();
+  if (token) {
+    try { await supabase.rpc('admin_logout', { p_token: token }); } catch {}
+  }
+  clearStoredAuth();
+  location.reload();
+}
+
+function renderUserBadge() {
+  const auth = getStoredAuth();
+  if (!auth) return;
+  const badge = $('#user-badge');
+  if (badge) {
+    badge.innerHTML = `<b>${escapeHtml(auth.full_name || auth.username)}</b> <span style="color:var(--text-dim); font-size:12px;">(${auth.role})</span>`;
+  }
+}
+
+// Verify session on page load — ถ้ามี token เก่า เช็คว่ายัง valid ก่อน boot
+async function checkSessionAndBoot() {
+  const auth = getStoredAuth();
+  if (!auth || !auth.token) {
+    showLogin();
+    return;
+  }
+  try {
+    const { data, error } = await supabase.rpc('verify_session', { p_token: auth.token });
+    if (error) throw error;
+    if (!data || data.length === 0) {
+      // session expired
+      clearStoredAuth();
+      showLogin();
+      return;
+    }
+    // valid → enter app
+    hideLogin();
+    renderUserBadge();
+    boot();
+  } catch (e) {
+    console.error('Session check failed:', e);
+    clearStoredAuth();
+    showLogin();
+  }
+}
+
+// ============================================================
 // Param config — label, unit, รวมทุก parameter ของทุกเกรด
 // ============================================================
 const PARAMS = {
@@ -1124,17 +1326,15 @@ const state = {
 
 async function init() {
   // ขั้น 1: load suppliers (ใช้ count = small) — แสดง UI ก่อน
-  // ใช้วิธี select ทั้ง columns แต่ filter เฉพาะที่ต้องการ + page-through
   let distinct;
   try {
-    distinct = await fetchAllRows(
-      supabase.from('quality_tests')
-        .select('supplier, paper_type, paper_invoice_id')
-        .not('supplier', 'is', null)
-    );
+    // ใช้ qa_list_quality_tests RPC แทน direct query
+    distinct = await callRPCList('qa_list_quality_tests', { p_limit: 50000 });
   } catch (error) {
     console.error('init load failed:', error);
-    showToast('โหลด suppliers ไม่สำเร็จ — ดู console', 'error');
+    if (error.message !== 'NOT_LOGGED_IN' && error.message !== 'SESSION_EXPIRED') {
+      showToast('โหลด suppliers ไม่สำเร็จ — ดู console', 'error');
+    }
     return;
   }
   console.log(`[init] loaded ${distinct.length} quality_tests rows for dropdowns`);
@@ -1261,21 +1461,11 @@ async function loadMonitor() {
 
   try {
     // ดึง COA ทุก field — ใช้ * เพื่อให้รองรับ parameter ใหม่ทุกอัน
-    let q = supabase
-      .from('quality_tests')
-      .select('*, paper_invoices(paper_type, paper_category, paper_lot, receive_date)')
-      .order('production_date', { ascending: true });
-
-    if (supplier) q = q.eq('supplier', supplier);
-
-    // filter ตาม date field ที่เลือก
-    if (dateField === 'production_date') {
-      if (from) q = q.gte('production_date', from);
-      if (to)   q = q.lte('production_date', to);
-    }
-    // ถ้าเป็น receive_date — filter ทาง client-side หลัง fetch (เพราะอยู่ใน paper_invoices)
-
-    const data = await fetchAllRows(q);
+    const data = await callRPCList('qa_list_quality_tests', {
+      p_supplier: supplier || null,
+      p_date_from: (dateField === 'production_date' ? from : null) || null,
+      p_date_to:   (dateField === 'production_date' ? to   : null) || null,
+    });
 
     // filter by paper_type + receive_date (client-side)
     let filtered = type
@@ -1404,7 +1594,7 @@ async function loadMonitor() {
 async function loadSpecs() {
   if (state.specs) return state.specs;
   try {
-    const { data } = await supabase.from('paper_type_specs').select('*');
+    const data = await callRPCList('qa_list_specs');
     const map = {};
     for (const s of (data || [])) {
       const key = `${s.paper_category||''}|${s.paper_type||''}|${s.parameter}`;
@@ -1683,21 +1873,17 @@ async function loadTrend() {
 
   try {
     // ดึง COA ทุก field — รองรับ orphan (paper_type column ใน qt) ด้วย
-    let q = supabase
-      .from('quality_tests')
-      .select(`*, paper_invoices(paper_type, paper_category, paper_lot, receive_date)`)
-      .not(param, 'is', null)
-      .order('production_date', { ascending: true });
-
-    if (supplier) q = q.eq('supplier', supplier);
-    // date filter — ใช้ production_date filter ใน server, ส่วน receive_date filter ทาง client
+    let dateFromStr = null;
     if (dateField === 'production_date' && days > 0) {
       const d = new Date();
       d.setDate(d.getDate() - days);
-      q = q.gte('production_date', d.toISOString().slice(0,10));
+      dateFromStr = d.toISOString().slice(0,10);
     }
-
-    const raw = await fetchAllRows(q);
+    const allRows = await callRPCList('qa_list_quality_tests', {
+      p_supplier: supplier || null,
+      p_date_from: dateFromStr,
+    });
+    const raw = allRows.filter(r => r[param] != null);
     let filtered = type
       ? raw.filter(r => (r.paper_invoices?.paper_type || r.paper_type) === type)
       : raw;
@@ -2032,23 +2218,14 @@ async function doMultiLookup(opts) {
 
     const invIds = (invs || []).map(i => i.id);
 
-    let coas = [];
-    if (invIds.length) {
-      const { data: c } = await supabase
-        .from('quality_tests')
-        .select('*')
-        .in('paper_invoice_id', invIds);
-      coas = c || [];
-    }
-    const { data: orphanCoas } = await supabase
-      .from('quality_tests')
-      .select('*')
-      .in('paper_lot', lots)
-      .is('paper_invoice_id', null);
-    const seenCoaIds = new Set(coas.map(c => c.id));
-    for (const oc of (orphanCoas || [])) {
-      if (!seenCoaIds.has(oc.id)) coas.push(oc);
-    }
+    // ดึง COA ทั้งหมดผ่าน RPC แล้ว filter client-side
+    const allQT = await callRPCList('qa_list_quality_tests');
+    const invIdSet = new Set(invIds);
+    const lotSet = new Set(lots);
+    const coas = (allQT || []).filter(c =>
+      (c.paper_invoice_id && invIdSet.has(c.paper_invoice_id)) ||
+      (!c.paper_invoice_id && c.paper_lot && lotSet.has(c.paper_lot))
+    );
 
     let outs = [];
     if (invIds.length) {
@@ -2061,22 +2238,14 @@ async function doMultiLookup(opts) {
     }
 
     let issues = [];
-    if (invIds.length) {
-      const { data: i } = await supabase
-        .from('quality_issues')
-        .select('*')
-        .in('paper_invoice_id', invIds)
-        .order('issue_date', { ascending: false });
-      issues = i || [];
-    }
     {
-      const { data: iByLot } = await supabase
-        .from('quality_issues')
-        .select('*')
-        .in('paper_lot', lots)
-        .order('issue_date', { ascending: false });
-      const seen = new Set(issues.map(x => x.id));
-      for (const x of (iByLot || [])) if (!seen.has(x.id)) issues.push(x);
+      const allIssues = await callRPCList('qa_list_issues');
+      const invIdSet = new Set(invIds);
+      const lotSet = new Set(lots);
+      issues = (allIssues || []).filter(x =>
+        (x.paper_invoice_id && invIdSet.has(x.paper_invoice_id)) ||
+        (x.paper_lot && lotSet.has(x.paper_lot))
+      );
     }
 
     const lotResults = lots.map((lot, i) => {
@@ -2202,13 +2371,9 @@ async function renderLookupComparison(lotResults) {
     container.appendChild(ptSection);
     const smContainer = ptSection.querySelector('.small-multiples');
 
-    const baseline = await fetchAllRows(
-      supabase
-        .from('quality_tests')
-        .select('*, paper_invoices(paper_type, paper_category, paper_lot)')
-        .eq('paper_type', pt)
-        .order('production_date', { ascending: true })
-    );
+    const baseline = await callRPCList('qa_list_quality_tests', {
+      p_paper_type: pt
+    });
 
     if (!baseline.length) {
       smContainer.innerHTML = '<div class="empty" style="padding:20px;">ไม่มี baseline สำหรับ paper_type นี้</div>';
@@ -2505,10 +2670,8 @@ async function fetchLotForIssue() {
     }
 
     const inv = invs[0];
-    const { data: coas } = await supabase
-      .from('quality_tests')
-      .select('*')
-      .eq('paper_invoice_id', inv.id);
+    const allCoasForLot = await callRPCList('qa_list_quality_tests');
+    const coas = (allCoasForLot || []).filter(c => c.paper_invoice_id === inv.id);
     const coa = (coas || [])[0];
 
     state.currentLot = { invoice: inv, coa, allInvoices: invs, allCoas: coas || [] };
@@ -2610,12 +2773,7 @@ async function saveIssue() {
   $('#i-save').textContent = 'กำลังบันทึก...';
 
   try {
-    const { data, error } = await supabase
-      .from('quality_issues')
-      .insert(payload)
-      .select()
-      .single();
-    if (error) throw error;
+    const data = await callRPC('qa_create_issue', { p_payload: payload });
     showToast('บันทึกปัญหาสำเร็จ ✅ — ID: ' + data.id, 'success');
     clearIssueForm();
   } catch (e) {
@@ -2635,18 +2793,14 @@ $('#il-go').addEventListener('click', loadIssuesList);
 async function loadIssuesList() {
   $('#il-results').innerHTML = '<div class="panel"><div class="loading"><div class="spinner"></div>กำลังโหลด...</div></div>';
   try {
-    let q = supabase
-      .from('quality_issues')
-      .select('*')
-      .order('issue_date', { ascending: false });
     const status = $('#il-status').value;
     const sev    = $('#il-sev').value;
     const sup    = $('#il-supplier').value;
-    if (status) q = q.eq('status', status);
-    if (sev)    q = q.eq('severity', sev);
-    if (sup)    q = q.eq('supplier', sup);
-
-    const data = await fetchAllRows(q);
+    const data = await callRPCList('qa_list_issues', {
+      p_status:   status || null,
+      p_severity: sev || null,
+      p_supplier: sup || null,
+    });
     if (!data.length) {
       $('#il-results').innerHTML = '<div class="panel"><div class="empty">ไม่พบรายการ</div></div>';
       return;
@@ -2696,9 +2850,13 @@ async function viewIssueDetail(id, lot) {
   const detail = $('#il-detail');
   detail.innerHTML = '<div class="panel"><div class="loading"><div class="spinner"></div>กำลังโหลดรายละเอียด...</div></div>';
 
-  const { data: iss, error } = await supabase.from('quality_issues').select('*').eq('id', id).single();
-  if (error) {
-    detail.innerHTML = `<div class="panel"><div class="empty" style="color:var(--danger)">โหลดไม่ได้</div></div>`;
+  let iss;
+  try {
+    const list = await callRPCList('qa_list_issues');
+    iss = (list || []).find(i => i.id === id);
+    if (!iss) throw new Error('ไม่พบ issue');
+  } catch (e) {
+    detail.innerHTML = `<div class="panel"><div class="empty" style="color:var(--danger)">โหลดไม่ได้: ${escapeHtml(e.message || e)}</div></div>`;
     return;
   }
 
@@ -2773,8 +2931,11 @@ async function viewIssueDetail(id, lot) {
       corrective_action:$('#il-d-action').value.trim() || null,
     };
     if (upd.status === 'resolved' || upd.status === 'closed') upd.resolved_at = new Date().toISOString();
-    const { error } = await supabase.from('quality_issues').update(upd).eq('id', id);
-    if (error) { showToast('บันทึกไม่ได้: ' + error.message, 'error'); return; }
+    try {
+      await callRPC('qa_update_issue', { p_id: id, p_payload: upd });
+    } catch (e) {
+      showToast('บันทึกไม่ได้: ' + (e.message || e), 'error'); return;
+    }
     showToast('อัปเดตสำเร็จ ✅', 'success');
     loadIssuesList();
   });
@@ -2795,11 +2956,8 @@ async function viewIssueDetail(id, lot) {
   // Compare button — open existing case or create new with this issue
   $('#il-d-compare').addEventListener('click', async () => {
     // check if a case already exists for this issue
-    const { data: existing } = await supabase
-      .from('lot_compare_groups')
-      .select('id, case_name')
-      .eq('issue_id', id)
-      .maybeSingle();
+    const allCases = await callRPCList('qa_list_compare_cases');
+    const existing = (allCases || []).find(c => c.issue_id === id) || null;
 
     // switch to compare tab
     $$('.tab').forEach(b => b.classList.remove('active'));
@@ -3295,7 +3453,12 @@ async function runImport() {
   try {
     for (let i = 0; i < records.length; i += BATCH) {
       const slice = records.slice(i, i + BATCH);
-      const { error } = await supabase.from('quality_tests').insert(slice);
+      let error = null;
+      try {
+        await callRPC('qa_bulk_import_coa', { p_records: slice });
+      } catch (e) {
+        error = e;
+      }
       if (error) {
         errors.push({ batch: i, msg: error.message });
         console.error('Batch error', i, error);
@@ -3379,11 +3542,8 @@ async function saveSpec() {
   $('#sp-save').textContent = 'กำลังบันทึก...';
 
   try {
-    // upsert by unique (category, type, parameter)
-    const { error } = await supabase
-      .from('paper_type_specs')
-      .upsert(payload, { onConflict: 'paper_category,paper_type,parameter' });
-    if (error) throw error;
+    // upsert by unique (category, type, parameter) via RPC
+    await callRPC('qa_upsert_spec', { p_payload: payload });
     showToast('บันทึก spec สำเร็จ ✅', 'success');
     state.specs = null; // invalidate cache
     $('#sp-clear').click();
@@ -3510,10 +3670,7 @@ async function importBulkSpec() {
   }));
 
   try {
-    const { error } = await supabase
-      .from('paper_type_specs')
-      .upsert(records, { onConflict: 'paper_category,paper_type,parameter' });
-    if (error) throw error;
+    await callRPC('qa_bulk_upsert_specs', { p_records: records });
     showToast(`Import ${records.length} specs สำเร็จ ✅`, 'success');
     state.specs = null;
     $('#sp-bulk-text').value = '';
@@ -3535,12 +3692,7 @@ async function loadSpecList() {
   wrap.innerHTML = '<div class="panel"><div class="loading"><div class="spinner"></div>กำลังโหลด...</div></div>';
 
   try {
-    const { data } = await supabase
-      .from('paper_type_specs')
-      .select('*')
-      .order('paper_category', { ascending: true })
-      .order('paper_type',     { ascending: true })
-      .order('parameter',      { ascending: true });
+    const data = await callRPCList('qa_list_specs');
 
     if (!data?.length) {
       wrap.innerHTML = '<div class="panel"><div class="empty">ยังไม่มี spec — เพิ่มได้ที่ฟอร์มด้านบน</div></div>';
@@ -3575,7 +3727,9 @@ async function loadSpecList() {
     $$('button[data-act="del"]', wrap).forEach(btn => {
       btn.addEventListener('click', async () => {
         if (!confirm('ลบ spec นี้?')) return;
-        const { error } = await supabase.from('paper_type_specs').delete().eq('id', +btn.dataset.id);
+        let error = null;
+        try { await callRPC('qa_delete_spec', { p_id: +btn.dataset.id }); }
+        catch (e) { error = e; }
         if (error) { showToast('ลบไม่ได้: ' + error.message, 'error'); return; }
         state.specs = null;
         showToast('ลบแล้ว ✅', 'success');
@@ -3732,10 +3886,7 @@ $$('.tab').forEach(btn => {
 
 async function loadCmpCases() {
   try {
-    const { data } = await supabase
-      .from('lot_compare_groups')
-      .select('id, case_name, paper_type, status, created_at, created_by')
-      .order('created_at', { ascending: false });
+    const data = await callRPCList('qa_list_compare_cases');
     const sel = $('#cmp-case-select');
     sel.innerHTML = '<option value="">— เลือก case หรือสร้างใหม่ —</option>' +
       (data || []).map(c => `<option value="${c.id}">${escapeHtml(c.case_name)} ${c.paper_type ? `· ${escapeHtml(c.paper_type)}` : ''} · ${c.status}</option>`).join('');
@@ -3759,11 +3910,7 @@ async function openCaseForm(group) {
   const sel = $('#cmp-case-issue');
   sel.innerHTML = '<option value="">— ไม่เชื่อม —</option><option value="" disabled>กำลังโหลด...</option>';
   try {
-    const { data: issues } = await supabase
-      .from('quality_issues')
-      .select('id, issue_type, paper_lot, issue_date, severity, status')
-      .order('issue_date', { ascending: false })
-      .limit(100);
+    const issues = (await callRPCList('qa_list_issues')).slice(0, 100);
     sel.innerHTML = '<option value="">— ไม่เชื่อม —</option>' +
       (issues || []).map(i =>
         `<option value="${i.id}">[${fmtDate(i.issue_date)}] ${escapeHtml(i.issue_type || '—')} · ${escapeHtml(i.paper_lot || '—')} · ${i.severity}</option>`
@@ -3793,12 +3940,10 @@ async function saveCmpCase() {
   $('#cmp-case-save').disabled = true;
   try {
     if (editId) {
-      const { error } = await supabase.from('lot_compare_groups').update(payload).eq('id', +editId);
-      if (error) throw error;
+      await callRPC('qa_update_compare_case', { p_id: +editId, p_payload: payload });
       showToast('แก้ไข case สำเร็จ ✅', 'success');
     } else {
-      const { data, error } = await supabase.from('lot_compare_groups').insert(payload).select().single();
-      if (error) throw error;
+      const data = await callRPC('qa_create_compare_case', { p_payload: payload });
       showToast('สร้าง case สำเร็จ ✅', 'success');
       $('#cmp-case-form').dataset.editId = data.id;
       $('#cmp-case-select').value = data.id;
@@ -3829,7 +3974,9 @@ async function deleteCmpCase() {
   if (!confirm('ลบ case นี้และ items ทั้งหมด? ไม่สามารถ undo ได้')) return;
 
   try {
-    const { error } = await supabase.from('lot_compare_groups').delete().eq('id', +editId);
+    let error = null;
+    try { await callRPC('qa_delete_compare_case', { p_id: +editId }); }
+    catch (e) { error = e; }
     if (error) throw error;
     showToast('ลบ case สำเร็จ', 'success');
     cmpState = { currentGroupId: null, currentGroup: null, items: [] };
@@ -3848,15 +3995,14 @@ async function loadCmpCase(groupId) {
   $('#cmp-results').innerHTML = '<div class="panel"><div class="loading"><div class="spinner"></div>กำลังโหลด...</div></div>';
 
   try {
-    // group + items
-    const { data: group } = await supabase
-      .from('lot_compare_groups').select('*').eq('id', groupId).single();
+    // load all cases + find the one we want
+    const cases = await callRPCList('qa_list_compare_cases');
+    const group = (cases || []).find(g => g.id === groupId);
+    if (!group) throw new Error('ไม่พบ case ที่เลือก');
     cmpState.currentGroup = group;
 
-    const items = await fetchAllRows(
-      supabase.from('v_compare_lots').select('*').eq('group_id', groupId)
-    );
-    cmpState.items = items;
+    const items = await callRPCList('qa_list_compare_items', { p_group_id: groupId });
+    cmpState.items = items || [];
 
     // show items panel
     $('#cmp-items-panel').style.display = 'block';
@@ -4050,7 +4196,9 @@ function renderCmpCase() {
     if (!ids.length) return;
     if (!confirm(`ลบ ${ids.length} lots ออกจาก case?`)) return;
     try {
-      const { error } = await supabase.from('lot_compare_items').delete().in('id', ids);
+      let error = null;
+      try { await callRPC('qa_delete_compare_lots', { p_ids: ids }); }
+      catch (e) { error = e; }
       if (error) throw error;
       showToast(`ลบ ${ids.length} lots สำเร็จ ✅`, 'success');
       await loadCmpCase(cmpState.currentGroupId);
@@ -4089,41 +4237,29 @@ async function addCmpItem() {
   const product_batch_no = $('#cmp-item-batch').value.trim() || null;
   const notes = $('#cmp-item-notes').value.trim() || null;
 
-  const records = lots.map(lot => ({
-    group_id: groupId,
-    paper_lot: lot,
-    classification,
-    used_for_product_date,
-    product_batch_no,
-    notes,
-  }));
-
   $('#cmp-item-add').disabled = true;
   $('#cmp-item-add').textContent = `กำลังเพิ่ม ${lots.length} lot${lots.length>1?'s':''}...`;
 
   try {
-    // upsert (เผื่อ duplicate ใน batch เดียว)
-    const { data, error } = await supabase
-      .from('lot_compare_items')
-      .insert(records)
-      .select();
+    const result = await callRPC('qa_add_compare_lots', {
+      p_group_id: groupId,
+      p_lots: lots,
+      p_classification: classification,
+      p_used_for_product_date: used_for_product_date,
+      p_product_batch_no: product_batch_no,
+      p_notes: notes,
+    });
 
-    if (error) {
-      // อาจมี duplicate (unique constraint) — ลองใส่ทีละตัวเพื่อหา lot ที่ซ้ำ
-      if (error.code === '23505') {
-        let added = 0, dup = [];
-        for (const rec of records) {
-          const { error: e } = await supabase.from('lot_compare_items').insert(rec);
-          if (e) {
-            if (e.code === '23505') dup.push(rec.paper_lot);
-            else throw e;
-          } else added++;
-        }
-        if (added) showToast(`เพิ่ม ${added} lots สำเร็จ ✅${dup.length ? ` · ข้าม ${dup.length} lots ที่ซ้ำ: ${dup.join(', ')}` : ''}`, dup.length ? 'info' : 'success');
-        else showToast(`Lot ทั้งหมดมีอยู่แล้วใน case นี้: ${dup.join(', ')}`, 'error');
-      } else throw error;
+    const added = result?.added || 0;
+    const dup = result?.duplicates || 0;
+    const dupLots = result?.duplicate_lots || [];
+
+    if (added && dup) {
+      showToast(`เพิ่ม ${added} lots สำเร็จ ✅ · ข้าม ${dup} lots ที่ซ้ำ: ${dupLots.join(', ')}`, 'info');
+    } else if (added) {
+      showToast(`เพิ่ม ${added} lot${added>1?'s':''} สำเร็จ ✅`, 'success');
     } else {
-      showToast(`เพิ่ม ${data.length} lot${data.length>1?'s':''} สำเร็จ ✅`, 'success');
+      showToast(`Lot ทั้งหมดมีอยู่แล้วใน case นี้: ${dupLots.join(', ')}`, 'error');
     }
 
     // clear form (keep classification + date + batch)
@@ -4164,8 +4300,7 @@ async function saveEditCmpItem() {
   };
   $('#cmp-edit-save').disabled = true;
   try {
-    const { error } = await supabase.from('lot_compare_items').update(payload).eq('id', itemId);
-    if (error) throw error;
+    await callRPC('qa_update_compare_lot', { p_id: itemId, p_payload: payload });
     showToast('แก้ไขสำเร็จ ✅', 'success');
     $('#cmp-edit-modal').style.display = 'none';
     await loadCmpCase(cmpState.currentGroupId);
@@ -4220,8 +4355,7 @@ async function saveBulkEdit() {
   $('#cmp-bulk-save').disabled = true;
   $('#cmp-bulk-save').textContent = `กำลังอัปเดต ${ids.length} lots...`;
   try {
-    const { error } = await supabase.from('lot_compare_items').update(payload).in('id', ids);
-    if (error) throw error;
+    await callRPC('qa_bulk_update_compare_lots', { p_ids: ids, p_payload: payload });
     showToast(`อัปเดต ${ids.length} lots สำเร็จ ✅`, 'success');
     $('#cmp-bulk-modal').style.display = 'none';
     await loadCmpCase(cmpState.currentGroupId);
@@ -4237,8 +4371,7 @@ async function saveBulkEdit() {
 async function deleteCmpItem(itemId) {
   if (!confirm('ลบ lot นี้ออกจาก case?')) return;
   try {
-    const { error } = await supabase.from('lot_compare_items').delete().eq('id', itemId);
-    if (error) throw error;
+    await callRPC('qa_delete_compare_lots', { p_ids: [itemId] });
     showToast('ลบแล้ว', 'success');
     await loadCmpCase(cmpState.currentGroupId);
   } catch (e) {
@@ -4277,14 +4410,10 @@ async function renderCmpCharts() {
   if (showBase || showSpec) {
     const focusType = cmpState.currentGroup.paper_type || items[0]?.invoice_paper_type;
     if (focusType) {
-      const baseline = await fetchAllRows(
-        supabase
-          .from('quality_tests')
-          .select('production_date, ' + param + ', paper_invoices(paper_category)')
-          .eq('paper_type', focusType)
-          .not(param, 'is', null)
-          .order('production_date', { ascending: true })
-      );
+      const allBaseline = await callRPCList('qa_list_quality_tests', {
+        p_paper_type: focusType
+      });
+      const baseline = (allBaseline || []).filter(b => b[param] != null);
       for (const b of baseline) {
         if (!category) category = b.paper_invoices?.paper_category;
         if (b.production_date) {
@@ -4642,11 +4771,34 @@ $('#print-modal').addEventListener('click', e => {
 // ============================================================
 // Boot
 // ============================================================
-init().catch(e => {
-  console.error(e);
-  showToast('Init error — ดู console', 'error');
+function boot() {
+  init().catch(e => {
+    console.error(e);
+    if (e.message !== 'NOT_LOGGED_IN' && e.message !== 'SESSION_EXPIRED') {
+      showToast('Init error — ดู console', 'error');
+    }
+  });
+}
+
+// Wire login form handlers
+$('#login-btn').addEventListener('click', doLogin);
+$('#login-username').addEventListener('keydown', e => {
+  if (e.key === 'Enter') $('#login-password').focus();
 });
+$('#login-password').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doLogin();
+});
+
+// Wire logout button
+$('#btn-logout').addEventListener('click', () => {
+  if (confirm('ออกจากระบบ?')) doLogout();
+});
+
+// Check session on page load
+checkSessionAndBoot();
 </script>
+
+</div><!-- /main-app -->
 
 </body>
 </html>
