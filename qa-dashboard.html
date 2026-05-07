@@ -462,8 +462,8 @@
         <div>
           <label class="field-label">ใช้วันที่ของ</label>
           <select id="m-datefield">
+            <option value="receive_date" selected>Receive Date (รับเข้าคลัง)</option>
             <option value="production_date">Production Date (ผลิต)</option>
-            <option value="receive_date">Receive Date (รับเข้าคลัง)</option>
           </select>
         </div>
         <div>
@@ -477,8 +477,8 @@
       </div>
       <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
         <button class="btn" id="m-go">📊 แสดงข้อมูล</button>
-        <button class="btn outline" id="m-reset">🗑 ล้าง filter วันที่</button>
-        <span style="color:var(--text-dim); font-size:13px;">💡 ปล่อยช่องวันที่ว่างเพื่อดูข้อมูลทั้งหมด</span>
+        <button class="btn outline" id="m-reset">🔄 ใช้ค่าเริ่มต้น (3 เดือน)</button>
+        <span style="color:var(--text-dim); font-size:13px;">💡 ค่าเริ่มต้น: 3 เดือนย้อนหลัง · ลบช่องวันที่เพื่อดูทั้งหมด</span>
       </div>
     </div>
 
@@ -526,8 +526,8 @@
         <div>
           <label class="field-label">ใช้วันที่ของ</label>
           <select id="t-datefield">
+            <option value="receive_date" selected>Receive Date (รับเข้าคลัง)</option>
             <option value="production_date">Production Date (ผลิต)</option>
-            <option value="receive_date">Receive Date (รับเข้าคลัง)</option>
           </select>
         </div>
         <div>
@@ -1459,10 +1459,23 @@ $$('.tab').forEach(btn => {
 // ============================================================
 // TAB 1: MONITOR
 // ============================================================
+
+// Helper: ตั้งค่า default date range = 3 เดือนย้อนหลังจากวันนี้
+function setMonitorDefaultDates() {
+  const today = new Date();
+  const threeMonthsAgo = new Date(today);
+  threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+  const fmt = d => d.toISOString().slice(0, 10);  // YYYY-MM-DD
+  $('#m-from').value = fmt(threeMonthsAgo);
+  $('#m-to').value   = fmt(today);
+}
+// เรียกครั้งแรกตอนโหลดหน้า
+setMonitorDefaultDates();
+
 $('#m-go').addEventListener('click', loadMonitor);
 $('#m-reset').addEventListener('click', () => {
-  $('#m-from').value = '';
-  $('#m-to').value = '';
+  // "ล้าง filter วันที่" → กลับไป default 3 เดือน (ไม่ใช่ว่างเปล่า)
+  setMonitorDefaultDates();
   loadMonitor();
 });
 
