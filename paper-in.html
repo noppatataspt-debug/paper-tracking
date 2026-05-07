@@ -300,6 +300,93 @@ input.mono { font-family: var(--mono); }
    ============================================ */
 .rolls-count-inline { color: var(--accent); font-weight: 600; font-family: var(--mono); }
 
+/* ============================================
+   COA PANEL (Muda — invoice level)
+   ============================================ */
+.coa-meta-grid {
+  grid-template-columns: 1fr 1fr 1fr !important;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.coa-section-title {
+  font-size: 14px; font-weight: 700; color: var(--text);
+  margin: 12px 0 10px;
+  padding: 8px 12px;
+  background: #fef3c7;
+  border-left: 3px solid #d97706;
+  border-radius: 4px;
+}
+.coa-param-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+@media (max-width: 700px) {
+  .coa-meta-grid { grid-template-columns: 1fr !important; }
+  .coa-param-grid { grid-template-columns: 1fr; }
+}
+.coa-param {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.coa-param > label {
+  display: block;
+  font-size: 12px; font-weight: 700; color: var(--text);
+  margin-bottom: 6px;
+}
+.coa-range {
+  display: flex; align-items: center; gap: 6px;
+}
+.coa-range input {
+  flex: 1; min-width: 0;
+  padding: 6px 8px;
+  font-family: var(--mono); font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.coa-range input:focus {
+  outline: none; border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(99,102,241,0.15);
+}
+.coa-tilde {
+  color: var(--text-dim); font-weight: 700; font-size: 14px;
+}
+.coa-hint {
+  display: block; font-size: 10px; color: var(--text-dim);
+  margin-top: 3px; font-style: italic;
+}
+
+/* Live preview of midpoint values */
+.coa-preview {
+  margin-top: 14px;
+  background: #f0fdf4;
+  border: 1px solid #86efac;
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+.coa-preview-title {
+  font-size: 12px; font-weight: 700;
+  color: #166534;
+  margin-bottom: 8px;
+}
+.coa-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 8px;
+  font-size: 12px;
+  font-family: var(--mono);
+  color: var(--text);
+}
+.coa-preview-grid .pv-item {
+  background: white;
+  border-radius: 4px;
+  padding: 4px 8px;
+}
+.coa-preview-grid .pv-item .pv-label { color: var(--text-dim); margin-right: 4px; }
+.coa-preview-grid .pv-item .pv-val { font-weight: 700; }
+
 .roll-item {
   background: var(--panel-2); border: 1.5px solid var(--border);
   border-radius: 10px; padding: 14px; margin-bottom: 10px;
@@ -1044,6 +1131,97 @@ tr:hover td { background: var(--panel-2); }
           <label>วันที่รับเข้า <span class="required">*</span></label>
           <input type="date" id="m-receive-date">
         </div>
+      </div>
+    </div>
+
+    <!-- ========== COA Panel (Muda only) ========== -->
+    <div class="panel" id="coa-panel" style="display:none;">
+      <div class="panel-title">
+        <span class="panel-title-icon">📋</span>
+        <span>Certificate of Analysis (COA) <span style="color:var(--danger);font-size:13px;">*</span></span>
+        <span style="margin-left:auto; font-size:12px; color:var(--text-dim); font-weight:normal;">
+          ค่า COA จะ apply กับทุกม้วนใน invoice นี้
+        </span>
+      </div>
+      
+      <!-- COA reference info -->
+      <div class="form-grid coa-meta-grid">
+        <div class="form-group">
+          <label>Picking List</label>
+          <input type="text" id="coa-picking-list" placeholder="e.g. F26/03500">
+        </div>
+        <div class="form-group">
+          <label>Delivery Date</label>
+          <input type="date" id="coa-delivery-date">
+          <span style="font-size:11px; color:var(--text-dim);">วันที่ COA / production date</span>
+        </div>
+        <div class="form-group">
+          <label>Substance Spec (gsm)</label>
+          <input type="number" id="coa-substance-spec" placeholder="350" step="1">
+          <span style="font-size:11px; color:var(--text-dim);">ค่าตามใบ — ไม่ใช่ค่าทดสอบ</span>
+        </div>
+      </div>
+      
+      <!-- COA test results — range (min ~ max) -->
+      <div class="coa-section-title">📊 Test Results <span style="color:var(--text-dim); font-weight:normal;">(ใส่ค่า min ~ max ตามใบ COA)</span></div>
+      
+      <div class="coa-param-grid">
+        <div class="coa-param">
+          <label>SUBSTANCE (gsm)</label>
+          <div class="coa-range">
+            <input type="number" class="coa-min" id="coa-substance-min" placeholder="346" step="0.1">
+            <span class="coa-tilde">~</span>
+            <input type="number" class="coa-max" id="coa-substance-max" placeholder="356" step="0.1">
+          </div>
+        </div>
+        <div class="coa-param">
+          <label>THICKNESS (mm)</label>
+          <div class="coa-range">
+            <input type="number" class="coa-min" id="coa-thickness-min" placeholder="0.53" step="0.01">
+            <span class="coa-tilde">~</span>
+            <input type="number" class="coa-max" id="coa-thickness-max" placeholder="0.55" step="0.01">
+          </div>
+        </div>
+        <div class="coa-param">
+          <label>MOISTURE (%)</label>
+          <div class="coa-range">
+            <input type="number" class="coa-min" id="coa-moisture-min" placeholder="6.4" step="0.1">
+            <span class="coa-tilde">~</span>
+            <input type="number" class="coa-max" id="coa-moisture-max" placeholder="7.2" step="0.1">
+          </div>
+        </div>
+        <div class="coa-param">
+          <label>BURSTING (kg/cm²)</label>
+          <div class="coa-range">
+            <input type="number" class="coa-min" id="coa-burst-min" placeholder="4.0" step="0.1">
+            <span class="coa-tilde">~</span>
+            <input type="number" class="coa-max" id="coa-burst-max" placeholder="4.3" step="0.1">
+          </div>
+          <span class="coa-hint">→ จะแปลงเป็น kPa อัตโนมัติ</span>
+        </div>
+        <div class="coa-param">
+          <label>BONDING (J/m²)</label>
+          <div class="coa-range">
+            <input type="number" class="coa-min" id="coa-bonding-min" placeholder="211" step="1">
+            <span class="coa-tilde">~</span>
+            <input type="number" class="coa-max" id="coa-bonding-max" placeholder="240" step="1">
+          </div>
+        </div>
+        <div class="coa-param">
+          <label>COBB (gsm)</label>
+          <div class="coa-range">
+            <input type="number" class="coa-min" id="coa-cobb-min" placeholder="163" step="1">
+            <span class="coa-tilde">~</span>
+            <input type="number" class="coa-max" id="coa-cobb-max" placeholder="284" step="1">
+          </div>
+          <span class="coa-hint">→ บันทึกทั้ง cobb_top + cobb_bottom</span>
+        </div>
+      </div>
+      
+      <!-- Live preview of converted values -->
+      <div class="coa-preview" id="coa-preview" style="display:none;">
+        <div class="coa-preview-title">📐 ค่าเฉลี่ย (midpoint) ที่จะบันทึก</div>
+        <div class="coa-preview-grid" id="coa-preview-grid"></div>
       </div>
     </div>
 
@@ -2526,8 +2704,167 @@ function setupManual() {
   $('#m-clear').addEventListener('click', clearManual);
   $('#m-save').addEventListener('click', saveManual);
   
+  // COA panel: toggle by supplier + live preview
+  $('#m-supplier').addEventListener('change', updateCoaPanelVisibility);
+  // Auto-populate COA delivery date from receive date (default)
+  $('#m-receive-date').addEventListener('change', () => {
+    const cd = $('#coa-delivery-date');
+    if (cd && !cd.value) cd.value = $('#m-receive-date').value;
+  });
+  // Live preview as user types
+  document.querySelectorAll('#coa-panel .coa-min, #coa-panel .coa-max').forEach(input => {
+    input.addEventListener('input', updateCoaPreview);
+  });
+  
   // เพิ่มม้วนแรกเมื่อเริ่ม
   addManualRoll();
+}
+
+// ============================================================
+// COA Helpers (Muda)
+// ============================================================
+const COA_PARAMS = [
+  // [keyId, columnInDb, label, unit, displayUnit, conversionFn (val → store)]
+  { id: 'substance', col: 'basis_weight', label: 'Substance', dbUnit: 'g/m²', displayUnit: 'gsm', convert: v => v },
+  { id: 'thickness', col: 'caliper',      label: 'Thickness', dbUnit: 'μm',   displayUnit: 'mm',  convert: v => v * 1000 },
+  { id: 'moisture',  col: 'moisture',     label: 'Moisture',  dbUnit: '%',    displayUnit: '%',   convert: v => v },
+  { id: 'burst',     col: 'burst',        label: 'Bursting',  dbUnit: 'kPa',  displayUnit: 'kg/cm²', convert: v => v * 98.0665 },
+  { id: 'bonding',   col: 'plybond',      label: 'Bonding',   dbUnit: 'J/m²', displayUnit: 'J/m²', convert: v => v },
+  // COBB → ใส่ทั้ง cobb_top + cobb_bottom (ค่าเท่ากัน)
+  { id: 'cobb',      col: ['cobb_top', 'cobb_bottom'], label: 'Cobb', dbUnit: 'g/m²', displayUnit: 'gsm', convert: v => v },
+];
+
+function isCoaSupplier() {
+  const sup = $('#m-supplier').value;
+  return sup === 'Muda';
+}
+
+function updateCoaPanelVisibility() {
+  const panel = $('#coa-panel');
+  if (!panel) return;
+  panel.style.display = isCoaSupplier() ? '' : 'none';
+}
+
+// Read inputs and compute midpoints; return { params: {keyId: midpoint}, ranges: {keyId: [min,max]} } or null if any required missing
+function readCoaInputs() {
+  const params = {};
+  const ranges = {};
+  let hasAny = false;
+  for (const p of COA_PARAMS) {
+    const min = parseFloat($(`#coa-${p.id}-min`).value);
+    const max = parseFloat($(`#coa-${p.id}-max`).value);
+    if (!isNaN(min) && !isNaN(max)) {
+      params[p.id] = (min + max) / 2;
+      ranges[p.id] = [min, max];
+      hasAny = true;
+    } else if (!isNaN(min) || !isNaN(max)) {
+      // เฉพาะตัวเดียวมี — ถือว่ายังกรอกไม่ครบ
+      params[p.id] = isNaN(min) ? max : min;
+      ranges[p.id] = [isNaN(min) ? max : min, isNaN(max) ? min : max];
+      hasAny = true;
+    }
+  }
+  return { params, ranges, hasAny };
+}
+
+function updateCoaPreview() {
+  const previewEl = $('#coa-preview');
+  const gridEl = $('#coa-preview-grid');
+  if (!previewEl || !gridEl) return;
+  
+  const { params, hasAny } = readCoaInputs();
+  if (!hasAny) {
+    previewEl.style.display = 'none';
+    return;
+  }
+  
+  previewEl.style.display = '';
+  const items = [];
+  for (const p of COA_PARAMS) {
+    if (params[p.id] == null) continue;
+    const stored = p.convert(params[p.id]);
+    const inputDisplay = params[p.id].toFixed(p.id === 'thickness' ? 3 : 1);
+    let storeDisplay;
+    if (p.dbUnit !== p.displayUnit) {
+      storeDisplay = `${inputDisplay} ${p.displayUnit} → ${stored.toFixed(2)} ${p.dbUnit}`;
+    } else {
+      storeDisplay = `${inputDisplay} ${p.dbUnit}`;
+    }
+    items.push(`<div class="pv-item"><span class="pv-label">${p.label}:</span><span class="pv-val">${storeDisplay}</span></div>`);
+  }
+  gridEl.innerHTML = items.join('');
+}
+
+function clearCoaInputs() {
+  document.querySelectorAll('#coa-panel input').forEach(el => { el.value = ''; });
+  $('#coa-preview').style.display = 'none';
+}
+
+// Validate COA — for Muda, every param's min~max must be filled
+// Returns { ok: true } or { ok: false, msg: '...' }
+function validateCoaIfRequired() {
+  if (!isCoaSupplier()) return { ok: true };
+  
+  const missing = [];
+  for (const p of COA_PARAMS) {
+    const min = parseFloat($(`#coa-${p.id}-min`).value);
+    const max = parseFloat($(`#coa-${p.id}-max`).value);
+    if (isNaN(min) || isNaN(max)) missing.push(p.label);
+  }
+  if (missing.length) {
+    return { ok: false, msg: `กรุณากรอก COA ทุกพารามิเตอร์: ${missing.join(', ')}` };
+  }
+  // Picking list + delivery date ก็ต้องมี
+  if (!$('#coa-picking-list').value.trim()) {
+    return { ok: false, msg: 'กรุณาใส่ Picking List ใน COA' };
+  }
+  if (!$('#coa-delivery-date').value) {
+    return { ok: false, msg: 'กรุณาใส่ Delivery Date ใน COA' };
+  }
+  return { ok: true };
+}
+
+// Build COA records (1 record per inserted invoice/roll) for qa_bulk_import_coa RPC
+function buildCoaRecords(insertedInvoices) {
+  const { params, ranges } = readCoaInputs();
+  const pickingList = $('#coa-picking-list').value.trim();
+  const deliveryDate = $('#coa-delivery-date').value;
+  const substanceSpec = parseFloat($('#coa-substance-spec').value) || null;
+  
+  return insertedInvoices.map(inv => {
+    const rec = {
+      scope: 'roll',
+      paper_invoice_id: inv.id,
+      paper_lot: inv.paper_lot,
+      supplier: inv.supplier,
+      paper_type: inv.paper_type,
+      paper_category: inv.paper_category || null,
+      production_date: deliveryDate,
+      width_cm: inv.width_mm ? inv.width_mm / 10 : null,
+      source: 'paper_in_manual',
+      raw_data: {
+        coa_origin: 'manual_paper_in',
+        picking_list: pickingList,
+        substance_spec: substanceSpec,
+        ranges: ranges,   // {substance: [346,356], thickness: [0.53, 0.55], ...}
+        units_input: {     // เก็บหน่วยที่ user ใส่ (กันหายว่า kg/cm² vs kPa)
+          burst: 'kg/cm²',
+          thickness: 'mm',
+        },
+      },
+    };
+    
+    // Apply midpoint values to DB columns (with conversion)
+    for (const p of COA_PARAMS) {
+      if (params[p.id] == null) continue;
+      const stored = p.convert(params[p.id]);
+      // p.col might be string or array
+      const cols = Array.isArray(p.col) ? p.col : [p.col];
+      for (const c of cols) rec[c] = stored;
+    }
+    
+    return rec;
+  });
 }
 
 function addManualRoll() {
@@ -2594,8 +2931,8 @@ function updateManualSummary() {
   $('#m-total-weight').textContent = formatNumber(totalWeight);
 }
 
-function clearManual() {
-  if (!confirm('ล้างข้อมูลทั้งหมด?')) return;
+function resetManualForm() {
+  // ใช้หลัง save success — ไม่มี confirm
   state.manualRolls = [];
   $('#m-rolls-list').innerHTML = '';
   $('#m-supplier').value = '';
@@ -2604,7 +2941,15 @@ function clearManual() {
   $('#m-invoice-date').value = '';
   $('#m-receive-date').value = today();
   $('#m-notes').value = '';
+  clearCoaInputs();
+  updateCoaPanelVisibility();   // ซ่อน COA panel เมื่อ supplier reset
   addManualRoll();
+}
+
+function clearManual() {
+  // ใช้ตอน user กดปุ่ม "ล้างทั้งหมด"
+  if (!confirm('ล้างข้อมูลทั้งหมด?')) return;
+  resetManualForm();
 }
 
 async function saveManual() {
@@ -2618,6 +2963,14 @@ async function saveManual() {
   if (!supplier) { showToast('กรุณาเลือก Supplier', 'error'); return; }
   if (!invoiceNo) { showToast('กรุณาใส่เลข Invoice', 'error'); return; }
   if (!receiveDate) { showToast('กรุณาเลือกวันที่รับเข้า', 'error'); return; }
+  
+  // Validate COA — Muda only, all fields required
+  const coaCheck = validateCoaIfRequired();
+  if (!coaCheck.ok) {
+    showToast('❌ ' + coaCheck.msg, 'error');
+    $('#coa-panel').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
   
   // เก็บข้อมูลม้วน
   const items = $$('.roll-item');
@@ -2670,12 +3023,32 @@ async function saveManual() {
       return;
     }
     
-    const { error } = await supabase.from('paper_invoices').insert(rolls);
+    // Insert paper_invoices (.select() to get inserted rows + ids back)
+    const { data: insertedInvoices, error } = await supabase
+      .from('paper_invoices')
+      .insert(rolls)
+      .select('id, paper_lot, supplier, paper_type, paper_category, width_mm');
     if (error) throw error;
     
+    // ถ้า Muda → insert COA records ผ่าน RPC
+    if (isCoaSupplier() && insertedInvoices && insertedInvoices.length > 0) {
+      const coaRecords = buildCoaRecords(insertedInvoices);
+      try {
+        await supabase.rpc('qa_bulk_import_coa', { p_records: coaRecords });
+      } catch (coaErr) {
+        // COA insert ล้มเหลว — paper_invoices ลงไปแล้ว แค่เตือน user
+        console.error('COA insert failed:', coaErr);
+        hideLoading();
+        showToast(`⚠️ บันทึกม้วน ${rolls.length} ม้วนแล้ว แต่ COA ลงไม่ได้: ${coaErr.message || coaErr}`, 'error');
+        resetManualForm();
+        return;
+      }
+    }
+    
     hideLoading();
-    showToast(`✅ บันทึก ${rolls.length} ม้วนสำเร็จ`, 'success');
-    clearManual();
+    const coaMsg = isCoaSupplier() ? ` + COA ${insertedInvoices.length} record` : '';
+    showToast(`✅ บันทึก ${rolls.length} ม้วนสำเร็จ${coaMsg}`, 'success');
+    resetManualForm();
   } catch (e) {
     hideLoading();
     console.error(e);
