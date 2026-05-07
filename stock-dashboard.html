@@ -553,13 +553,17 @@ body {
   --ag-bucket-aging: #d94a3d;     /* warm red 61-90 */
   --ag-bucket-stale: #5b1f1a;     /* dark red 90+ */
   margin-top: 24px;
+  /* Override .section padding — let inner blocks handle their own */
+  padding: 0 !important;
+  background: transparent !important;
+  border: none !important;
 }
 
 /* Header with metric toggle */
 .ag-charts-header {
   display: flex; justify-content: space-between; align-items: center;
-  flex-wrap: wrap; gap: 12px; margin-bottom: 18px;
-  padding-bottom: 14px; border-bottom: 1px solid var(--border);
+  flex-wrap: wrap; gap: 12px; margin-bottom: 16px;
+  padding: 0 4px;
 }
 .ag-metric-toggle {
   display: flex; align-items: center; gap: 6px;
@@ -583,48 +587,49 @@ body {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 18px 22px;
-  margin-bottom: 16px;
+  padding: 22px 26px;
+  margin-bottom: 18px;
 }
 .ag-chart-header {
   display: flex; justify-content: space-between; align-items: flex-start;
-  flex-wrap: wrap; gap: 12px; margin-bottom: 14px;
+  flex-wrap: wrap; gap: 12px; margin-bottom: 18px;
 }
 .ag-chart-title {
-  font-size: 15px; font-weight: 700; color: var(--text);
+  font-size: 17px; font-weight: 700; color: var(--text);
   line-height: 1.3;
 }
 .ag-chart-sub {
-  font-size: 12px; color: var(--text-dim); font-weight: 400;
-  margin-top: 3px;
+  font-size: 13px; color: var(--text-dim); font-weight: 400;
+  margin-top: 4px;
 }
 
 /* Stacked bar legend */
 .ag-stacked-legend {
-  display: flex; gap: 14px; flex-wrap: wrap;
-  font-size: 12px; color: var(--text-dim);
+  display: flex; gap: 16px; flex-wrap: wrap;
+  font-size: 13px; color: var(--text-dim);
+  font-weight: 600;
 }
 .ag-stacked-legend .legend-item {
-  display: flex; align-items: center; gap: 5px;
+  display: flex; align-items: center; gap: 6px;
 }
 .ag-stacked-legend .swatch {
-  display: inline-block; width: 12px; height: 12px;
+  display: inline-block; width: 14px; height: 14px;
   border-radius: 3px;
 }
 .ag-stacked-legend .legend-item-unit {
-  margin-left: auto; color: var(--text-dim); font-weight: 600;
+  margin-left: auto; color: var(--text); font-weight: 700;
 }
 
 /* Stacked bar rows */
 .aging-stack-row {
   display: grid;
-  grid-template-columns: 110px 1fr 100px;
+  grid-template-columns: 130px 1fr 110px;
   align-items: center;
-  gap: 14px;
-  margin-bottom: 12px;
+  gap: 16px;
+  margin-bottom: 14px;
 }
 .aging-stack-row .stack-label {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 700;
   color: var(--text);
   text-align: right;
@@ -633,7 +638,7 @@ body {
 }
 .aging-stack-row .stack-bar {
   display: flex;
-  height: 32px;
+  height: 42px;
   border-radius: 6px;
   background: var(--panel-2);
   overflow: hidden;
@@ -644,13 +649,13 @@ body {
   display: flex; align-items: center; justify-content: center;
   color: white;
   font-family: var(--mono);
-  font-size: 12px; font-weight: 700;
+  font-size: 14px; font-weight: 700;
   overflow: hidden; white-space: nowrap;
-  padding: 0 4px;
+  padding: 0 6px;
 }
 .aging-stack-row .stack-val {
   font-family: var(--mono);
-  font-size: 13px; font-weight: 700;
+  font-size: 15px; font-weight: 700;
   color: var(--text);
   text-align: right;
 }
@@ -664,35 +669,35 @@ body {
 /* Heatmap grid */
 .aging-heatmap-grid {
   display: grid;
-  grid-template-columns: 130px repeat(4, 1fr) 80px;
-  gap: 3px;
+  grid-template-columns: 150px repeat(4, 1fr) 90px;
+  gap: 4px;
   margin-top: 8px;
 }
 .aging-heat-corner { background: transparent; }
 .aging-heat-head {
   background: var(--panel-2);
-  padding: 8px 4px;
+  padding: 12px 6px;
   text-align: center;
   border-radius: 6px;
-  display: flex; flex-direction: column; gap: 4px; align-items: center;
+  display: flex; flex-direction: column; gap: 6px; align-items: center;
 }
 .aging-heat-head .head-label {
   font-family: var(--mono);
-  font-size: 12px; font-weight: 700;
+  font-size: 14px; font-weight: 700;
   color: var(--text);
   line-height: 1;
 }
 .aging-heat-head .head-tag {
-  font-size: 10px; font-weight: 700;
+  font-size: 11px; font-weight: 700;
   color: white;
-  padding: 2px 8px;
+  padding: 3px 10px;
   border-radius: 10px;
   letter-spacing: 0.3px;
 }
 .aging-heat-rowlabel {
   background: var(--panel-2);
-  padding: 10px 12px;
-  font-size: 13px; font-weight: 700;
+  padding: 14px 14px;
+  font-size: 15px; font-weight: 700;
   color: var(--text);
   border-radius: 6px;
   display: flex; align-items: center;
@@ -700,20 +705,20 @@ body {
   font-family: 'IBM Plex Sans Thai', sans-serif;
 }
 .aging-heat-cell {
-  padding: 14px 6px;
+  padding: 18px 6px;
   text-align: center;
   font-family: var(--mono);
-  font-size: 14px; font-weight: 700;
+  font-size: 17px; font-weight: 700;
   color: var(--text);
   border-radius: 6px;
-  display: flex; flex-direction: column; gap: 2px; align-items: center; justify-content: center;
+  display: flex; flex-direction: column; gap: 3px; align-items: center; justify-content: center;
 }
 .aging-heat-cell .heat-sub {
-  font-size: 9px; font-weight: 500; opacity: 0.75;
+  font-size: 10px; font-weight: 500; opacity: 0.75;
 }
 
 /* Heatmap intensity — kept from Claude Design (warm earth tones) */
-.aging-heat-cell.h-0 { background: var(--panel-2); color: var(--text-muted); opacity: 0.55; font-size: 16px; }
+.aging-heat-cell.h-0 { background: var(--panel-2); color: var(--text-muted); opacity: 0.55; font-size: 20px; }
 .aging-heat-cell.h-1 { background: rgba(232,168,56,0.20); }   /* gold 20% */
 .aging-heat-cell.h-2 { background: rgba(232,168,56,0.45); }   /* gold 45% */
 .aging-heat-cell.h-3 { background: rgba(217,74,61,0.50); color: white; }   /* warm red 50% */
@@ -723,9 +728,9 @@ body {
 .aging-heat-total {
   background: var(--text);   /* dashboard's --text = #0f172a */
   color: white;
-  padding: 14px 6px;
+  padding: 18px 6px;
   font-family: var(--mono);
-  font-size: 14px; font-weight: 700;
+  font-size: 17px; font-weight: 700;
   text-align: center;
   border-radius: 6px;
   display: flex; align-items: center; justify-content: center;
@@ -2867,10 +2872,9 @@ function renderAgingV1Stacked(filtered) {
   
   // rows
   const rowsHTML = sorted.map(([sup, s]) => {
-    // sqrt scale: ลดความต่างระหว่าง supplier ใหญ่/เล็ก
-    // + กำหนด min 25% เพื่อให้ supplier เล็กยังอ่าน segment ได้
-    const sqrtRatio = Math.sqrt(s.total) / sqrtMaxTotal;
-    const barWidth = Math.max(25, sqrtRatio * 100);
+    // Linear scale — bar ของ supplier ใหญ่สุดยาวเต็ม, ที่เหลือเป็นสัดส่วนจริง
+    // อ่านง่าย, semantic ตรงไปตรงมา (ขนาด supplier × bucket distribution)
+    const barWidth = (s.total / maxTotal * 100);
     
     // segments — แต่ละ bucket
     const segs = AGING_BUCKET_KEYS.map(k => {
