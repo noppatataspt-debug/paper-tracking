@@ -513,6 +513,25 @@ body {
 .aging-export-btn.secondary { background: #6b7280; }
 .aging-export-btn.secondary:hover { background: #4b5563; }
 
+/* Aging insight banner — auto-detected pattern callouts */
+.aging-insight-banner {
+  background: #fffbeb;
+  border: 1.5px solid #fbbf24;
+  border-left: 4px solid #f59e0b;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.aging-insight-item {
+  font-size: 13px;
+  color: #78350f;
+  line-height: 1.5;
+}
+.aging-insight-item b { color: #451a03; }
+
 /* Sort toggle for Top 20 */
 .aging-sort-bar {
   display: flex; gap: 8px; margin-bottom: 10px; align-items: center;
@@ -2235,6 +2254,79 @@ function bucketKeyOfDays(d) {
   return 'over90';
 }
 
+// สร้าง SVG sparkline จาก array ตัวเลข 30 วัน
+// คืนค่า "—" ถ้าไม่มีการขายเลย
+function buildSparklineSVG(dailyKgs) {
+  if (!dailyKgs || dailyKgs.length === 0) {
+    return '<span style="color:var(--text-dim); font-size: 11px;">— ไม่มีขาย</span>';
+  }
+  const max = Math.max(...dailyKgs);
+  if (max === 0) {
+    return '<span style="color:var(--text-dim); font-size: 11px;">— ไม่มีขาย</span>';
+  }
+  const W = 80, H = 22;
+  const stepX = W / (dailyKgs.length - 1);
+  const points = dailyKgs.map((v, i) => {
+    const x = (i * stepX).toFixed(1);
+    const y = (H - 2 - (v / max) * (H - 4)).toFixed(1);
+    return `${x},${y}`;
+  }).join(' ');
+  // หาวันที่มีขายล่าสุด → จุดสีแดงทับ
+  let lastIdx = -1;
+  for (let i = dailyKgs.length - 1; i >= 0; i--) {
+    if (dailyKgs[i] > 0) { lastIdx = i; break; }
+  }
+  const lastDot = lastIdx >= 0
+    ? `<circle cx="${(lastIdx * stepX).toFixed(1)}" cy="${(H - 2 - (dailyKgs[lastIdx] / max) * (H - 4)).toFixed(1)}" r="2" fill="var(--accent)" />`
+    : '';
+  const totalKg = dailyKgs.reduce((s, v) => s + v, 0);
+  return `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="display:block;" title="ขายรวม 30 วัน: ${totalKg.toFixed(0)} kg">
+    <polyline points="${points}" fill="none" stroke="var(--accent)" stroke-width="1.3" stroke-linejoin="round" />
+    ${lastDot}
+  </svg>`;
+}
+
+// คำนวณ insights สำหรับ banner — คืนค่า array ของ insight messages
+function computeAgingInsights(filtered, filterLabel) {
+  const insights = [];
+  const over90 = filtered.filter(r => r.days > 90);
+  if (over90.length === 0) return insights;
+  
+  const totalOver90Value = over90.reduce((s, r) => s + r._value, 0);
+  const totalOver90Rolls = over90.length;
+  
+  // Insight 1: supplier ที่ครองสัดส่วนสูง > 50% ของของจม
+  const supValueMap = new Map();
+  for (const r of over90) {
+    const sup = r.supplier || '(ไม่ระบุ)';
+    supValueMap.set(sup, (supValueMap.get(sup) || 0) + r._value);
+  }
+  const topSup = [...supValueMap.entries()].sort((a, b) => b[1] - a[1])[0];
+  if (topSup && totalOver90Value > 0) {
+    const pct = (topSup[1] / totalOver90Value * 100);
+    if (pct >= 50) {
+      insights.push(`🎯 <b>${escapeHtml(topSup[0])}</b> ครอง <b>${pct.toFixed(0)}%</b> ของเงินจม > 90 วัน${filterLabel} → เจรจา/ส่งคืน supplier นี้ก่อน`);
+    } else if (pct >= 30) {
+      insights.push(`📌 <b>${escapeHtml(topSup[0])}</b> มีสัดส่วน ${pct.toFixed(0)}% ของเงินจม${filterLabel} (มากที่สุด)`);
+    }
+  }
+  
+  // Insight 2: ม้วนค้างนานสุด
+  const oldest = over90.reduce((max, r) => r.days > max.days ? r : max, over90[0]);
+  if (oldest && oldest.days >= 180) {
+    insights.push(`⏰ ม้วนเก่าสุดค้าง <b>${oldest.days} วัน</b> (${escapeHtml(oldest.paper_lot)} · ${escapeHtml(oldest.supplier || '—')}) → ควรพิจารณาตัดขาย/ตัดจำหน่าย`);
+  }
+  
+  // Insight 3: ม้วนนิ่ง (ไม่มี outflow ใน 30 วันล่าสุด)
+  const stuck = over90.filter(r => !r._spark || r._spark.every(v => v === 0));
+  if (stuck.length >= 5) {
+    const stuckPct = (stuck.length / over90.length * 100);
+    insights.push(`💤 มี <b>${stuck.length} ม้วน</b> (${stuckPct.toFixed(0)}%) ไม่มีการขายเลยใน 30 วันที่ผ่านมา`);
+  }
+  
+  return insights;
+}
+
 async function loadAging() {
   const myToken = newRequestToken('aging');
   const buckets = $('#agingBuckets');
@@ -2252,9 +2344,35 @@ async function loadAging() {
   try {
     const data = await fetchAllRows(() => supabase
       .from('paper_invoices')
-      .select('paper_lot, supplier, paper_type, paper_category, width_mm, weight_kg, remaining_weight_kg, receive_date, price_per_kg')
+      .select('id, paper_lot, supplier, paper_type, paper_category, width_mm, weight_kg, remaining_weight_kg, receive_date, price_per_kg')
       .eq('status', 'in_stock').not('receive_date', 'is', null));
     if (!isRequestStillCurrent('aging', myToken)) return;
+    
+    // โหลด outflow 30 วันล่าสุดสำหรับ sparkline trend
+    const today = new Date();
+    const startDate = new Date(today);
+    startDate.setDate(startDate.getDate() - 29);
+    const startDateStr = startDate.toISOString().split('T')[0];
+    
+    const recentOutflows = await fetchAllRows(() => supabase
+      .from('paper_outflows')
+      .select('paper_invoice_id, weight_kg, outflow_date')
+      .eq('voided', false)
+      .gte('outflow_date', startDateStr));
+    if (!isRequestStillCurrent('aging', myToken)) return;
+    
+    // จัด outflow เป็น Map<invoice_id, daily kg array (30 days)>
+    const sparkByInvoice = new Map();
+    for (const o of (recentOutflows || [])) {
+      if (!o.paper_invoice_id) continue;
+      const d = new Date(o.outflow_date);
+      const dayIdx = Math.floor((d - startDate) / 86400000);
+      if (dayIdx < 0 || dayIdx > 29) continue;
+      if (!sparkByInvoice.has(o.paper_invoice_id)) {
+        sparkByInvoice.set(o.paper_invoice_id, new Array(30).fill(0));
+      }
+      sparkByInvoice.get(o.paper_invoice_id)[dayIdx] += parseFloat(o.weight_kg) || 0;
+    }
     
     // Pre-compute fields for each row
     const withDays = [];
@@ -2265,7 +2383,8 @@ async function loadAging() {
       const price = parseFloat(r.price_per_kg) || 0;
       const value = kg * price;
       const cat = AGING_CATS.includes(r.paper_category) ? r.paper_category : null;
-      withDays.push({ ...r, days: d, _kg: kg, _value: value, _cat: cat });
+      const spark = sparkByInvoice.get(r.id) || null;  // null = ไม่มีการขายเลยใน 30 วัน
+      withDays.push({ ...r, days: d, _kg: kg, _value: value, _cat: cat, _spark: spark });
     }
     
     _agingData = withDays;
@@ -2355,6 +2474,13 @@ function renderAgingPage() {
         </div>
       </div>
     `;
+    
+    // เพิ่ม insight banner ใต้ KPI ถ้ามี insights
+    const insights = computeAgingInsights(filtered, filterLabel);
+    if (insights.length > 0) {
+      const insightHTML = insights.map(msg => `<div class="aging-insight-item">${msg}</div>`).join('');
+      banner.innerHTML += `<div class="aging-insight-banner">${insightHTML}</div>`;
+    }
     
     // wire export buttons
     const btnOver90 = document.getElementById('agingExportOver90Btn');
@@ -2477,6 +2603,7 @@ function renderAgingTop20() {
           ${showMoney ? '<th class="right">มูลค่า (฿)</th>' : ''}
           <th class="thai-text">วันรับเข้า</th>
           <th class="right">ค้าง (วัน)</th>
+          <th class="thai-text" style="text-align:center;">ขาย 30 วัน</th>
         </tr>
       </thead>
       <tbody>
@@ -2484,6 +2611,11 @@ function renderAgingTop20() {
   for (const r of top20) {
     const dayStyle = r.days > 90 ? 'style="color:var(--danger);font-weight:700;"' 
       : r.days > 60 ? 'style="color:var(--warning);font-weight:600;"' : '';
+    const sparkHTML = buildSparklineSVG(r._spark);
+    const totalSpark = r._spark ? r._spark.reduce((s, v) => s + v, 0) : 0;
+    const sparkTitle = totalSpark > 0 
+      ? `title="ขายรวม 30 วัน: ${totalSpark.toFixed(0)} kg"` 
+      : '';
     html += `
       <tr>
         <td>${escapeHtml(r.paper_lot)}</td>
@@ -2496,6 +2628,7 @@ function renderAgingTop20() {
         ${showMoney ? `<td class="right" style="font-weight:600;">${fmtMoney(r._value)}</td>` : ''}
         <td class="thai-text">${escapeHtml(r.receive_date || '—')}</td>
         <td class="right" ${dayStyle}>${r.days}</td>
+        <td style="text-align:center;" ${sparkTitle}>${sparkHTML}</td>
       </tr>
     `;
   }
