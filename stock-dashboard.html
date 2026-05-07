@@ -545,22 +545,144 @@ body {
 }
 .aging-sort-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
 
-/* Supplier breakdown */
-.aging-supplier-section { margin-top: 24px; }
-.aging-supplier-grid {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+/* === Aging charts (V1 stacked bar + V2 heatmap) === */
+.aging-charts-section { margin-top: 24px; }
+.aging-charts-header {
+  display: flex; justify-content: space-between; align-items: center;
+  flex-wrap: wrap; gap: 12px; margin-bottom: 18px;
+}
+.aging-metric-toggle {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--panel-2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 4px 4px 4px 10px;
+}
+.aging-metric-toggle .label { font-size: 12px; color: var(--text-dim); font-weight: 600; }
+.aging-metric-btn {
+  background: transparent; border: 1px solid transparent; border-radius: 6px;
+  padding: 4px 12px; font-size: 12px; font-weight: 600; cursor: pointer;
+  color: var(--text); transition: all 0.15s;
+}
+.aging-metric-btn:hover { background: var(--panel); }
+.aging-metric-btn.active { background: var(--accent); color: white; }
+
+.aging-chart-block {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}
+.aging-chart-title {
+  font-size: 14px; font-weight: 700; color: var(--text);
+  margin-bottom: 12px;
+}
+.aging-chart-title .aging-chart-sub {
+  font-weight: 400; font-size: 12px; color: var(--text-dim);
+  margin-left: 6px;
+}
+
+/* Stacked bar — V1 */
+.aging-stacked-bar-legend {
+  display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 12px;
+  font-size: 12px; color: var(--text-dim);
+}
+.aging-stacked-bar-legend .legend-item {
+  display: flex; align-items: center; gap: 5px;
+}
+.aging-stacked-bar-legend .swatch {
+  display: inline-block; width: 12px; height: 12px; border-radius: 3px;
+}
+.aging-stack-row {
+  display: grid;
+  grid-template-columns: 140px 1fr 90px;
+  align-items: center;
   gap: 10px;
+  margin-bottom: 6px;
 }
-.aging-supplier-card {
-  background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px;
-  padding: 12px 14px;
+.aging-stack-row .stack-label {
+  font-size: 13px; color: var(--text); font-weight: 600;
+  text-align: right;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.aging-supplier-card .sup-name { font-size: 13px; font-weight: 700; color: #7f1d1d; margin-bottom: 6px; }
-.aging-supplier-card .sup-stats {
-  display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+.aging-stack-row .stack-bar {
+  display: flex; height: 22px; border-radius: 4px; overflow: hidden;
+  background: #f3f4f6;
 }
-.aging-supplier-card .sup-rolls { font-size: 18px; font-weight: 700; font-family: var(--mono); color: #991b1b; }
-.aging-supplier-card .sup-detail { font-size: 11px; color: #7c2d12; font-family: var(--mono); text-align: right; }
+.aging-stack-row .stack-seg {
+  height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  color: white; font-size: 11px; font-weight: 700; font-family: var(--mono);
+  overflow: hidden; white-space: nowrap;
+  cursor: default;
+}
+.aging-stack-row .stack-val {
+  font-size: 12px; font-weight: 700; font-family: var(--mono);
+  color: var(--text); text-align: right;
+}
+
+/* Bucket colors (Fresh/Watch/Aging/Stale) */
+.aging-bucket-color-0-30  { background: #16a34a; }   /* green */
+.aging-bucket-color-31-60 { background: #eab308; }   /* yellow */
+.aging-bucket-color-61-90 { background: #f97316; }   /* orange */
+.aging-bucket-color-over90{ background: #991b1b; }   /* dark red */
+
+/* Heatmap — V2 */
+.aging-heatmap-grid {
+  display: grid;
+  grid-template-columns: 140px repeat(4, 1fr) 80px;
+  gap: 4px;
+  align-items: stretch;
+}
+.aging-heat-corner { background: transparent; }
+.aging-heat-head {
+  background: var(--panel-2);
+  padding: 8px 4px;
+  text-align: center;
+  font-size: 11px; font-weight: 700; color: var(--text);
+  border-radius: 4px;
+  display: flex; flex-direction: column; gap: 2px; align-items: center;
+}
+.aging-heat-head .head-label { font-family: var(--mono); }
+.aging-heat-head .head-tag {
+  font-size: 10px; font-weight: 600; color: white;
+  padding: 1px 6px; border-radius: 10px;
+}
+.aging-heat-rowlabel {
+  background: var(--panel-2);
+  padding: 8px 10px;
+  font-size: 12px; font-weight: 600; color: var(--text);
+  border-radius: 4px;
+  display: flex; align-items: center;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.aging-heat-cell {
+  padding: 12px 6px;
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 14px; font-weight: 700;
+  border-radius: 4px;
+  color: var(--text);
+  display: flex; flex-direction: column; gap: 2px; align-items: center; justify-content: center;
+}
+.aging-heat-cell .heat-sub { font-size: 9px; font-weight: 500; opacity: 0.75; }
+.aging-heat-cell.h-0 { background: #f3f4f6; color: var(--text-dim); }
+.aging-heat-cell.h-1 { background: #fef3c7; }
+.aging-heat-cell.h-2 { background: #fde68a; }
+.aging-heat-cell.h-3 { background: #fbbf24; color: #451a03; }
+.aging-heat-cell.h-4 { background: #f59e0b; color: white; }
+.aging-heat-cell.h-5 { background: #b45309; color: white; }
+.aging-heat-total {
+  background: #1f2937; color: white;
+  padding: 12px 6px;
+  font-family: var(--mono); font-size: 14px; font-weight: 700;
+  border-radius: 4px; text-align: center;
+  display: flex; align-items: center; justify-content: center;
+}
+
+@media (max-width: 768px) {
+  .aging-heatmap-grid { grid-template-columns: 100px repeat(4, 1fr) 60px; }
+  .aging-stack-row { grid-template-columns: 100px 1fr 70px; }
+}
 
 .trend-chart-wrap { position: relative; height: 320px; }
 
@@ -1278,9 +1400,27 @@ body {
       <div id="agingKpiBanner"></div>
       <div class="aging-buckets" id="agingBuckets"><div class="loading-state"><span class="loading"></span></div></div>
     </div>
-    <div class="section aging-supplier-section" id="agingSupplierSection" style="display:none;">
-      <div class="section-title" id="agingSupplierTitle">🏭 ม้วนค้าง > 90 วัน แยกตาม Supplier</div>
-      <div id="agingSupplierBreakdown"></div>
+    <div class="section aging-charts-section" id="agingChartsSection" style="display:none;">
+      <div class="aging-charts-header">
+        <div class="section-title" id="agingChartsTitle" style="margin: 0;">📊 ภาพรวม &gt; 90 วัน</div>
+        <div class="aging-metric-toggle">
+          <span class="label">หน่วย:</span>
+          <button class="aging-metric-btn active" data-metric="rolls">ม้วน</button>
+          <button class="aging-metric-btn" data-metric="kg">kg</button>
+          <button class="aging-metric-btn" data-metric="value" id="agingMetricValueBtn">มูลค่า (฿)</button>
+        </div>
+      </div>
+      
+      <div class="aging-chart-block">
+        <div class="aging-chart-title">🏭 Aging แยกตาม Supplier <span class="aging-chart-sub">(stacked bar — แสดงสัดส่วนแต่ละช่วงอายุ)</span></div>
+        <div class="aging-stacked-bar-legend" id="agingStackedLegend"></div>
+        <div id="agingStackedBar"></div>
+      </div>
+      
+      <div class="aging-chart-block">
+        <div class="aging-chart-title">📋 Heatmap: ประเภทกระดาษ × ช่วงอายุ <span class="aging-chart-sub">(สีเข้ม = ค่ามาก)</span></div>
+        <div id="agingHeatmap"></div>
+      </div>
     </div>
     <div class="section">
       <div class="section-title" id="agingTopTitle">🔝 Top 20 ม้วนที่ค้างนานที่สุด</div>
@@ -2231,6 +2371,7 @@ async function loadDetailPivot() {
 let _agingData = null;          // ข้อมูลทั้งหมดที่โหลด (ทุกประเภท)
 let _agingSortMode = 'days';    // 'days' | 'value' | 'kg'
 let _agingPageFilter = 'all';   // 'all' | 'Liner' | 'Grey-Board' | 'Core-Board'
+let _agingMetric = 'rolls';     // 'rolls' | 'kg' | 'value' (สำหรับ V1+V2 charts)
 
 const AGING_CATS = ['Liner', 'Grey-Board', 'Core-Board'];
 const AGING_BUCKET_KEYS = ['0-30', '31-60', '61-90', 'over90'];
@@ -2332,13 +2473,13 @@ async function loadAging() {
   const buckets = $('#agingBuckets');
   const tbl = $('#agingTable');
   const banner = $('#agingKpiBanner');
-  const supSection = $('#agingSupplierSection');
+  const chartsSection = $('#agingChartsSection');
   const sortBar = $('#agingSortBar');
   
   buckets.innerHTML = '<div class="loading-state"><span class="loading"></span></div>';
   tbl.innerHTML = '<div class="loading-state"><span class="loading"></span></div>';
   banner.innerHTML = '';
-  supSection.style.display = 'none';
+  chartsSection.style.display = 'none';
   sortBar.style.display = 'none';
   
   try {
@@ -2409,6 +2550,23 @@ async function loadAging() {
       };
     });
     
+    // Wire metric toggle (rolls / kg / value) — applies to V1 + V2 charts
+    document.querySelectorAll('.aging-metric-btn').forEach(btn => {
+      btn.onclick = () => {
+        _agingMetric = btn.dataset.metric;
+        document.querySelectorAll('.aging-metric-btn').forEach(b => 
+          b.classList.toggle('active', b.dataset.metric === _agingMetric));
+        renderAgingCharts();
+      };
+    });
+    // Hide value button if not manager
+    if (!isManager()) {
+      const valueBtn = document.getElementById('agingMetricValueBtn');
+      if (valueBtn) valueBtn.style.display = 'none';
+      // Force metric to rolls if user landed with value selected (shouldn't happen but defensive)
+      if (_agingMetric === 'value') _agingMetric = 'rolls';
+    }
+    
     if (!isRequestStillCurrent('aging', myToken)) return;
     renderAgingPage();
   } catch (err) {
@@ -2422,10 +2580,10 @@ function renderAgingPage() {
   
   const buckets = $('#agingBuckets');
   const banner = $('#agingKpiBanner');
-  const supSection = $('#agingSupplierSection');
+  const chartsSection = $('#agingChartsSection');
   const sortBar = $('#agingSortBar');
   const sectionTitle = $('#agingSectionTitle');
-  const supplierTitle = $('#agingSupplierTitle');
+  const chartsTitle = $('#agingChartsTitle');
   const topTitle = $('#agingTopTitle');
   
   // 1) filter data ตาม page filter
@@ -2435,7 +2593,7 @@ function renderAgingPage() {
   
   const filterLabel = _agingPageFilter === 'all' ? '' : ` — ${_agingPageFilter}`;
   sectionTitle.textContent = `⏰ รายงานม้วนค้าง Stock (Aging Report)${filterLabel}`;
-  supplierTitle.textContent = `🏭 ม้วนค้าง > 90 วัน แยกตาม Supplier${filterLabel}`;
+  chartsTitle.textContent = `📊 ภาพรวม > 90 วัน${filterLabel}`;
   topTitle.textContent = `🔝 Top 20 ม้วนที่ค้างนานที่สุด${filterLabel}`;
   
   // 2) คำนวณ buckets
@@ -2511,44 +2669,13 @@ function renderAgingPage() {
     buckets.innerHTML = AGING_BUCKET_KEYS.map(bucketCell).join('');
   }
   
-  // 5) Supplier breakdown (> 90 วัน, ในกลุ่มที่เลือก)
+  // 5) V1 Stacked bar + V2 Heatmap (charts ของ > 90 วัน, ในกลุ่มที่เลือก)
   const over90Rows = filtered.filter(r => r.days > 90);
   if (over90Rows.length > 0) {
-    const supMap = new Map();
-    for (const r of over90Rows) {
-      const sup = r.supplier || '(ไม่ระบุ)';
-      if (!supMap.has(sup)) supMap.set(sup, { rolls: 0, kg: 0, value: 0, maxDays: 0 });
-      const s = supMap.get(sup);
-      s.rolls++;
-      s.kg += r._kg;
-      s.value += r._value;
-      if (r.days > s.maxDays) s.maxDays = r.days;
-    }
-    const supSorted = [...supMap.entries()].sort((a, b) => 
-      showMoney ? b[1].value - a[1].value : b[1].rolls - a[1].rolls
-    );
-    
-    const supCards = supSorted.map(([sup, s]) => {
-      const valueLine = showMoney ? `<div>${fmtMoney(s.value)}</div>` : '';
-      return `
-        <div class="aging-supplier-card">
-          <div class="sup-name">${escapeHtml(sup)}</div>
-          <div class="sup-stats">
-            <div class="sup-rolls">${fmtNum(s.rolls)} ม้วน</div>
-            <div class="sup-detail">
-              ${fmtNum(Math.round(s.kg))} kg
-              ${valueLine}
-              <div style="margin-top:2px;">นานสุด ${s.maxDays} วัน</div>
-            </div>
-          </div>
-        </div>
-      `;
-    }).join('');
-    
-    $('#agingSupplierBreakdown').innerHTML = `<div class="aging-supplier-grid">${supCards}</div>`;
-    supSection.style.display = '';
+    chartsSection.style.display = '';
+    renderAgingCharts();  // ใช้ filtered/over90Rows ภายใน — อ่าน state เอง
   } else {
-    supSection.style.display = 'none';
+    chartsSection.style.display = 'none';
   }
   
   // 6) Top 20
@@ -2559,6 +2686,217 @@ function renderAgingPage() {
     sortBar.style.display = '';
     renderAgingTop20();
   }
+}
+
+// === V1 Stacked bar + V2 Heatmap renderers ===
+// อ่าน state จาก _agingData, _agingPageFilter, _agingMetric — เรียกซ้ำได้
+function renderAgingCharts() {
+  if (!_agingData) return;
+  const filtered = _agingPageFilter === 'all' 
+    ? _agingData 
+    : _agingData.filter(r => r._cat === _agingPageFilter);
+  const over90Rows = filtered.filter(r => r.days > 90);
+  if (over90Rows.length === 0) return;
+  
+  // ถ้า user ไม่ใช่ manager แต่ metric = value (defensive) → fallback rolls
+  if (!isManager() && _agingMetric === 'value') _agingMetric = 'rolls';
+  
+  renderAgingV1Stacked(filtered);   // ทุก bucket — เพื่อให้เห็นสัดส่วนเต็ม
+  renderAgingV2Heatmap(filtered);
+}
+
+// V1: Stacked bar — แต่ละ supplier ใช้ทุก bucket (0-30, 31-60, 61-90, 90+)
+// metric = rolls/kg/value ตาม _agingMetric
+// เรียงจาก over90 มาก → น้อย (เพราะ user สนใจของจม)
+function renderAgingV1Stacked(filtered) {
+  const wrap = $('#agingStackedBar');
+  const legendWrap = $('#agingStackedLegend');
+  if (!wrap) return;
+  
+  const metric = _agingMetric;
+  const metricKey = metric === 'rolls' ? 'rolls' : metric === 'kg' ? 'kg' : 'value';
+  const metricLabel = metric === 'rolls' ? 'ม้วน' : metric === 'kg' ? 'kg' : '฿';
+  const fmtVal = v => {
+    if (metric === 'rolls') return fmtNum(v) + ' ม้วน';
+    if (metric === 'kg') return fmtNum(Math.round(v)) + ' kg';
+    return fmtMoney(v);
+  };
+  const fmtSeg = v => {
+    if (metric === 'rolls') return fmtNum(v);
+    if (metric === 'kg') return fmtNum(Math.round(v));
+    // value: ใช้ฟอร์แมตสั้น เช่น 1.2M, 350K
+    if (v >= 1_000_000) return (v / 1_000_000).toFixed(1) + 'M';
+    if (v >= 1_000) return Math.round(v / 1_000) + 'K';
+    return fmtNum(Math.round(v));
+  };
+  
+  // group by supplier × bucket
+  const supMap = new Map();
+  for (const r of filtered) {
+    const sup = r.supplier || '(ไม่ระบุ)';
+    if (!supMap.has(sup)) {
+      supMap.set(sup, { '0-30': { rolls: 0, kg: 0, value: 0 }, '31-60': { rolls: 0, kg: 0, value: 0 }, '61-90': { rolls: 0, kg: 0, value: 0 }, 'over90': { rolls: 0, kg: 0, value: 0 }, total: 0, over90Total: 0 });
+    }
+    const s = supMap.get(sup);
+    const bk = bucketKeyOfDays(r.days);
+    s[bk].rolls++;
+    s[bk].kg += r._kg;
+    s[bk].value += r._value;
+    s.total += metric === 'rolls' ? 1 : metric === 'kg' ? r._kg : r._value;
+    if (r.days > 90) s.over90Total += metric === 'rolls' ? 1 : metric === 'kg' ? r._kg : r._value;
+  }
+  
+  // sort by over90 (ของจม) มาก → น้อย ตาม metric ที่เลือก
+  const sorted = [...supMap.entries()].sort((a, b) => b[1].over90Total - a[1].over90Total);
+  
+  // หา max total (สำหรับ scale)
+  const maxTotal = Math.max(...sorted.map(([, s]) => s.total), 1);
+  
+  // legend
+  const legendHTML = AGING_BUCKET_KEYS.map(k => `
+    <div class="legend-item">
+      <span class="swatch aging-bucket-color-${k}"></span>
+      <span>${AGING_BUCKET_LABELS[k]}</span>
+    </div>
+  `).join('');
+  legendWrap.innerHTML = legendHTML + `<div class="legend-item" style="margin-left:auto;color:var(--text-dim);">หน่วย: ${metricLabel}</div>`;
+  
+  // rows
+  const rowsHTML = sorted.map(([sup, s]) => {
+    const barWidth = (s.total / maxTotal * 100);  // % เทียบกับ supplier ที่ใหญ่สุด
+    
+    // segments — แต่ละ bucket
+    const segs = AGING_BUCKET_KEYS.map(k => {
+      const v = s[k][metricKey];
+      if (v === 0) return '';
+      const pctOfRow = (v / s.total * 100);
+      // แสดง label เฉพาะถ้า segment กว้างพอ (>= 8% ของ row)
+      const showLabel = pctOfRow >= 8;
+      return `<div class="stack-seg aging-bucket-color-${k}" style="width:${pctOfRow.toFixed(2)}%;" title="${AGING_BUCKET_LABELS[k]}: ${fmtVal(v)}">${showLabel ? fmtSeg(v) : ''}</div>`;
+    }).join('');
+    
+    return `
+      <div class="aging-stack-row">
+        <div class="stack-label" title="${escapeHtml(sup)}">${escapeHtml(sup)}</div>
+        <div class="stack-bar" style="width:${barWidth.toFixed(2)}%;">${segs}</div>
+        <div class="stack-val">${fmtVal(s.total)}</div>
+      </div>
+    `;
+  }).join('');
+  
+  wrap.innerHTML = rowsHTML || `<div class="empty-msg">ไม่มีข้อมูล</div>`;
+}
+
+// V2: Heatmap — Paper Type × Bucket
+function renderAgingV2Heatmap(filtered) {
+  const wrap = $('#agingHeatmap');
+  if (!wrap) return;
+  
+  const metric = _agingMetric;
+  const metricKey = metric === 'rolls' ? 'rolls' : metric === 'kg' ? 'kg' : 'value';
+  const fmtCell = v => {
+    if (v === 0) return '0';
+    if (metric === 'rolls') return fmtNum(v);
+    if (metric === 'kg') return fmtNum(Math.round(v));
+    if (v >= 1_000_000) return '฿' + (v / 1_000_000).toFixed(1) + 'M';
+    if (v >= 1_000) return '฿' + Math.round(v / 1_000) + 'K';
+    return '฿' + fmtNum(Math.round(v));
+  };
+  const subUnit = metric === 'rolls' ? '' : metric === 'kg' ? 'kg' : '';
+  
+  // group by paper_type × bucket
+  const ptMap = new Map();
+  for (const r of filtered) {
+    const pt = r.paper_type || '(ไม่ระบุ)';
+    if (!ptMap.has(pt)) {
+      ptMap.set(pt, {
+        '0-30':  { rolls: 0, kg: 0, value: 0 },
+        '31-60': { rolls: 0, kg: 0, value: 0 },
+        '61-90': { rolls: 0, kg: 0, value: 0 },
+        'over90':{ rolls: 0, kg: 0, value: 0 },
+        total: 0
+      });
+    }
+    const s = ptMap.get(pt);
+    const bk = bucketKeyOfDays(r.days);
+    s[bk].rolls++;
+    s[bk].kg += r._kg;
+    s[bk].value += r._value;
+    s.total += metric === 'rolls' ? 1 : metric === 'kg' ? r._kg : r._value;
+  }
+  
+  // sort by total desc — เอาเฉพาะ top 12 paper types (เพื่อไม่ให้ table ยาวเกิน)
+  const sorted = [...ptMap.entries()].sort((a, b) => b[1].total - a[1].total).slice(0, 12);
+  
+  if (sorted.length === 0) {
+    wrap.innerHTML = `<div class="empty-msg">ไม่มีข้อมูล</div>`;
+    return;
+  }
+  
+  // หา max value ในทุก cell (ทุก paper_type × ทุก bucket) สำหรับ intensity
+  let maxCellVal = 0;
+  for (const [, s] of sorted) {
+    for (const k of AGING_BUCKET_KEYS) {
+      if (s[k][metricKey] > maxCellVal) maxCellVal = s[k][metricKey];
+    }
+  }
+  
+  // intensity bin: 0 → h-0 (empty), >0 → h-1..h-5 ตามสัดส่วน
+  const intensityClass = v => {
+    if (v === 0) return 'h-0';
+    if (maxCellVal === 0) return 'h-0';
+    const ratio = v / maxCellVal;
+    if (ratio < 0.10) return 'h-1';
+    if (ratio < 0.30) return 'h-2';
+    if (ratio < 0.55) return 'h-3';
+    if (ratio < 0.80) return 'h-4';
+    return 'h-5';
+  };
+  
+  // header row
+  const bucketTagColors = {
+    '0-30':  '#16a34a',
+    '31-60': '#eab308',
+    '61-90': '#f97316',
+    'over90':'#991b1b'
+  };
+  let html = `<div class="aging-heatmap-grid">`;
+  html += `<div class="aging-heat-corner"></div>`;
+  for (const k of AGING_BUCKET_KEYS) {
+    const tagText = k === '0-30' ? 'Fresh' : k === '31-60' ? 'Watch' : k === '61-90' ? 'Aging' : 'Stale';
+    html += `<div class="aging-heat-head">
+      <div class="head-label">${k === 'over90' ? '90+' : k}d</div>
+      <div class="head-tag" style="background:${bucketTagColors[k]};">${tagText}</div>
+    </div>`;
+  }
+  html += `<div class="aging-heat-head"><div class="head-label">รวม</div></div>`;
+  
+  // body rows
+  for (const [pt, s] of sorted) {
+    html += `<div class="aging-heat-rowlabel" title="${escapeHtml(pt)}">${escapeHtml(pt)}</div>`;
+    for (const k of AGING_BUCKET_KEYS) {
+      const v = s[k][metricKey];
+      const cls = intensityClass(v);
+      const subText = subUnit && v > 0 ? `<div class="heat-sub">${subUnit}</div>` : '';
+      const titleText = `${escapeHtml(pt)} · ${AGING_BUCKET_LABELS[k]}: ${fmtCell(v)}${subUnit ? ' ' + subUnit : ''}`;
+      html += `<div class="aging-heat-cell ${cls}" title="${titleText}">
+        <div>${fmtCell(v)}</div>
+        ${subText}
+      </div>`;
+    }
+    html += `<div class="aging-heat-total">${fmtCell(s.total)}</div>`;
+  }
+  
+  html += `</div>`;
+  
+  // ถ้ามี > 12 paper_type ที่ตัดออก แสดง note
+  if (ptMap.size > 12) {
+    html += `<div style="margin-top:10px; font-size:12px; color:var(--text-dim); font-style:italic;">
+      💡 แสดง top 12 ประเภทกระดาษ จากทั้งหมด ${ptMap.size} ประเภท
+    </div>`;
+  }
+  
+  wrap.innerHTML = html;
 }
 
 function renderAgingTop20() {
