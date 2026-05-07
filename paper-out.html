@@ -29,7 +29,13 @@
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background: var(--bg);
+  /* subtle warm gradient — red theme matching brand */
+  background:
+    radial-gradient(ellipse at 0% 0%, rgba(220,38,38,0.06) 0%, transparent 50%),
+    radial-gradient(ellipse at 100% 100%, rgba(217,119,6,0.04) 0%, transparent 50%),
+    linear-gradient(180deg, #fef2f2 0%, #f9fafb 200px, #f9fafb 100%);
+  background-attachment: fixed;
+  min-height: 100vh;
   color: var(--text);
   font-size: 14px;
   line-height: 1.5;
@@ -320,44 +326,72 @@ body {
 .group-day-header {
   background: #1f2937;
   color: white;
-  padding: 12px 16px;
+  padding: 14px 18px;
   font-weight: 700;
-  font-size: 14px;
+  font-size: 15px;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
 }
+.group-day-header:hover { background: #111827; }
 .group-day-header .day-stats {
-  font-size: 12px;
-  opacity: 0.8;
+  font-size: 13px;
+  opacity: 0.85;
   font-weight: 500;
 }
+.group-day-header .toggle-icon {
+  display: inline-block;
+  width: 20px; text-align: center;
+  margin-right: 8px;
+  transition: transform 0.2s;
+  font-size: 13px;
+}
+.group-day.collapsed .group-day-header .toggle-icon { transform: rotate(-90deg); }
+.group-day.collapsed .group-machine { display: none; }
+
 .group-machine {
   border-bottom: 1px solid var(--border);
 }
 .group-machine:last-child { border-bottom: none; }
 .group-machine-header {
   background: #f3f4f6;
-  padding: 8px 16px;
-  font-size: 13px;
+  padding: 12px 18px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--text);
   display: flex;
   justify-content: space-between;
   align-items: center;
   border-top: 1px solid var(--border);
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
 }
+.group-machine-header:hover { background: #e5e7eb; }
 .group-machine-header:first-child { border-top: none; }
 .group-machine-header .m-stats {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-dim);
   font-weight: 500;
 }
+.group-machine-header .toggle-icon {
+  display: inline-block;
+  width: 18px; text-align: center;
+  margin-right: 6px;
+  transition: transform 0.2s;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.group-machine.collapsed .group-machine-header .toggle-icon { transform: rotate(-90deg); }
+.group-machine.collapsed .outflow-row { display: none; }
 
 .outflow-row {
-  display: grid; grid-template-columns: 95px 130px 1fr auto;
-  gap: 8px; padding: 10px 16px; border-top: 1px solid var(--border);
-  align-items: center; font-size: 13px; transition: background 0.15s;
+  display: grid; grid-template-columns: 110px 160px 1fr auto;
+  gap: 12px; padding: 14px 18px; border-top: 1px solid var(--border);
+  align-items: center; font-size: 14px; transition: background 0.15s;
 }
 .outflow-row:hover { background: var(--bg); }
 .outflow-row.voided { opacity: 0.5; text-decoration: line-through; }
@@ -367,14 +401,14 @@ body {
 }
 .outflow-row.prestock:hover { background: #fed7aa; }
 
-.outflow-time { color: var(--text-dim); font-size: 12px; font-family: var(--mono); }
-.outflow-lot { font-family: var(--mono); font-weight: 700; font-size: 14px; }
+.outflow-time { color: var(--text-dim); font-size: 13px; font-family: var(--mono); }
+.outflow-lot { font-family: var(--mono); font-weight: 700; font-size: 16px; }
 .outflow-lot .prestock-icon {
   display: inline-block;
   margin-right: 4px;
   color: var(--warning);
 }
-.outflow-info { font-size: 12px; color: var(--text-dim); }
+.outflow-info { font-size: 13px; color: var(--text-dim); }
 .outflow-info b { color: var(--text); font-weight: 600; }
 .outflow-prestock-tag {
   display: inline-block;
@@ -388,8 +422,8 @@ body {
 }
 .outflow-undo {
   background: none; border: 1px solid var(--border-strong);
-  color: var(--text-dim); padding: 4px 10px; border-radius: 6px;
-  font-size: 12px; cursor: pointer; font-weight: 600;
+  color: var(--text-dim); padding: 6px 12px; border-radius: 6px;
+  font-size: 13px; cursor: pointer; font-weight: 600;
 }
 .outflow-undo:hover { background: var(--primary-light); color: var(--primary); border-color: var(--primary); }
 
@@ -1581,9 +1615,9 @@ function renderList() {
     });
     
     return `
-      <div class="group-day">
-        <div class="group-day-header">
-          <span>📅 ${fmtDateLong(date)}</span>
+      <div class="group-day" data-day="${escapeHtml(date)}">
+        <div class="group-day-header" data-toggle="day">
+          <span><span class="toggle-icon">▼</span>📅 ${fmtDateLong(date)}</span>
           <span class="day-stats">${totalRolls} ม้วน · ${totalKg} kg</span>
         </div>
         ${sortedMachines.map(m => {
@@ -1598,9 +1632,9 @@ function renderList() {
           const mLabel = MACHINE_LABELS[m] || `❓ ${m}`;
           
           return `
-            <div class="group-machine">
-              <div class="group-machine-header">
-                <span>${mLabel}</span>
+            <div class="group-machine" data-machine="${escapeHtml(date)}::${escapeHtml(m)}">
+              <div class="group-machine-header" data-toggle="machine">
+                <span><span class="toggle-icon">▼</span>${mLabel}</span>
                 <span class="m-stats">${mRolls} ม้วน · ${mKg} kg</span>
               </div>
               ${rows.map(o => `
@@ -1633,7 +1667,60 @@ function renderList() {
       </div>
     `;
   }).join('');
+  
+  // Restore collapsed states from localStorage
+  applyCollapsedStates();
 }
+
+// === Collapse/expand state management ===
+const COLLAPSE_KEY = 'paperOut.collapsedGroups';
+function getCollapsedSet() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(COLLAPSE_KEY) || '[]'));
+  } catch { return new Set(); }
+}
+function saveCollapsedSet(set) {
+  try { localStorage.setItem(COLLAPSE_KEY, JSON.stringify([...set])); } catch {}
+}
+function applyCollapsedStates() {
+  const collapsed = getCollapsedSet();
+  document.querySelectorAll('.group-day').forEach(el => {
+    const key = 'day::' + el.dataset.day;
+    if (collapsed.has(key)) el.classList.add('collapsed');
+  });
+  document.querySelectorAll('.group-machine').forEach(el => {
+    const key = 'machine::' + el.dataset.machine;
+    if (collapsed.has(key)) el.classList.add('collapsed');
+  });
+}
+
+// Single delegated click handler for toggles
+document.getElementById('outflowList').addEventListener('click', (e) => {
+  const dayHeader = e.target.closest('.group-day-header');
+  const machineHeader = e.target.closest('.group-machine-header');
+  
+  if (dayHeader) {
+    // Don't toggle if click came from inside outflow-row (shouldn't happen with closest, but safety)
+    const dayEl = dayHeader.closest('.group-day');
+    if (!dayEl) return;
+    dayEl.classList.toggle('collapsed');
+    const collapsed = getCollapsedSet();
+    const key = 'day::' + dayEl.dataset.day;
+    if (dayEl.classList.contains('collapsed')) collapsed.add(key); else collapsed.delete(key);
+    saveCollapsedSet(collapsed);
+    return;
+  }
+  
+  if (machineHeader) {
+    const machineEl = machineHeader.closest('.group-machine');
+    if (!machineEl) return;
+    machineEl.classList.toggle('collapsed');
+    const collapsed = getCollapsedSet();
+    const key = 'machine::' + machineEl.dataset.machine;
+    if (machineEl.classList.contains('collapsed')) collapsed.add(key); else collapsed.delete(key);
+    saveCollapsedSet(collapsed);
+  }
+});
 
 function renderStats() {
   const today = new Date().toISOString().split('T')[0];
