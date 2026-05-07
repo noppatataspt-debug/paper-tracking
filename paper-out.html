@@ -1167,8 +1167,71 @@ function buildScgLot() {
   return `${s1}-${s2}-${s3}-${s4}`;
 }
 
+// Smart parser — รับได้หลาย format:
+//   - "77-6-A1937-4G"  (full dashed)
+//   - "77-6-1937-4G"   (no A prefix, will add)
+//   - "776A19374G"     (no dashes)
+//   - "776 A1937 4G"   (with spaces)
+// คืน {s1, s2, s3, s4} ถ้า parse ได้, null ถ้า parse ไม่ได้
+function parseScgLot(raw) {
+  if (!raw) return null;
+  const cleaned = raw.trim().toUpperCase();
+  
+  // Format 1: dashed — split by '-'
+  if (cleaned.includes('-')) {
+    const parts = cleaned.split('-').map(p => p.trim()).filter(p => p !== '');
+    if (parts.length === 4) {
+      return {
+        s1: parts[0].slice(0, 2),
+        s2: parts[1].slice(0, 1),
+        s3: parts[2].replace(/^A/, '').slice(0, 4),
+        s4: parts[3].slice(0, 2)
+      };
+    }
+    return null;  // ไม่ใช่ 4 parts — parse ไม่ได้
+  }
+  
+  // Format 2: compact — strip non-alphanumeric, ใช้ regex จับ pattern XX#A####XA หรือ XX####XA (ไม่มี A)
+  const compact = cleaned.replace(/[^A-Z0-9]/g, '');
+  // Pattern A: XX#A####XA  (10 ตัว, มี A ที่ position 3)
+  let m = compact.match(/^([0-9]{2})([0-9])A([0-9]{4})([0-9][A-Z])$/);
+  if (m) {
+    return { s1: m[1], s2: m[2], s3: m[3], s4: m[4] };
+  }
+  // Pattern B: XX#####XA  (9 ตัว, ไม่มี A หน้าเลข 4 ตัว)
+  m = compact.match(/^([0-9]{2})([0-9])([0-9]{4})([0-9][A-Z])$/);
+  if (m) {
+    return { s1: m[1], s2: m[2], s3: m[3], s4: m[4] };
+  }
+  return null;
+}
+
+function applyScgParsedLot(parsed) {
+  scgS1.value = parsed.s1;
+  scgS2.value = parsed.s2;
+  scgS3.value = parsed.s3;
+  scgS4.value = parsed.s4;
+  // Trigger sync (ใน input handler) ผ่าน synthetic input event
+  scgS4.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
 // Auto-tab: เมื่อพิมพ์ครบ → ย้ายไปช่องถัดไป
 scgInputs.forEach((input, idx) => {
+  // === Paste handler — ดักก่อน input event เพื่อ split ลงทุกช่อง ===
+  input.addEventListener('paste', e => {
+    const pasted = (e.clipboardData || window.clipboardData).getData('text');
+    if (!pasted) return;
+    const parsed = parseScgLot(pasted);
+    if (parsed) {
+      e.preventDefault();
+      applyScgParsedLot(parsed);
+      // Focus ช่องสุดท้าย + cursor ที่ท้าย (พร้อมแก้ถ้าผิด)
+      scgS4.focus();
+      scgS4.setSelectionRange(scgS4.value.length, scgS4.value.length);
+    }
+    // ถ้า parse ไม่ได้ → ปล่อยให้ default paste behavior ทำงาน (จะติด maxlength)
+  });
+  
   input.addEventListener('input', e => {
     e.target.value = e.target.value.toUpperCase();
     
