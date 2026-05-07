@@ -882,6 +882,16 @@
 
       <div class="form-grid-2">
         <div>
+          <label class="field-label">Supplier <span style="font-size:11px; color:var(--text-dim); font-weight:normal;">(ปล่อยว่าง = ใช้ทุก supplier)</span></label>
+          <select id="sp-supplier">
+            <option value="">— ทั้งหมด (generic) —</option>
+            <option value="SCG">SCG</option>
+            <option value="Muda">Muda</option>
+            <option value="UTP">UTP</option>
+            <option value="MPK">MPK</option>
+          </select>
+        </div>
+        <div>
           <label class="field-label">Paper Category</label>
           <select id="sp-category">
             <option value="">— ไม่ระบุ —</option>
@@ -957,7 +967,7 @@
           <input type="file" id="sp-bulk-file" accept=".csv" style="display:none;">
         </div>
         <textarea id="sp-bulk-text" rows="8" style="font-family: var(--mono); font-size: 13px;"
-          placeholder="paper_category,paper_type,parameter,min_value,max_value,target_value,source&#10;Core-Board,CBS350,basis_weight,336,364,350,SCG datasheet&#10;Core-Board,CBS350,burst,500,,,SCG datasheet&#10;..."></textarea>
+          placeholder="supplier,paper_category,paper_type,parameter,min_value,max_value,target_value,source&#10;SCG,Core-Board,CBS350,basis_weight,336,364,350,SCG datasheet&#10;Muda,Core-Board,CBS350,basis_weight,332.5,367.5,350,Muda datasheet&#10;..."></textarea>
       </div>
       <div style="display:flex; gap:8px; flex-wrap:wrap;">
         <button class="btn" id="sp-bulk-preview">🔍 Preview</button>
@@ -1611,7 +1621,7 @@ async function loadMonitor() {
         cat = r.paper_invoices?.paper_category || r.paper_category;
         if (cat) break;
       }
-      renderSmallMultiples(chartId, rows, dateField, activeParams, specs, cat, pt);
+      renderSmallMultiples(chartId, rows, dateField, activeParams, specs, cat, pt, supplier);
     }
   } catch (e) {
     console.error(e);
@@ -1626,7 +1636,9 @@ async function loadSpecs() {
     const data = await callRPCList('qa_list_specs');
     const map = {};
     for (const s of (data || [])) {
-      const key = `${s.paper_category||''}|${s.paper_type||''}|${s.parameter}`;
+      // Key includes supplier (use '__GENERIC__' for null = applies to any supplier)
+      const supKey = s.supplier || '__GENERIC__';
+      const key = `${supKey}|${s.paper_category||''}|${s.paper_type||''}|${s.parameter}`;
       map[key] = s;
     }
     state.specs = map;
@@ -1638,24 +1650,38 @@ async function loadSpecs() {
   }
 }
 
-// หา spec ที่ตรงสุด (priority: paper_type > paper_category)
-function findSpec(specs, category, paperType, parameter) {
-  if (paperType) {
-    const k1 = `${category||''}|${paperType}|${parameter}`;
-    if (specs[k1]) return specs[k1];
-    // fallback: ตัด category — เผื่อ spec บันทึกแบบไม่ใส่ category
-    const k2 = `|${paperType}|${parameter}`;
-    if (specs[k2]) return specs[k2];
+// หา spec ที่ตรงสุด — priority order:
+//   1. supplier-specific + category + type
+//   2. supplier-specific + type alone
+//   3. supplier-specific + category alone
+//   4. generic + category + type
+//   5. generic + type alone
+//   6. generic + category alone
+function findSpec(specs, category, paperType, parameter, supplier) {
+  const tryKeys = (sup) => {
+    if (paperType) {
+      const k1 = `${sup}|${category||''}|${paperType}|${parameter}`;
+      if (specs[k1]) return specs[k1];
+      const k2 = `${sup}||${paperType}|${parameter}`;
+      if (specs[k2]) return specs[k2];
+    }
+    if (category) {
+      const k3 = `${sup}|${category}||${parameter}`;
+      if (specs[k3]) return specs[k3];
+    }
+    return null;
+  };
+  // First try supplier-specific
+  if (supplier) {
+    const found = tryKeys(supplier);
+    if (found) return found;
   }
-  if (category) {
-    const k3 = `${category}||${parameter}`;
-    if (specs[k3]) return specs[k3];
-  }
-  return null;
+  // Fallback to generic spec
+  return tryKeys('__GENERIC__');
 }
 
 // ----------- small multiples renderer (aggregate per day) -----------
-function renderSmallMultiples(containerId, rows, dateField, activeParams, specs, category, paperType) {
+function renderSmallMultiples(containerId, rows, dateField, activeParams, specs, category, paperType, supplier) {
   const container = $('#' + containerId);
   if (!container) return;
   container.innerHTML = '';
@@ -1705,7 +1731,7 @@ function renderSmallMultiples(containerId, rows, dateField, activeParams, specs,
     const lcl3 = stats.mean - 3 * stats.sd;
 
     // หา spec
-    const spec = findSpec(specs || {}, category, paperType, key);
+    const spec = findSpec(specs || {}, category, paperType, key, supplier);
     const specMin = spec?.min_value != null ? +spec.min_value : null;
     const specMax = spec?.max_value != null ? +spec.max_value : null;
 
@@ -1955,7 +1981,7 @@ async function loadTrend() {
     const sampleRow = filtered[0];
     const category = sampleRow.paper_invoices?.paper_category || sampleRow.paper_category;
     const paperType = type || null;
-    const spec = findSpec(specs || {}, category, paperType, param);
+    const spec = findSpec(specs || {}, category, paperType, param, supplier);
     const specMin = spec?.min_value != null ? +spec.min_value : null;
     const specMax = spec?.max_value != null ? +spec.max_value : null;
 
@@ -2410,9 +2436,11 @@ async function renderLookupComparison(lotResults) {
     }
 
     let category = null;
+    let lotSupplier = null;
     for (const b of baseline) {
       category = b.paper_invoices?.paper_category || b.paper_category;
-      if (category) break;
+      lotSupplier = b.supplier || b.paper_invoices?.supplier;
+      if (category && lotSupplier) break;
     }
 
     const activeParams = Object.entries(PARAMS).filter(([key]) =>
@@ -2445,7 +2473,7 @@ async function renderLookupComparison(lotResults) {
         }));
 
       const stats = calcStats(baselinePoints.map(p => p.y));
-      const spec = findSpec(specs, category, pt, key);
+      const spec = findSpec(specs, category, pt, key, lotSupplier);
       const specMin = spec?.min_value != null ? +spec.min_value : null;
       const specMax = spec?.max_value != null ? +spec.max_value : null;
 
@@ -3537,7 +3565,7 @@ $('#sp-param').addEventListener('change', e => {
   $('#sp-unit').value = info?.unit || '';
 });
 $('#sp-clear').addEventListener('click', () => {
-  ['#sp-category','#sp-type','#sp-param','#sp-unit','#sp-min','#sp-max','#sp-target','#sp-source'].forEach(id => {
+  ['#sp-supplier','#sp-category','#sp-type','#sp-param','#sp-unit','#sp-min','#sp-max','#sp-target','#sp-source'].forEach(id => {
     const el = $(id); if (el) el.value = '';
   });
 });
@@ -3557,6 +3585,7 @@ async function saveSpec() {
   if (!min && !max && !target) { showToast('ใส่ Min, Max, หรือ Target อย่างน้อย 1 ค่า', 'error'); return; }
 
   const payload = {
+    supplier:       $('#sp-supplier').value || null,
     paper_category: $('#sp-category').value || null,
     paper_type:     $('#sp-type').value.trim() || null,
     parameter:      param,
@@ -3588,14 +3617,12 @@ async function saveSpec() {
 
 // ---- Bulk import handlers ----
 $('#sp-bulk-template').addEventListener('click', () => {
-  $('#sp-bulk-text').value = `paper_category,paper_type,parameter,min_value,max_value,target_value,source
-Core-Board,CBS350,basis_weight,336,364,350,SCG datasheet
-Core-Board,CBS350,burst,500,,,SCG datasheet
-Core-Board,CBS350,plybond,280,,,SCG datasheet
-Core-Board,CBS350,moisture,5,8,,SCG datasheet
-Core-Board,CPS450,basis_weight,432,468,450,SCG datasheet
-Core-Board,CPS450,burst,650,,,SCG datasheet
-Core-Board,MF-450,basis_weight,432,468,450,SCG datasheet`;
+  $('#sp-bulk-text').value = `supplier,paper_category,paper_type,parameter,min_value,max_value,target_value,source
+SCG,Core-Board,CBS350,basis_weight,336,364,350,SCG datasheet
+SCG,Core-Board,CBS350,burst,500,,,SCG datasheet
+Muda,Core-Board,CBS350,basis_weight,332.5,367.5,350,Muda datasheet
+Muda,Core-Board,CBS350,burst,441.3,,,Muda datasheet
+,Core-Board,,moisture,5,8,,Generic spec for any supplier`;
 });
 $('#sp-bulk-file-btn').addEventListener('click', () => $('#sp-bulk-file').click());
 $('#sp-bulk-file').addEventListener('change', async (e) => {
@@ -3612,6 +3639,8 @@ function parseBulkSpecCSV(text) {
   if (!lines.length) return [];
   const headerLine = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/[^a-z0-9]/g, ''));
   const colMap = {
+    'supplier':      'supplier',
+    'sup':           'supplier',
     'papercategory': 'paper_category',
     'category':      'paper_category',
     'papertype':     'paper_type',
@@ -3667,11 +3696,12 @@ function previewBulkSpec() {
   let html = `<div style="background:var(--panel-2); border-radius:8px; padding:10px;">
     <div style="font-weight:700; margin-bottom:8px;">Preview ${rows.length} rows${invalid.length ? ' — ⚠ มี ' + invalid.length + ' rows ที่ parameter ไม่ valid' : ''}</div>
     <div style="overflow-x:auto"><table>
-      <thead><tr><th>#</th><th>Cat</th><th>Type</th><th>Param</th><th class="num">Min</th><th class="num">Max</th><th class="num">Target</th><th>Source</th></tr></thead><tbody>`;
+      <thead><tr><th>#</th><th>Supplier</th><th>Cat</th><th>Type</th><th>Param</th><th class="num">Min</th><th class="num">Max</th><th class="num">Target</th><th>Source</th></tr></thead><tbody>`;
   rows.forEach((r, i) => {
     const bad = !validParams.has(r.parameter);
     html += `<tr style="${bad ? 'background:var(--danger-bg);' : ''}">
       <td>${i+1}</td>
+      <td><b>${escapeHtml(r.supplier || '— generic —')}</b></td>
       <td>${escapeHtml(r.paper_category || '—')}</td>
       <td>${escapeHtml(r.paper_type || '—')}</td>
       <td>${escapeHtml(r.parameter)}${bad ? ' ❌' : ''}</td>
@@ -3732,13 +3762,14 @@ async function loadSpecList() {
       <div class="panel-title">📋 Specs ที่บันทึกไว้ (${data.length})</div>
       <div style="overflow-x:auto"><table>
         <thead><tr>
-          <th>Category</th><th>Type</th><th>Parameter</th>
+          <th>Supplier</th><th>Category</th><th>Type</th><th>Parameter</th>
           <th class="num">Min</th><th class="num">Max</th><th class="num">Target</th>
           <th>Unit</th><th>Source</th><th></th>
         </tr></thead><tbody>`;
     for (const s of data) {
       const info = PARAMS[s.parameter] || {};
       html += `<tr>
+        <td><b>${escapeHtml(s.supplier || '— ทั้งหมด —')}</b></td>
         <td>${escapeHtml(s.paper_category || '—')}</td>
         <td>${escapeHtml(s.paper_type || '— ทั้ง category —')}</td>
         <td><b>${escapeHtml(info.label || s.parameter)}</b></td>
@@ -4453,7 +4484,9 @@ async function renderCmpCharts() {
         stats = calcStats(baselinePointsByX.production_date.map(p => p.y));
       }
       const specs = await loadSpecs();
-      spec = findSpec(specs, category, focusType, param);
+      // supplier from current case items (assume same supplier in a case)
+      const cmpSupplier = cmpState.currentGroup?.supplier || items[0]?.invoice_supplier || items[0]?.supplier || null;
+      spec = findSpec(specs, category, focusType, param, cmpSupplier);
     }
   }
 
