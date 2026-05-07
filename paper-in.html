@@ -278,6 +278,61 @@ input.mono { font-family: var(--mono); }
 .inv-rolls-table tr:last-child td { border-bottom: none; }
 .inv-rolls-table .mono { font-family: var(--mono); font-size: 12px; }
 
+/* COA badges + values block */
+.coa-review-badge {
+  display: inline-block;
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #d97706;
+  padding: 2px 9px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  margin-left: 6px;
+  animation: pulse-warning 2s ease-in-out infinite;
+}
+@keyframes pulse-warning {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(217,119,6,0.4); }
+  50% { box-shadow: 0 0 0 4px rgba(217,119,6,0); }
+}
+.coa-ok-badge {
+  display: inline-block;
+  background: var(--success-bg);
+  color: var(--success);
+  border: 1px solid var(--success);
+  padding: 2px 9px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  margin-left: 6px;
+}
+.coa-values-block {
+  background: #fffbeb;
+  border: 1.5px solid #fde68a;
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin: 10px 0;
+}
+.coa-values-title {
+  font-size: 13px; font-weight: 700;
+  color: #78350f;
+  margin-bottom: 10px;
+}
+.coa-values-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+  font-size: 12px;
+}
+.coa-values-grid > div {
+  background: white;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid #fde68a;
+}
+.coa-values-grid .lbl { color: var(--text-dim); margin-right: 4px; }
+.coa-values-grid .val { font-family: var(--mono); font-weight: 700; color: var(--text); }
+
 .inv-card-actions {
   display: flex; gap: 8px; justify-content: flex-end;
   padding-top: 10px; border-top: 1px solid var(--border);
@@ -1081,8 +1136,8 @@ tr:hover td { background: var(--panel-2); }
       <div class="upload-zone" id="upload-zone">
         <div class="upload-icon">📁</div>
         <div class="upload-title">ลากไฟล์มาวาง หรือคลิกเลือก</div>
-        <div class="upload-hint">รองรับ: .txt, .csv, .xlsx, .xls (ได้หลายไฟล์พร้อมกัน)</div>
-        <input type="file" id="file-input" multiple accept=".txt,.csv,.xlsx,.xls" hidden>
+        <div class="upload-hint">รองรับ: .txt, .csv, .xlsx, .xls, .pdf (ได้หลายไฟล์พร้อมกัน — ระบบจะ match ให้)</div>
+        <input type="file" id="file-input" multiple accept=".txt,.csv,.xlsx,.xls,.pdf" hidden>
       </div>
 
       <div id="parsed-invoices"></div>
@@ -1094,7 +1149,7 @@ tr:hover td { background: var(--panel-2); }
         <li><strong>SCG:</strong> Upload ไฟล์ .txt (ชื่อ 0535xxxxxx.txt) — พร้อมไฟล์ COA .xlsx ถ้ามี</li>
         <li><strong>MPK:</strong> Upload ไฟล์ Packing List .csv</li>
         <li><strong>United:</strong> Upload ไฟล์ .xlsx (ASPT-xxxx.xlsx)</li>
-        <li><strong>Muda:</strong> Upload ไฟล์ .xls (Asia_Tube_PL_xxxx.xls)</li>
+        <li><strong>Muda:</strong> Upload ไฟล์ .xls (Asia_Tube_PL_xxxx.xls) <strong>+ COA .pdf</strong> — ระบบ match invoice กันเอง 🤖</li>
         <li><strong>Supplier อื่น:</strong> ใช้ Tab "กรอกมือ" ก่อน</li>
       </ul>
     </div>
@@ -2095,7 +2150,10 @@ function detectSupplier(filename, content) {
   const nNorm = n.replace(/[\s_]+/g, '_');
   if (nNorm.includes('asia_tube') && nNorm.includes('_pl_')) return 'Muda_XLS';
   
-  // Muda COA — รับทั้ง .pdf และ .xlsx
+  // Muda COA PDF — รับ PDF ที่ Muda ส่งมา → parse ด้วย Claude API
+  if (nNorm.includes('asia_tube') && nNorm.includes('coa') && n.endsWith('.pdf')) return 'Muda_COA_PDF';
+  
+  // Muda COA — XLSX (legacy, ถ้ามีในอนาคต)
   if (nNorm.includes('asia_tube') && nNorm.includes('coa')) return 'Muda_COA';
   
   return null;
@@ -2247,6 +2305,21 @@ function readAsArrayBuffer(file) {
   });
 }
 
+// Read file as base64 (for sending PDF to Claude API)
+function readAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => {
+      // strip "data:...;base64," prefix
+      const result = fr.result;
+      const base64 = result.split(',')[1];
+      resolve(base64);
+    };
+    fr.onerror = reject;
+    fr.readAsDataURL(file);
+  });
+}
+
 // ============================================================
 // Master Data Loading
 // ============================================================
@@ -2339,6 +2412,10 @@ async function handleFiles(fileList) {
   const scgTxtByInv = {};  // invoice_no → parsed result
   const scgCoaByInv = {};  // invoice_no → coa list
   
+  // Group Muda PDF (COA) with matching XLS (Packing List)
+  const mudaXlsByInv = {};  // normalized invoice_no → parsed result
+  const mudaPdfByInv = {};  // normalized invoice_no → coa parsed
+  
   for (const file of files) {
     try {
       const supplier = detectSupplier(file.name, '');
@@ -2371,7 +2448,22 @@ async function handleFiles(fileList) {
         continue;
       }
       
-      // ไม่ใช่ SCG → เพิ่มเข้า list ปกติ
+      // Muda XLS — เก็บไว้ merge กับ COA PDF
+      if (supplier === 'Muda_XLS') {
+        result.filename = file.name;
+        const invKey = normalizeInvoiceNo(result.data.invoice_no);
+        mudaXlsByInv[invKey] = result;
+        continue;
+      }
+      
+      // Muda COA PDF — เก็บไว้ merge กับ XLS
+      if (supplier === 'Muda_COA_PDF') {
+        const invKey = normalizeInvoiceNo(result.coa_parsed.invoice_no);
+        mudaPdfByInv[invKey] = result;
+        continue;
+      }
+      
+      // ไม่ใช่ SCG/Muda → เพิ่มเข้า list ปกติ
       result.filename = file.name;
       state.parsedInvoices.push(result);
       addInvoiceCard(result);
@@ -2414,7 +2506,68 @@ async function handleFiles(fileList) {
     }
   }
   
+  // Merge Muda XLS + PDF (COA)
+  for (const invKey of Object.keys(mudaXlsByInv)) {
+    const xls = mudaXlsByInv[invKey];
+    const pdf = mudaPdfByInv[invKey];
+    if (pdf) {
+      // แนบ COA ให้ invoice (ไม่ใช่แต่ละม้วน — ใช้ invoice-level COA ทุกม้วน)
+      xls.invoice_coa = pdf.coa_parsed;     // เก็บ raw จาก Claude
+      xls.hasCoa = true;
+      xls.coa_source = 'pdf_ai';            // mark ว่ามาจาก AI parsing → review badge
+      xls.coa_usage = pdf.coa_usage;        // เก็บ usage info
+    }
+    state.parsedInvoices.push(xls);
+    addInvoiceCard(xls);
+    if (pdf) {
+      // เสียง + toast ตอน merge สำเร็จ
+      playSuccessSound();
+      showToast(`✅ ${xls.filename}: COA จาก PDF อ่านแล้ว — ตรวจสอบก่อน save`, 'success');
+    }
+  }
+  
+  // Muda PDF อย่างเดียว (ไม่มี XLS matching) → เตือน
+  for (const invKey of Object.keys(mudaPdfByInv)) {
+    if (!mudaXlsByInv[invKey]) {
+      const pdf = mudaPdfByInv[invKey];
+      addInvoiceCard({
+        filename: pdf.filename,
+        supplier: 'Muda COA',
+        warning: `COA Invoice ${pdf.coa_parsed.invoice_no} ไม่พบไฟล์ Packing (.xls) คู่กัน — กรุณา upload ไฟล์ .xls ด้วย`,
+        status: 'warn',
+      });
+    }
+  }
+  
   hideLoading();
+}
+
+// Normalize invoice number — ตัด prefix "SSI ", "SSI", whitespace, leading zeros
+// ใช้สำหรับ match XLS (มี "SSI 26040880") กับ PDF (มี "26040880")
+function normalizeInvoiceNo(invNo) {
+  if (!invNo) return '';
+  return String(invNo).replace(/[^\d]/g, '').replace(/^0+/, '') || '0';
+}
+
+// Sound feedback — short success beep
+function playSuccessSound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = 'sine';
+    // Two-note success "ding"
+    osc.frequency.setValueAtTime(880, ctx.currentTime);          // A5
+    osc.frequency.setValueAtTime(1175, ctx.currentTime + 0.08);  // D6
+    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.25);
+  } catch (e) {
+    // Sound not critical — silently fail if AudioContext blocked
+  }
 }
 
 async function parseFile(file, supplier) {
@@ -2454,6 +2607,30 @@ async function parseFile(file, supplier) {
     const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
     const data = parseMuda_XLS(rows, file.name);  // pass filename for paper_type detection
     return { supplier: 'Muda', data, status: 'ok' };
+  }
+  
+  if (supplier === 'Muda_COA_PDF') {
+    // Call Vercel Edge Function → Claude API → parsed COA values
+    const base64 = await readAsBase64(file);
+    
+    const resp = await fetch('/api/parse-coa-muda', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ pdf_base64: base64 })
+    });
+    
+    const result = await resp.json();
+    if (!resp.ok || !result.ok) {
+      throw new Error(`Claude API error: ${result.error || 'unknown'}`);
+    }
+    
+    return { 
+      supplier: 'Muda_COA',
+      filename: file.name,
+      coa_parsed: result.parsed,    // {invoice_no, delivery_date, picking_list, test_results, ...}
+      coa_usage: result.usage,
+      status: 'ok' 
+    };
   }
   
   return null;
@@ -2508,10 +2685,47 @@ function addInvoiceCard(result) {
   const div = document.createElement('div');
   div.className = 'inv-card ok';
   div.dataset.idx = idx;
+  
+  // COA badge — แสดงถ้ามี COA และ source = AI (review badge)
+  let coaBadge = '';
+  if (result.hasCoa && result.coa_source === 'pdf_ai') {
+    coaBadge = ' <span class="coa-review-badge">📋 COA (AI) — ตรวจสอบก่อน save</span>';
+  } else if (result.hasCoa) {
+    coaBadge = ' <span class="coa-ok-badge">📋 COA</span>';
+  }
+  
+  // COA values display (เฉพาะถ้ามี invoice_coa จาก AI)
+  let coaValuesHtml = '';
+  if (result.invoice_coa) {
+    const coa = result.invoice_coa;
+    const tr = coa.test_results || {};
+    const fmt = (range, unit) => {
+      if (!range || !Array.isArray(range)) return '<span style="color:var(--text-muted);">—</span>';
+      if (range[0] === range[1]) return `${range[0]} ${unit}`;
+      return `${range[0]} ~ ${range[1]} ${unit}`;
+    };
+    coaValuesHtml = `
+      <div class="coa-values-block">
+        <div class="coa-values-title">📋 COA (อ่านจาก PDF) — <span style="color:var(--warning); font-weight:700;">⚠️ กรุณาตรวจสอบ</span></div>
+        <div class="coa-values-grid">
+          <div><span class="lbl">Picking List:</span> <span class="val">${escapeHtml(coa.picking_list || '—')}</span></div>
+          <div><span class="lbl">Delivery Date:</span> <span class="val">${escapeHtml(coa.delivery_date || '—')}</span></div>
+          <div><span class="lbl">Substance Spec:</span> <span class="val">${coa.substance_spec_gsm || '—'} gsm</span></div>
+          <div><span class="lbl">Substance:</span> <span class="val">${fmt(tr.substance, 'gsm')}</span></div>
+          <div><span class="lbl">Thickness:</span> <span class="val">${fmt(tr.thickness, 'mm')}</span></div>
+          <div><span class="lbl">Moisture:</span> <span class="val">${fmt(tr.moisture, '%')}</span></div>
+          <div><span class="lbl">Bursting:</span> <span class="val">${fmt(tr.bursting, 'kg/cm²')}</span></div>
+          <div><span class="lbl">Bonding:</span> <span class="val">${fmt(tr.bonding, 'J/m²')}</span></div>
+          <div><span class="lbl">Cobb:</span> <span class="val">${fmt(tr.cobb, 'gsm')}</span></div>
+        </div>
+      </div>
+    `;
+  }
+  
   div.innerHTML = `
     <div class="inv-card-header">
       <div class="inv-card-title">
-        <span>✅ ${escapeHtml(result.supplier)}${result.hasCoa ? ' + COA' : ''}</span>
+        <span>✅ ${escapeHtml(result.supplier)}${coaBadge}</span>
         <span class="filename">${escapeHtml(result.filename)}</span>
       </div>
       <span class="inv-status ok">${d.rolls.length} ม้วน</span>
@@ -2534,6 +2748,7 @@ function addInvoiceCard(result) {
         <div class="value">${formatNumber(totalWeight)} kg</div>
       </div>
     </div>
+    ${coaValuesHtml}
     <div class="inv-rolls-summary">
       <div>📦 <strong>${d.rolls.length}</strong> ม้วน · <strong>${uniqueTypes.length}</strong> ประเภท (${escapeHtml(uniqueTypes.join(', '))})</div>
     </div>
@@ -2649,11 +2864,74 @@ async function saveInvoice(idx, receiveDate, sourceFile) {
     if (insErr) throw insErr;
     
     // ถ้ามี COA → บันทึกใน quality_tests
+    // 2 cases: 
+    //   (1) Per-roll COA (SCG): r.coa อยู่ใน rolls แต่ละม้วน
+    //   (2) Invoice-level COA (Muda): result.invoice_coa apply ทุกม้วน
     if (result.hasCoa || d.rolls.some(r => r.coa)) {
       const invoiceIdByLot = {};
       (inserted || []).forEach(i => invoiceIdByLot[i.paper_lot_normalized] = i.id);
       
       const qaRecords = [];
+      
+      // Case 2: Invoice-level COA (Muda) → apply to every roll
+      if (result.invoice_coa) {
+        const coa = result.invoice_coa;
+        const tr = coa.test_results || {};
+        // Helper: midpoint of [min, max] range
+        const mid = arr => {
+          if (!arr || !Array.isArray(arr)) return null;
+          if (arr[0] == null && arr[1] == null) return null;
+          if (arr[0] == null) return arr[1];
+          if (arr[1] == null) return arr[0];
+          return (Number(arr[0]) + Number(arr[1])) / 2;
+        };
+        
+        // Compute mid values + apply unit conversions
+        const midSubstance = mid(tr.substance);
+        const midThickness = mid(tr.thickness);
+        const midMoisture  = mid(tr.moisture);
+        const midBursting  = mid(tr.bursting);
+        const midBonding   = mid(tr.bonding);
+        const midCobb      = mid(tr.cobb);
+        
+        const basisWeight = midSubstance;                                  // gsm → gsm
+        const caliper     = midThickness != null ? midThickness * 1000 : null;  // mm → μm
+        const moisture    = midMoisture;                                    // % → %
+        const burst       = midBursting != null ? midBursting * 98.0665 : null; // kg/cm² → kPa
+        const plybond     = midBonding;                                     // J/m² → J/m²
+        const cobbVal     = midCobb;                                        // gsm → gsm (top + bottom)
+        
+        d.rolls.forEach(r => {
+          if (!invoiceIdByLot[r.paper_lot_normalized]) return;
+          qaRecords.push({
+            scope: 'roll',
+            paper_invoice_id: invoiceIdByLot[r.paper_lot_normalized],
+            paper_lot: r.paper_lot,
+            supplier: result.supplier,
+            paper_type: r.paper_type,
+            production_date: coa.delivery_date || null,
+            width_cm: r.width_mm ? r.width_mm / 10 : null,
+            source: 'paper_in_pdf_ai',
+            basis_weight: basisWeight,
+            caliper: caliper,
+            moisture: moisture,
+            burst: burst,
+            plybond: plybond,
+            cobb_top: cobbVal,
+            cobb_bottom: cobbVal,
+            raw_data: {
+              coa_origin: 'pdf_claude_api',
+              picking_list: coa.picking_list,
+              substance_spec: coa.substance_spec_gsm,
+              ranges: tr,
+              units_input: { burst: 'kg/cm²', thickness: 'mm' },
+              ai_usage: result.coa_usage,
+            },
+          });
+        });
+      }
+      
+      // Case 1: Per-roll COA (SCG)
       d.rolls.forEach(r => {
         if (r.coa && invoiceIdByLot[r.paper_lot_normalized]) {
           qaRecords.push({
