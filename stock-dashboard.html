@@ -899,37 +899,45 @@ body {
 .summary-pill > div { font-family: var(--mono); font-size: 14px; }
 .summary-pill b { font-size: 18px; color: var(--accent); }
 
-/* Result table for filter tab */
+/* Result table for filter tab — sized for A4 portrait print */
 .flt-result-table {
-  width: 100%; max-width: 1100px; margin: 0 auto;
-  border-collapse: collapse; font-size: 13px;
-  table-layout: auto;
+  width: 100%; max-width: 800px; margin: 0 auto;
+  border-collapse: collapse; font-size: 12px;
+  table-layout: fixed;
 }
+/* Column widths — total ~720px (fits A4 portrait usable width) */
+.flt-result-table col.col-seq { width: 38px; }
+.flt-result-table col.col-sup { width: 100px; }
+.flt-result-table col.col-typ { width: 100px; }
+.flt-result-table col.col-wid { width: 110px; }
+.flt-result-table col.col-rolls { width: 110px; }
+.flt-result-table col.col-kg { width: 130px; }
+
 .flt-result-table th {
-  background: var(--panel-2); padding: 10px 12px; text-align: left;
+  background: var(--panel-2); padding: 8px 10px; text-align: left;
   font-weight: 700; color: var(--text); border-bottom: 2px solid var(--border-strong);
-  font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em;
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em;
   position: sticky; top: 0; z-index: 1;
   white-space: nowrap;
 }
 .flt-result-table th.right { text-align: right; }
 .flt-result-table th.center { text-align: center; }
 .flt-result-table td {
-  padding: 8px 12px; font-family: var(--mono); font-size: 13px;
+  padding: 6px 10px; font-family: var(--mono); font-size: 12px;
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
 }
-.flt-result-table td.thai-text { font-family: 'IBM Plex Sans Thai', sans-serif; font-weight: 600; }
+.flt-result-table td.thai-text { font-family: 'IBM Plex Sans Thai', sans-serif; font-weight: 600; font-size: 12px; }
 .flt-result-table td.right { text-align: right; }
-.flt-result-table td.center { text-align: center; color: var(--text-dim); font-size: 12px; }
+.flt-result-table td.center { text-align: center; color: var(--text-muted); font-size: 11px; font-family: var(--mono); }
 .flt-result-table tr.subtotal-row td {
   background: #fef3c7; font-weight: 700; border-top: 1px solid #d97706;
-  font-size: 13px;
-  padding: 9px 12px;
+  font-size: 12px;
+  padding: 7px 10px;
 }
 .flt-result-table tr.grand-total-row td {
-  background: var(--accent); color: white; font-weight: 800; font-size: 14px;
-  padding: 11px 12px;
+  background: var(--accent); color: white; font-weight: 800; font-size: 13px;
+  padding: 9px 10px;
 }
 .flt-result-table tr:hover:not(.subtotal-row):not(.grand-total-row) {
   background: var(--panel-2);
@@ -1002,6 +1010,36 @@ body {
   .pivot-table td, .heatmap-table td, .flt-result-table td {
     font-size: 11px !important;
     padding: 4px 5px !important;
+  }
+  
+  /* Filter table — A4 portrait optimization */
+  .flt-result-table {
+    max-width: none !important;
+    table-layout: fixed !important;
+    font-size: 10.5px !important;
+  }
+  .flt-result-table th { font-size: 9.5px !important; padding: 5px 4px !important; }
+  .flt-result-table td { font-size: 10.5px !important; padding: 4px 5px !important; }
+  .flt-result-table td.thai-text { font-size: 10.5px !important; }
+  .flt-result-table td.center { font-size: 9.5px !important; }
+  .flt-result-table tr.subtotal-row td {
+    background: #fef3c7 !important;
+    font-size: 10.5px !important;
+    padding: 5px 5px !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .flt-result-table tr.grand-total-row td {
+    background: #1e293b !important; color: white !important;
+    font-size: 11px !important;
+    padding: 6px 5px !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .flt-result-table tr:nth-child(even):not(.subtotal-row):not(.grand-total-row) {
+    background: #f8fafc !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
   
   /* Compact first column (Supplier/ประเภท/หน้ากว้าง) */
@@ -4142,8 +4180,16 @@ function showFilterResult() {
   let html = '<div class="section">';
   html += `<div class="section-title">📋 ผลการค้นหา (${fmtNum(filtered.length)} ม้วน)</div>`;
   html += '<div style="overflow-x:auto;"><table class="flt-result-table">';
+  html += `<colgroup>
+    <col class="col-seq">
+    <col class="col-sup">
+    <col class="col-typ">
+    <col class="col-wid">
+    <col class="col-rolls">
+    <col class="col-kg">
+  </colgroup>`;
   html += `<thead><tr>
-    <th class="center" style="width:50px;">ลำดับ</th>
+    <th class="center">ลำดับ</th>
     <th>Supplier</th>
     <th>ประเภทกระดาษ</th>
     <th class="right">หน้ากว้าง (mm)</th>
