@@ -6,7 +6,7 @@
 <title>📊 Stock Dashboard | Asia Paper Tube</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Caveat:wght@400;700&family=Architects+Daughter&family=Kalam:wght@400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
 :root {
   --bg: #f8fafc; --panel: #ffffff; --panel-2: #f1f5f9;
@@ -545,261 +545,221 @@ body {
 }
 .aging-sort-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
 
-/* === Aging charts (V1+V2) — Paper/Sketch style à la Claude Design === */
-/* Color palette */
+/* === Aging charts (V1 stacked bar + V2 heatmap) — dashboard style === */
 .aging-charts-section {
-  --wf-ink: #1a1a1a;
-  --wf-ink-2: #3a3a3a;
-  --wf-paper-bg: #f7f3ec;
-  --wf-paper-2: #efe9dd;
-  --wf-muted: #888178;
-  /* Bucket colors (Claude Design) */
-  --wf-bucket-fresh: #6a8d5b;     /* warm green 0-30 */
-  --wf-bucket-watch: #e8a838;     /* gold 31-60 */
-  --wf-bucket-aging: #d94a3d;     /* warm red 61-90 */
-  --wf-bucket-stale: #5b1f1a;     /* dark red 90+ */
+  /* Bucket colors — kept from Claude Design (user preference) */
+  --ag-bucket-fresh: #6a8d5b;     /* warm green 0-30 */
+  --ag-bucket-watch: #e8a838;     /* gold 31-60 */
+  --ag-bucket-aging: #d94a3d;     /* warm red 61-90 */
+  --ag-bucket-stale: #5b1f1a;     /* dark red 90+ */
   margin-top: 24px;
 }
 
-/* The "paper" container — light cream background, dark border */
-.wf-paper {
-  background: var(--wf-paper-bg);
-  border: 2.5px solid var(--wf-ink);
-  border-radius: 8px;
-  padding: 28px 32px;
-  position: relative;
-  color: var(--wf-ink);
-  /* subtle paper texture via gradient */
-  background-image:
-    radial-gradient(circle at 20% 20%, rgba(0,0,0,0.015) 0%, transparent 50%),
-    radial-gradient(circle at 80% 70%, rgba(0,0,0,0.015) 0%, transparent 50%);
+/* Header with metric toggle */
+.ag-charts-header {
+  display: flex; justify-content: space-between; align-items: center;
+  flex-wrap: wrap; gap: 12px; margin-bottom: 18px;
+  padding-bottom: 14px; border-bottom: 1px solid var(--border);
 }
-/* Paper section overrides parent .section card visuals */
-.aging-charts-section.section { padding: 0; background: transparent; border: none; }
-
-/* Headers */
-.wf-charts-header {
-  display: flex; justify-content: space-between; align-items: baseline;
-  flex-wrap: wrap; gap: 12px; margin-bottom: 20px;
-  padding-bottom: 14px; border-bottom: 1.5px solid var(--wf-ink);
-}
-.wf-page-title {
-  font-family: 'Caveat', cursive;
-  font-weight: 700;
-  font-size: 36px;
-  letter-spacing: 0.5px;
-  margin: 0;
-  color: var(--wf-ink);
-  line-height: 1;
-}
-.wf-label {
-  font-family: 'Architects Daughter', cursive;
-  font-size: 13px; color: var(--wf-ink-2);
-  letter-spacing: 0.2px;
-}
-.wf-mono-note {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11px; color: var(--wf-muted);
-  letter-spacing: 0.3px;
-}
-.wf-hand-title {
-  font-family: 'Caveat', cursive;
-  font-size: 22px; font-weight: 700;
-  color: var(--wf-ink); line-height: 1.2;
-}
-.wf-thai-sub {
-  font-family: 'IBM Plex Sans Thai', sans-serif;
-  font-size: 12px; color: var(--wf-ink-2);
-  margin-top: 2px;
-}
-.wf-row-spread {
-  display: flex; justify-content: space-between; align-items: baseline;
-  flex-wrap: wrap; gap: 12px; margin-bottom: 10px;
-}
-
-/* Metric toggle — chip style with hand-drawn feel */
-.wf-metric-toggle {
+.ag-metric-toggle {
   display: flex; align-items: center; gap: 6px;
+  background: var(--panel-2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 4px 4px 4px 10px;
 }
-.wf-metric-btn {
-  font-family: 'Architects Daughter', cursive;
-  font-size: 13px;
-  background: transparent;
-  border: 1.5px solid var(--wf-ink);
-  border-radius: 14px;
-  padding: 4px 14px;
-  cursor: pointer;
-  color: var(--wf-ink);
-  letter-spacing: 0.3px;
-  transition: all 0.15s;
+.ag-metric-toggle .ag-toggle-label {
+  font-size: 12px; color: var(--text-dim); font-weight: 600;
 }
-.wf-metric-btn:hover { background: var(--wf-paper-2); }
-.wf-metric-btn.active {
-  background: var(--wf-ink);
-  color: var(--wf-paper-bg);
+.ag-metric-btn {
+  background: transparent; border: 1px solid transparent; border-radius: 6px;
+  padding: 5px 12px; font-size: 12px; font-weight: 600; cursor: pointer;
+  color: var(--text); transition: all 0.15s;
+  font-family: inherit;
+}
+.ag-metric-btn:hover { background: var(--panel); }
+.ag-metric-btn.active { background: var(--accent); color: white; }
+
+/* Chart block */
+.ag-chart-block {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 18px 22px;
+  margin-bottom: 16px;
+}
+.ag-chart-header {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  flex-wrap: wrap; gap: 12px; margin-bottom: 14px;
+}
+.ag-chart-title {
+  font-size: 15px; font-weight: 700; color: var(--text);
+  line-height: 1.3;
+}
+.ag-chart-sub {
+  font-size: 12px; color: var(--text-dim); font-weight: 400;
+  margin-top: 3px;
 }
 
-/* "scribble" container — like sketched-on-paper boxes */
-.wf-scribble {
-  border: 1.5px solid var(--wf-ink);
-  border-radius: 6px;
-  padding: 16px 18px;
-  background: rgba(255,255,255,0.4);
-}
-
-/* Stacked bar — V1 */
-.wf-stacked-bar-legend {
+/* Stacked bar legend */
+.ag-stacked-legend {
   display: flex; gap: 14px; flex-wrap: wrap;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11px; color: var(--wf-ink-2);
+  font-size: 12px; color: var(--text-dim);
 }
-.wf-stacked-bar-legend .legend-item {
-  display: flex; align-items: center; gap: 4px;
+.ag-stacked-legend .legend-item {
+  display: flex; align-items: center; gap: 5px;
 }
-.wf-stacked-bar-legend .swatch {
+.ag-stacked-legend .swatch {
   display: inline-block; width: 12px; height: 12px;
-  border: 1px solid var(--wf-ink);
+  border-radius: 3px;
+}
+.ag-stacked-legend .legend-item-unit {
+  margin-left: auto; color: var(--text-dim); font-weight: 600;
 }
 
+/* Stacked bar rows */
 .aging-stack-row {
   display: grid;
-  grid-template-columns: 110px 1fr 110px;
+  grid-template-columns: 110px 1fr 100px;
   align-items: center;
   gap: 14px;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 .aging-stack-row .stack-label {
-  font-family: 'Caveat', cursive;
-  font-size: 22px;
+  font-size: 14px;
   font-weight: 700;
-  color: var(--wf-ink);
+  color: var(--text);
   text-align: right;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  line-height: 1;
+  font-family: 'IBM Plex Sans Thai', sans-serif;
 }
 .aging-stack-row .stack-bar {
   display: flex;
-  height: 38px;
-  border: 1.5px solid var(--wf-ink);
-  background: var(--wf-paper-bg);
+  height: 32px;
+  border-radius: 6px;
+  background: var(--panel-2);
   overflow: hidden;
+  border: 1px solid var(--border);
 }
 .aging-stack-row .stack-seg {
   height: 100%;
   display: flex; align-items: center; justify-content: center;
   color: white;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 13px; font-weight: 700;
+  font-family: var(--mono);
+  font-size: 12px; font-weight: 700;
   overflow: hidden; white-space: nowrap;
-  border-right: 1.5px solid var(--wf-ink);
   padding: 0 4px;
 }
-.aging-stack-row .stack-seg:last-child { border-right: none; }
 .aging-stack-row .stack-val {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 14px; font-weight: 700;
-  color: var(--wf-ink);
+  font-family: var(--mono);
+  font-size: 13px; font-weight: 700;
+  color: var(--text);
   text-align: right;
 }
 
-/* Bucket colors — Claude Design palette */
-.aging-bucket-color-0-30  { background: var(--wf-bucket-fresh); }
-.aging-bucket-color-31-60 { background: var(--wf-bucket-watch); color: var(--wf-ink) !important; }
-.aging-bucket-color-61-90 { background: var(--wf-bucket-aging); }
-.aging-bucket-color-over90{ background: var(--wf-bucket-stale); }
+/* Bucket colors — same Claude Design palette */
+.aging-bucket-color-0-30  { background: var(--ag-bucket-fresh); }
+.aging-bucket-color-31-60 { background: var(--ag-bucket-watch); color: #1a1a1a !important; }
+.aging-bucket-color-61-90 { background: var(--ag-bucket-aging); }
+.aging-bucket-color-over90{ background: var(--ag-bucket-stale); }
 
-/* Heatmap — V2 */
+/* Heatmap grid */
 .aging-heatmap-grid {
   display: grid;
-  grid-template-columns: 140px repeat(4, 1fr) 80px;
-  gap: 0;
-  border: 1.5px solid var(--wf-ink);
-  background: rgba(26,26,26,0.5);   /* gap color — softer */
-  margin-top: 10px;
+  grid-template-columns: 130px repeat(4, 1fr) 80px;
+  gap: 3px;
+  margin-top: 8px;
 }
-.aging-heatmap-grid > * {
-  background: var(--wf-paper-bg);
-  border: 0.5px solid rgba(26,26,26,0.4);
-}
-.aging-heat-corner { background: var(--wf-paper-2); }
+.aging-heat-corner { background: transparent; }
 .aging-heat-head {
-  background: var(--wf-paper-2);
-  padding: 10px 4px;
+  background: var(--panel-2);
+  padding: 8px 4px;
   text-align: center;
+  border-radius: 6px;
   display: flex; flex-direction: column; gap: 4px; align-items: center;
 }
 .aging-heat-head .head-label {
-  font-family: 'Caveat', cursive;
-  font-size: 18px; font-weight: 700;
-  color: var(--wf-ink);
+  font-family: var(--mono);
+  font-size: 12px; font-weight: 700;
+  color: var(--text);
   line-height: 1;
 }
 .aging-heat-head .head-tag {
-  font-family: 'Architects Daughter', cursive;
-  font-size: 11px; font-weight: 400;
+  font-size: 10px; font-weight: 700;
   color: white;
   padding: 2px 8px;
-  border: 1px solid var(--wf-ink);
+  border-radius: 10px;
   letter-spacing: 0.3px;
 }
 .aging-heat-rowlabel {
-  background: var(--wf-paper-2);
+  background: var(--panel-2);
   padding: 10px 12px;
-  font-family: 'Caveat', cursive;
-  font-size: 18px; font-weight: 700;
-  color: var(--wf-ink);
+  font-size: 13px; font-weight: 700;
+  color: var(--text);
+  border-radius: 6px;
   display: flex; align-items: center;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  line-height: 1;
+  font-family: 'IBM Plex Sans Thai', sans-serif;
 }
 .aging-heat-cell {
   padding: 14px 6px;
   text-align: center;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--mono);
   font-size: 14px; font-weight: 700;
-  color: var(--wf-ink);
+  color: var(--text);
+  border-radius: 6px;
   display: flex; flex-direction: column; gap: 2px; align-items: center; justify-content: center;
 }
 .aging-heat-cell .heat-sub {
-  font-family: 'Architects Daughter', cursive;
-  font-size: 10px; font-weight: 400; opacity: 0.75;
+  font-size: 9px; font-weight: 500; opacity: 0.75;
 }
-/* Heatmap intensity — warm earth tones (Claude Design feel) */
-.aging-heat-cell.h-0 { background: var(--wf-paper-bg); color: var(--wf-muted); opacity: 0.4; font-size: 18px; }
+
+/* Heatmap intensity — kept from Claude Design (warm earth tones) */
+.aging-heat-cell.h-0 { background: var(--panel-2); color: var(--text-muted); opacity: 0.55; font-size: 16px; }
 .aging-heat-cell.h-1 { background: rgba(232,168,56,0.20); }   /* gold 20% */
 .aging-heat-cell.h-2 { background: rgba(232,168,56,0.45); }   /* gold 45% */
 .aging-heat-cell.h-3 { background: rgba(217,74,61,0.50); color: white; }   /* warm red 50% */
 .aging-heat-cell.h-4 { background: rgba(217,74,61,0.80); color: white; }   /* warm red 80% */
-.aging-heat-cell.h-5 { background: var(--wf-bucket-stale); color: white; }  /* dark red */
+.aging-heat-cell.h-5 { background: var(--ag-bucket-stale); color: white; }  /* dark red */
+
 .aging-heat-total {
-  background: var(--wf-paper-2);
-  color: var(--wf-ink);
+  background: var(--text);   /* dashboard's --text = #0f172a */
+  color: white;
   padding: 14px 6px;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 15px; font-weight: 800;
+  font-family: var(--mono);
+  font-size: 14px; font-weight: 700;
   text-align: center;
-  border-left: 2px solid var(--wf-ink) !important;
+  border-radius: 6px;
   display: flex; align-items: center; justify-content: center;
 }
 
-/* Heatmap legend (low → high gradient) */
-.wf-heat-legend {
+/* Heatmap legend */
+.ag-heat-legend {
   display: flex; gap: 8px; align-items: center;
-  margin-top: 12px;
+  margin-top: 14px;
+  font-size: 12px; color: var(--text-dim);
 }
-.wf-heat-legend-row {
+.ag-heat-legend-row {
   display: flex; gap: 2px;
 }
 
-@media (max-width: 768px) {
-  .wf-paper { padding: 18px 16px; }
-  .wf-page-title { font-size: 28px; }
-  .aging-heatmap-grid { grid-template-columns: 90px repeat(4, 1fr) 60px; }
-  .aging-stack-row { grid-template-columns: 100px 1fr 80px; }
-  .aging-heat-rowlabel { font-size: 14px; padding: 8px 6px; }
-  .aging-heat-cell { padding: 10px 4px; font-size: 12px; }
-  .aging-stack-row .stack-label { font-size: 16px; }
+/* Note for "showing top N" message */
+.ag-heatmap-note {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-dim);
+  font-style: italic;
 }
+
+@media (max-width: 768px) {
+  .ag-chart-block { padding: 14px 14px; }
+  .aging-heatmap-grid { grid-template-columns: 90px repeat(4, 1fr) 60px; }
+  .aging-stack-row { grid-template-columns: 90px 1fr 70px; gap: 8px; }
+  .aging-heat-rowlabel { font-size: 12px; padding: 8px 6px; }
+  .aging-heat-cell { padding: 10px 4px; font-size: 12px; }
+  .aging-stack-row .stack-label { font-size: 12px; }
+  .aging-stack-row .stack-bar { height: 28px; }
+}
+
+.trend-chart-wrap { position: relative; height: 320px; }
 
 .trend-chart-wrap { position: relative; height: 320px; }
 
@@ -1523,45 +1483,46 @@ body {
       <div class="aging-buckets" id="agingBuckets"><div class="loading-state"><span class="loading"></span></div></div>
     </div>
     <div class="section aging-charts-section" id="agingChartsSection" style="display:none;">
-      <div class="wf-paper">
-        <div class="wf-charts-header">
-          <h2 class="wf-page-title" id="agingChartsTitle">Aging Overview</h2>
-          <div class="wf-metric-toggle">
-            <span class="wf-label">หน่วย:</span>
-            <button class="wf-metric-btn active" data-metric="rolls">ม้วน</button>
-            <button class="wf-metric-btn" data-metric="kg">kg</button>
-            <button class="wf-metric-btn" data-metric="value" id="agingMetricValueBtn">มูลค่า ฿</button>
+      <div class="ag-charts-header">
+        <div class="section-title" id="agingChartsTitle" style="margin: 0;">📊 ภาพรวม &gt; 90 วัน</div>
+        <div class="ag-metric-toggle">
+          <span class="ag-toggle-label">หน่วย:</span>
+          <button class="ag-metric-btn active" data-metric="rolls">ม้วน</button>
+          <button class="ag-metric-btn" data-metric="kg">kg</button>
+          <button class="ag-metric-btn" data-metric="value" id="agingMetricValueBtn">มูลค่า (฿)</button>
+        </div>
+      </div>
+      
+      <div class="ag-chart-block">
+        <div class="ag-chart-header">
+          <div>
+            <div class="ag-chart-title">🏭 Aging แยกตาม Supplier</div>
+            <div class="ag-chart-sub">แต่ละ supplier แบ่งสัดส่วน 4 ช่วงอายุ</div>
+          </div>
+          <div class="ag-stacked-legend" id="agingStackedLegend"></div>
+        </div>
+        <div id="agingStackedBar"></div>
+      </div>
+      
+      <div class="ag-chart-block">
+        <div class="ag-chart-header">
+          <div>
+            <div class="ag-chart-title">📋 Heatmap: ประเภทกระดาษ × ช่วงอายุ</div>
+            <div class="ag-chart-sub">สีเข้ม = ค่ามาก</div>
           </div>
         </div>
-        
-        <div class="wf-scribble">
-          <div class="wf-row-spread">
-            <div>
-              <div class="wf-hand-title">Aging by Supplier</div>
-              <div class="wf-thai-sub">แต่ละ supplier แบ่งสัดส่วน 4 ช่วงอายุ</div>
-            </div>
-            <div class="wf-stacked-bar-legend" id="agingStackedLegend"></div>
+        <div id="agingHeatmap"></div>
+        <div class="ag-heat-legend">
+          <span>น้อย</span>
+          <div class="ag-heat-legend-row">
+            <div class="aging-heat-cell h-1" style="width:22px; height:14px; padding:0; font-size:0;"></div>
+            <div class="aging-heat-cell h-2" style="width:22px; height:14px; padding:0; font-size:0;"></div>
+            <div class="aging-heat-cell h-3" style="width:22px; height:14px; padding:0; font-size:0;"></div>
+            <div class="aging-heat-cell h-4" style="width:22px; height:14px; padding:0; font-size:0;"></div>
+            <div class="aging-heat-cell h-5" style="width:22px; height:14px; padding:0; font-size:0;"></div>
           </div>
-          <div id="agingStackedBar"></div>
+          <span>มาก</span>
         </div>
-        
-        <div class="wf-scribble" style="margin-top: 18px;">
-          <div class="wf-hand-title">Heatmap — Paper Type × Age Bucket</div>
-          <div class="wf-thai-sub">ประเภทกระดาษ × ช่วงอายุ · สีเข้ม = ค่ามาก</div>
-          <div id="agingHeatmap"></div>
-          <div class="wf-heat-legend">
-            <span class="wf-mono-note">low</span>
-            <div class="wf-heat-legend-row">
-              <div class="aging-heat-cell h-1" style="width:22px; height:14px; padding:0; font-size:0;"></div>
-              <div class="aging-heat-cell h-2" style="width:22px; height:14px; padding:0; font-size:0;"></div>
-              <div class="aging-heat-cell h-3" style="width:22px; height:14px; padding:0; font-size:0;"></div>
-              <div class="aging-heat-cell h-4" style="width:22px; height:14px; padding:0; font-size:0;"></div>
-              <div class="aging-heat-cell h-5" style="width:22px; height:14px; padding:0; font-size:0;"></div>
-            </div>
-            <span class="wf-mono-note">high</span>
-          </div>
-        </div>
-        
       </div>
     </div>
     <div class="section">
@@ -2693,10 +2654,10 @@ async function loadAging() {
     });
     
     // Wire metric toggle (rolls / kg / value) — applies to V1 + V2 charts
-    document.querySelectorAll('.wf-metric-btn').forEach(btn => {
+    document.querySelectorAll('.ag-metric-btn').forEach(btn => {
       btn.onclick = () => {
         _agingMetric = btn.dataset.metric;
-        document.querySelectorAll('.wf-metric-btn').forEach(b => 
+        document.querySelectorAll('.ag-metric-btn').forEach(b => 
           b.classList.toggle('active', b.dataset.metric === _agingMetric));
         renderAgingCharts();
       };
@@ -2735,7 +2696,7 @@ function renderAgingPage() {
   
   const filterLabel = _agingPageFilter === 'all' ? '' : ` — ${_agingPageFilter}`;
   sectionTitle.textContent = `⏰ รายงานม้วนค้าง Stock (Aging Report)${filterLabel}`;
-  chartsTitle.textContent = `Aging Overview${filterLabel ? ' ' + filterLabel : ''}`;
+  chartsTitle.textContent = `📊 ภาพรวม > 90 วัน${filterLabel}`;
   topTitle.textContent = `🔝 Top 20 ม้วนที่ค้างนานที่สุด${filterLabel}`;
   
   // 2) คำนวณ buckets
@@ -2902,7 +2863,7 @@ function renderAgingV1Stacked(filtered) {
       <span>${AGING_BUCKET_LABELS[k]}</span>
     </div>
   `).join('');
-  legendWrap.innerHTML = legendHTML + `<div class="legend-item" style="margin-left:auto;color:var(--wf-ink-2);font-family:'Architects Daughter',cursive;">หน่วย: ${metricLabel}</div>`;
+  legendWrap.innerHTML = legendHTML + `<div class="legend-item legend-item-unit">หน่วย: ${metricLabel}</div>`;
   
   // rows
   const rowsHTML = sorted.map(([sup, s]) => {
@@ -3037,7 +2998,7 @@ function renderAgingV2Heatmap(filtered) {
   
   // ถ้ามี > 12 paper_type ที่ตัดออก แสดง note
   if (ptMap.size > 12) {
-    html += `<div style="margin-top:10px; font-size:12px; color:var(--text-dim); font-style:italic;">
+    html += `<div class="ag-heatmap-note">
       💡 แสดง top 12 ประเภทกระดาษ จากทั้งหมด ${ptMap.size} ประเภท
     </div>`;
   }
