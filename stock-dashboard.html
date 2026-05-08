@@ -1481,6 +1481,7 @@ body {
     <button class="tab-btn" data-tab="invoice" data-manager-only>📥 ใบ Invoice</button>
     <button class="tab-btn" data-tab="filter">🔍 ค้นหา & พิมพ์</button>
     <button class="tab-btn" data-tab="usage">📅 ยอดใช้</button>
+    <button class="tab-btn" data-tab="alerts">🚨 Alerts</button>
   </div>
 
   <div class="tab-content active" id="tab-overview">
@@ -1742,7 +1743,84 @@ body {
     </div>
   </div>
 
+  <div class="tab-content" id="tab-alerts">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:16px; flex-wrap:wrap;">
+      <div>
+        <div style="font-size:18px; font-weight:700; margin-bottom:4px;">🚨 แจ้งเตือนสต็อกใกล้หมด</div>
+        <div style="font-size:14px; color:var(--text-dim);" id="alerts-meta">คำนวณจากค่าเฉลี่ยการใช้และ lead time ของแต่ละ supplier</div>
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="btn" id="alerts-refresh">🔄 รีเฟรช</button>
+        <button class="btn" id="alerts-export">📥 Export CSV</button>
+      </div>
+    </div>
+
+    <div class="kpi-grid" id="alerts-kpi" style="grid-template-columns:repeat(4, 1fr);">
+      <div class="loading-state"><span class="loading"></span> โหลด...</div>
+    </div>
+
+    <div class="section" style="padding:14px 18px;">
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <span style="font-size:14px; color:var(--text-dim); font-weight:600;">Filter:</span>
+        <button class="btn alert-sev-btn active" data-sev="all">ทั้งหมด</button>
+        <button class="btn alert-sev-btn" data-sev="stockout">⚫ Stockout</button>
+        <button class="btn alert-sev-btn" data-sev="critical">🔴 Critical</button>
+        <button class="btn alert-sev-btn" data-sev="warning">🟡 Warning</button>
+        <span style="border-left:1px solid var(--border); height:24px; margin:0 6px;"></span>
+        <select id="alerts-supplier-filter" style="padding:8px 12px; border:1px solid var(--border-strong); border-radius:8px; font-family:inherit; font-size:14px; background:white;">
+          <option value="all">ทุก Supplier</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="alerts-stockout-section"></div>
+    <div id="alerts-critical-section"></div>
+    <div id="alerts-warning-section"></div>
+    <div id="alerts-empty" style="display:none;"></div>
+  </div>
 </div>
+
+<div id="alert-detail-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:9999; align-items:center; justify-content:center; padding:16px;">
+  <div style="background:white; border-radius:14px; max-width:780px; width:100%; max-height:90vh; overflow-y:auto; box-shadow:0 10px 40px rgba(0,0,0,0.3);">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; padding:18px 22px; border-bottom:1px solid var(--border); position:sticky; top:0; background:white; z-index:1;">
+      <div>
+        <div id="alert-modal-title" style="font-size:20px; font-weight:700;">—</div>
+        <div id="alert-modal-subtitle" style="font-size:14px; color:var(--text-dim); margin-top:4px;">—</div>
+      </div>
+      <button id="alert-modal-close" style="background:none; border:none; font-size:24px; cursor:pointer; color:var(--text-dim); padding:0; line-height:1;">✕</button>
+    </div>
+    <div id="alert-modal-body" style="padding:20px 22px;">
+      <div class="loading-state"><span class="loading"></span> โหลด...</div>
+    </div>
+  </div>
+</div>
+
+<style>
+.alert-sev-btn { font-weight:600; }
+.alert-sev-btn.active { background:var(--accent); color:white; border-color:var(--accent); }
+.alert-section-card { background:white; border:1px solid var(--border); border-radius:12px; margin-bottom:14px; overflow:hidden; }
+.alert-section-header { padding:13px 18px; font-size:15px; font-weight:700; display:flex; align-items:center; gap:10px; }
+.alert-section-header .right-text { margin-left:auto; font-size:13px; font-weight:600; opacity:0.85; }
+.alert-section-header.sev-stockout { background:#1f2937; color:#f1f5f9; }
+.alert-section-header.sev-critical { background:#fee2e2; color:#7f1d1d; }
+.alert-section-header.sev-warning  { background:#fef3c7; color:#78350f; }
+.alert-table { width:100%; border-collapse:collapse; font-size:14px; }
+.alert-table th { background:var(--panel-2); padding:10px 14px; text-align:left; font-size:13px; color:var(--text-dim); font-weight:700; }
+.alert-table th.right { text-align:right; }
+.alert-table td { padding:13px 14px; border-top:1px solid var(--border); font-size:14px; }
+.alert-table td.right { text-align:right; font-family:var(--mono); }
+.alert-table td.paper-name { font-weight:700; font-size:15px; }
+.alert-table tr:hover { background:#f8fafc; }
+.alert-cat-pill { display:inline-block; padding:2px 8px; border-radius:6px; font-size:12px; font-weight:600; background:var(--panel-2); color:var(--text-dim); margin-left:6px; }
+.alert-days { font-weight:700; }
+.alert-days.sev-stockout { color:#f1f5f9; background:#1f2937; padding:3px 10px; border-radius:6px; font-size:13px; }
+.alert-days.sev-critical { color:#7f1d1d; }
+.alert-days.sev-warning  { color:#78350f; }
+.alert-detail-btn { padding:6px 12px; font-size:13px; font-weight:600; border:1px solid var(--border-strong); background:white; border-radius:7px; cursor:pointer; font-family:inherit; }
+.alert-detail-btn:hover { background:var(--panel-2); }
+.alert-empty-state { text-align:center; padding:60px 20px; color:var(--text-dim); }
+.alert-empty-state .big { font-size:48px; margin-bottom:8px; }
+</style>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
@@ -2013,6 +2091,7 @@ function loadActiveTab() {
     case 'invoice': if (isManager()) loadInvoiceTab(); break;
     case 'filter': loadFilterTab(); break;
     case 'usage': loadUsageTab(); break;
+    case 'alerts': loadAlertsTab(); break;
   }
 }
 
@@ -4982,6 +5061,437 @@ $('#flt-paper-lots').addEventListener('keydown', e => {
 $('#usage-period').addEventListener('change', renderUsageTable);
 $('#usage-unit').addEventListener('change', renderUsageTable);
 $('#usage-export-csv').addEventListener('click', exportUsageCSV);
+
+// =============================================================
+// ===== ALERTS TAB =====
+// =============================================================
+const alertsState = {
+  loadedAt: null,
+  data: null,
+  filterSeverity: 'all',
+  filterSupplier: 'all',
+};
+const ALERTS_CACHE_MS = 5 * 60 * 1000;
+
+async function loadAlertsTab() {
+  const now = Date.now();
+  if (alertsState.data && alertsState.loadedAt && (now - alertsState.loadedAt) < ALERTS_CACHE_MS) {
+    renderAlerts();
+    return;
+  }
+  await fetchAndRenderAlerts();
+}
+
+async function fetchAndRenderAlerts() {
+  $('#alerts-kpi').innerHTML = '<div class="loading-state"><span class="loading"></span> กำลังคำนวณ...</div>';
+  $('#alerts-stockout-section').innerHTML = '';
+  $('#alerts-critical-section').innerHTML = '';
+  $('#alerts-warning-section').innerHTML = '';
+  $('#alerts-empty').style.display = 'none';
+
+  if (!currentUser || !currentUser.session_token) {
+    $('#alerts-kpi').innerHTML = '<div class="alert-empty-state"><div class="big">🔒</div><div>Session หมดอายุ — กรุณา login ใหม่</div></div>';
+    return;
+  }
+
+  try {
+    const { data, error } = await supabase.rpc('qa_check_reorder_alerts', {
+      p_token: currentUser.session_token,
+      p_frequency_filter: null
+    });
+    if (error) throw error;
+    if (!data || !data.success) throw new Error(data?.error || 'RPC ส่ง response ผิดรูปแบบ');
+
+    alertsState.data = data;
+    alertsState.loadedAt = Date.now();
+    populateSupplierFilter();
+    renderAlerts();
+  } catch (e) {
+    console.error('[Alerts] fetch error:', e);
+    $('#alerts-kpi').innerHTML = `<div class="alert-empty-state"><div class="big">⚠️</div><div>โหลดข้อมูลไม่สำเร็จ</div><div style="font-size:13px; margin-top:6px; color:var(--danger);">${escapeHtml(e.message || String(e))}</div></div>`;
+  }
+}
+
+function populateSupplierFilter() {
+  if (!alertsState.data?.alerts) return;
+  const sel = $('#alerts-supplier-filter');
+  const current = sel.value;
+  const suppliers = new Set();
+  alertsState.data.alerts.forEach(a => { if (a.supplier) suppliers.add(a.supplier); });
+  const sorted = Array.from(suppliers).sort();
+  sel.innerHTML = '<option value="all">ทุก Supplier</option>' + sorted.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
+  if (sorted.includes(current)) sel.value = current;
+}
+
+function renderAlerts() {
+  if (!alertsState.data) return;
+  const all = alertsState.data.alerts || [];
+  const sev = alertsState.filterSeverity;
+  const sup = alertsState.filterSupplier;
+
+  const filtered = all.filter(a => {
+    if (sev !== 'all' && a.severity !== sev) return false;
+    if (sup !== 'all' && a.supplier !== sup) return false;
+    return true;
+  });
+
+  // KPI cards (always show counts from ALL data, not filtered)
+  const counts = { stockout: 0, critical: 0, warning: 0 };
+  all.forEach(a => { if (counts[a.severity] !== undefined) counts[a.severity]++; });
+  const generatedAt = alertsState.data.generated_at ? new Date(alertsState.data.generated_at) : new Date();
+  const timeStr = generatedAt.toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' });
+  $('#alerts-meta').textContent = `อัปเดต: ${timeStr} · คำนวณจาก lead time + safety buffer ของแต่ละ supplier`;
+
+  $('#alerts-kpi').innerHTML = `
+    <div class="kpi-card" style="background:#1f2937; border-color:#1f2937; color:#f1f5f9;">
+      <div class="kpi-label" style="color:#cbd5e1;">⚫ Stockout</div>
+      <div class="kpi-value" style="color:#f1f5f9;">${counts.stockout}</div>
+      <div class="kpi-sub" style="color:#94a3b8;">หมดสต็อกแล้ว</div>
+    </div>
+    <div class="kpi-card" style="background:#fee2e2; border-color:#fca5a5;">
+      <div class="kpi-label" style="color:#7f1d1d;">🔴 Critical</div>
+      <div class="kpi-value" style="color:#7f1d1d;">${counts.critical}</div>
+      <div class="kpi-sub" style="color:#991b1b;">≤ lead time</div>
+    </div>
+    <div class="kpi-card" style="background:#fef3c7; border-color:#fcd34d;">
+      <div class="kpi-label" style="color:#78350f;">🟡 Warning</div>
+      <div class="kpi-value" style="color:#78350f;">${counts.warning}</div>
+      <div class="kpi-sub" style="color:#92400e;">ใกล้ถึง threshold</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">รวมทั้งหมด</div>
+      <div class="kpi-value">${all.length}</div>
+      <div class="kpi-sub">paper_types</div>
+    </div>
+  `;
+
+  if (!filtered.length) {
+    $('#alerts-stockout-section').innerHTML = '';
+    $('#alerts-critical-section').innerHTML = '';
+    $('#alerts-warning-section').innerHTML = '';
+    $('#alerts-empty').style.display = 'block';
+    $('#alerts-empty').innerHTML = all.length === 0
+      ? '<div class="section"><div class="alert-empty-state"><div class="big">✅</div><div style="font-size:16px; font-weight:700;">ไม่มี Alert</div><div style="margin-top:6px;">สต็อกทุกชนิดเพียงพอตาม lead time</div></div></div>'
+      : '<div class="section"><div class="alert-empty-state"><div class="big">🔍</div><div>ไม่มี alert ตาม filter ที่เลือก</div></div></div>';
+    return;
+  }
+  $('#alerts-empty').style.display = 'none';
+
+  const groups = { stockout: [], critical: [], warning: [] };
+  filtered.forEach(a => { if (groups[a.severity]) groups[a.severity].push(a); });
+
+  $('#alerts-stockout-section').innerHTML = renderAlertSection('stockout', groups.stockout);
+  $('#alerts-critical-section').innerHTML = renderAlertSection('critical', groups.critical);
+  $('#alerts-warning-section').innerHTML = renderAlertSection('warning', groups.warning);
+
+  $$('.alert-detail-btn').forEach(btn => {
+    btn.addEventListener('click', () => openAlertDetail(parseInt(btn.dataset.idx, 10)));
+  });
+}
+
+function renderAlertSection(severity, rows) {
+  if (!rows.length) return '';
+  const labels = {
+    stockout: { icon: '⚫', title: 'Stockout', right: 'หมดสต็อก ต้องสั่งทันที' },
+    critical: { icon: '🔴', title: 'Critical', right: 'ต้องสั่งทันที (≤ lead time)' },
+    warning:  { icon: '🟡', title: 'Warning',  right: 'ใกล้ถึง threshold' },
+  };
+  const lbl = labels[severity];
+
+  const allAlerts = alertsState.data.alerts;
+  const trBody = rows.map(a => {
+    const idx = allAlerts.indexOf(a);
+    const supplier = a.supplier || (a.stock_breakdown ? `${a.stock_breakdown.length} suppliers` : '—');
+    const supplierLabel = a.supplier
+      ? `${escapeHtml(a.supplier)} <span class="alert-cat-pill">${escapeHtml(a.paper_category || '—')}</span>`
+      : `<span style="color:var(--accent); font-weight:600;">${escapeHtml(supplier)}</span> <span class="alert-cat-pill">${escapeHtml(a.paper_category || '—')}</span>`;
+    const stockTons = (a.current_stock_tons ?? 0).toFixed(2);
+    const useTons = (a.avg_daily_usage_tons ?? 0).toFixed(3);
+    const days = a.days_remaining === null || a.days_remaining === undefined ? '—' : `${a.days_remaining} วัน`;
+
+    return `
+      <tr>
+        <td class="paper-name">${escapeHtml(a.paper_type || '—')}</td>
+        <td>${supplierLabel}</td>
+        <td class="right">${stockTons} t</td>
+        <td class="right">${useTons} t</td>
+        <td class="right"><span class="alert-days sev-${severity}">${days}</span></td>
+        <td class="right"><button class="alert-detail-btn" data-idx="${idx}">รายละเอียด</button></td>
+      </tr>
+    `;
+  }).join('');
+
+  return `
+    <div class="alert-section-card">
+      <div class="alert-section-header sev-${severity}">
+        <span style="font-size:18px;">${lbl.icon}</span>
+        <span>${lbl.title} — ${rows.length} paper type${rows.length > 1 ? 's' : ''}</span>
+        <span class="right-text">${lbl.right}</span>
+      </div>
+      <table class="alert-table">
+        <thead>
+          <tr>
+            <th>Paper Type</th>
+            <th>Supplier</th>
+            <th class="right">Stock</th>
+            <th class="right">ใช้/วัน</th>
+            <th class="right">จะใช้หมดใน</th>
+            <th class="right"></th>
+          </tr>
+        </thead>
+        <tbody>${trBody}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+async function openAlertDetail(idx) {
+  const a = alertsState.data?.alerts?.[idx];
+  if (!a) return;
+  $('#alert-detail-modal').style.display = 'flex';
+  $('#alert-modal-title').innerHTML = `${escapeHtml(a.paper_type)} <span class="alert-cat-pill" style="font-size:13px;">${escapeHtml(a.paper_category || '—')}</span>`;
+  const sevLabel = { stockout: '⚫ Stockout', critical: '🔴 Critical', warning: '🟡 Warning' }[a.severity] || a.severity;
+  const supplierTxt = a.supplier ? a.supplier : `${a.stock_breakdown?.length || 0} suppliers (รวมกัน)`;
+  const days = a.days_remaining === null || a.days_remaining === undefined ? '—' : `${a.days_remaining} วัน`;
+  $('#alert-modal-subtitle').innerHTML = `${sevLabel} · Supplier: <b>${escapeHtml(supplierTxt)}</b> · จะใช้หมดใน <b>${days}</b>`;
+
+  const body = $('#alert-modal-body');
+  body.innerHTML = '<div class="loading-state"><span class="loading"></span> โหลดรายละเอียด...</div>';
+
+  try {
+    // Build sections
+    const sections = [];
+
+    // Section 1: Overview
+    const stockTons = (a.current_stock_tons ?? 0).toFixed(2);
+    const useTons = (a.avg_daily_usage_tons ?? 0).toFixed(3);
+    const recommendedTons = ((a.avg_daily_usage_tons ?? 0) * (a.lead_time_days + a.safety_buffer_days * 2)).toFixed(2);
+
+    sections.push(`
+      <div style="margin-bottom:18px;">
+        <div style="font-size:14px; font-weight:700; margin-bottom:10px;">📋 ข้อมูลภาพรวม</div>
+        <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:10px; font-size:14px;">
+          <div style="background:var(--panel-2); padding:12px; border-radius:8px;">
+            <div style="font-size:12px; color:var(--text-dim); margin-bottom:4px;">Stock ปัจจุบัน</div>
+            <div style="font-size:18px; font-weight:700; font-family:var(--mono);">${stockTons} ตัน</div>
+          </div>
+          <div style="background:var(--panel-2); padding:12px; border-radius:8px;">
+            <div style="font-size:12px; color:var(--text-dim); margin-bottom:4px;">ใช้เฉลี่ย/วัน</div>
+            <div style="font-size:18px; font-weight:700; font-family:var(--mono);">${useTons} ตัน</div>
+          </div>
+          <div style="background:var(--panel-2); padding:12px; border-radius:8px;">
+            <div style="font-size:12px; color:var(--text-dim); margin-bottom:4px;">Lead time + Buffer</div>
+            <div style="font-size:18px; font-weight:700; font-family:var(--mono);">${a.lead_time_days} + ${a.safety_buffer_days} วัน</div>
+          </div>
+          <div style="background:#dcfce7; padding:12px; border-radius:8px;">
+            <div style="font-size:12px; color:#166534; margin-bottom:4px;">💡 แนะนำสั่ง</div>
+            <div style="font-size:18px; font-weight:700; font-family:var(--mono); color:#166534;">${recommendedTons} ตัน</div>
+          </div>
+        </div>
+        <div style="font-size:12px; color:var(--text-dim); margin-top:8px;">
+          คำนวณจากค่าใช้เฉลี่ยใน ${a.lookback_days} วันย้อนหลัง · แจ้งเมื่อ stock ≤ ${a.threshold_days} วัน
+        </div>
+      </div>
+    `);
+
+    // Section 2: Stock breakdown (Liner cross-supplier)
+    if (a.stock_breakdown && a.stock_breakdown.length > 0) {
+      const bdRows = a.stock_breakdown.map(b => `
+        <tr>
+          <td>${escapeHtml(b.supplier)}</td>
+          <td class="right">${(b.stock_kg / 1000).toFixed(2)} ตัน</td>
+          <td class="right">${(b.used_kg / 1000).toFixed(2)} ตัน</td>
+          <td class="right">${(b.avg_daily_kg / 1000).toFixed(3)} ตัน</td>
+        </tr>
+      `).join('');
+      sections.push(`
+        <div style="margin-bottom:18px;">
+          <div style="font-size:14px; font-weight:700; margin-bottom:10px;">📦 Stock breakdown ต่อ Supplier</div>
+          <table class="alert-table" style="border:1px solid var(--border); border-radius:8px;">
+            <thead>
+              <tr>
+                <th>Supplier</th>
+                <th class="right">Stock</th>
+                <th class="right">ใช้รวม (lookback)</th>
+                <th class="right">ใช้/วัน</th>
+              </tr>
+            </thead>
+            <tbody>${bdRows}</tbody>
+          </table>
+        </div>
+      `);
+    }
+
+    body.innerHTML = sections.join('');
+
+    // Section 3: Load in-stock invoices + recent outflows
+    const loadingDiv = document.createElement('div');
+    loadingDiv.innerHTML = '<div style="font-size:13px; color:var(--text-dim); text-align:center; padding:14px;"><span class="loading"></span> โหลดรายละเอียด invoice + outflow ...</div>';
+    body.appendChild(loadingDiv);
+
+    const [invoicesRes, outflowsRes] = await Promise.all([
+      supabase.from('paper_invoices')
+        .select('paper_lot, supplier, weight_kg, remaining_weight_kg, receive_date, paper_category')
+        .eq('paper_type', a.paper_type)
+        .eq('status', 'in_stock')
+        .gt('remaining_weight_kg', 0)
+        .order('receive_date', { ascending: true }),
+      supabase.from('paper_outflows')
+        .select('outflow_date, supplier_name, weight_kg')
+        .eq('paper_type', a.paper_type)
+        .eq('voided', false)
+        .gte('outflow_date', new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10))
+        .order('outflow_date', { ascending: false })
+    ]);
+
+    body.removeChild(loadingDiv);
+
+    const invoices = invoicesRes.data || [];
+    const outflows = outflowsRes.data || [];
+
+    // In-stock invoices
+    let invHtml;
+    if (!invoices.length) {
+      invHtml = '<div style="background:#fee2e2; padding:10px 14px; border-radius:8px; font-size:13px; color:#7f1d1d;">⚠️ ไม่พบ invoice ที่ยังในสต็อก</div>';
+    } else {
+      const invTotal = invoices.reduce((s, r) => s + parseFloat(r.remaining_weight_kg || 0), 0);
+      const invRows = invoices.map(r => {
+        const days = daysSince(r.receive_date);
+        return `<tr>
+          <td>${escapeHtml(r.paper_lot)}</td>
+          <td>${escapeHtml(r.supplier || '—')}</td>
+          <td class="right">${fmtKgFull(r.remaining_weight_kg)} kg</td>
+          <td class="right">${escapeHtml(r.receive_date || '—')}</td>
+          <td class="right" style="color:${days > 90 ? '#dc2626' : 'inherit'};">${days !== null ? days + ' วัน' : '—'}</td>
+        </tr>`;
+      }).join('');
+      invHtml = `
+        <table class="alert-table" style="border:1px solid var(--border); border-radius:8px;">
+          <thead>
+            <tr>
+              <th>Paper Lot</th>
+              <th>Supplier</th>
+              <th class="right">น้ำหนัก</th>
+              <th class="right">รับเข้า</th>
+              <th class="right">อายุ</th>
+            </tr>
+          </thead>
+          <tbody>${invRows}</tbody>
+          <tfoot><tr style="font-weight:700; background:var(--panel-2);">
+            <td colspan="2">รวม ${invoices.length} ม้วน</td>
+            <td class="right">${fmtKgFull(invTotal)} kg</td>
+            <td colspan="2"></td>
+          </tr></tfoot>
+        </table>
+      `;
+    }
+
+    // Outflow chart (group by date)
+    let outflowHtml;
+    if (!outflows.length) {
+      outflowHtml = '<div style="font-size:13px; color:var(--text-dim);">ไม่พบ outflow ใน 30 วันล่าสุด</div>';
+    } else {
+      const byDate = {};
+      outflows.forEach(o => {
+        const d = o.outflow_date;
+        byDate[d] = (byDate[d] || 0) + parseFloat(o.weight_kg || 0);
+      });
+      const dates = Object.keys(byDate).sort();
+      const maxKg = Math.max(...Object.values(byDate));
+      const totalKg = outflows.reduce((s, r) => s + parseFloat(r.weight_kg || 0), 0);
+      const bars = dates.map(d => {
+        const kg = byDate[d];
+        const pct = (kg / maxKg) * 100;
+        return `
+          <div style="display:flex; align-items:center; gap:8px; font-size:12px; margin-bottom:3px;">
+            <span style="width:90px; color:var(--text-dim); font-family:var(--mono);">${d}</span>
+            <div style="flex:1; background:var(--panel-2); border-radius:4px; height:18px; position:relative;">
+              <div style="background:var(--accent); height:100%; width:${pct}%; border-radius:4px;"></div>
+            </div>
+            <span style="width:80px; text-align:right; font-family:var(--mono);">${fmtKgFull(kg)} kg</span>
+          </div>
+        `;
+      }).join('');
+      outflowHtml = `
+        <div style="font-size:13px; color:var(--text-dim); margin-bottom:8px;">รวม ${fmtKgFull(totalKg)} kg ใน ${dates.length} วัน</div>
+        <div style="max-height:240px; overflow-y:auto;">${bars}</div>
+      `;
+    }
+
+    body.insertAdjacentHTML('beforeend', `
+      <div style="margin-bottom:18px;">
+        <div style="font-size:14px; font-weight:700; margin-bottom:10px;">📋 Invoice ที่ยังในสต็อก</div>
+        ${invHtml}
+      </div>
+      <div>
+        <div style="font-size:14px; font-weight:700; margin-bottom:10px;">📊 การจ่ายออก 30 วันล่าสุด</div>
+        ${outflowHtml}
+      </div>
+    `);
+  } catch (e) {
+    console.error('[Alert detail] error:', e);
+    body.innerHTML = `<div class="alert-empty-state"><div class="big">⚠️</div><div>โหลดรายละเอียดไม่สำเร็จ</div><div style="font-size:13px; color:var(--danger); margin-top:6px;">${escapeHtml(e.message || String(e))}</div></div>`;
+  }
+}
+
+function closeAlertDetail() {
+  $('#alert-detail-modal').style.display = 'none';
+}
+
+function exportAlertsCSV() {
+  if (!alertsState.data?.alerts?.length) {
+    alert('ยังไม่มีข้อมูล alerts');
+    return;
+  }
+  const rows = [['Severity', 'Paper Type', 'Category', 'Supplier', 'Stock (tons)', 'Avg Daily (tons)', 'Days Remaining', 'Lead Time', 'Safety Buffer', 'Threshold', 'Lookback', 'Frequency']];
+  alertsState.data.alerts.forEach(a => {
+    rows.push([
+      a.severity,
+      a.paper_type || '',
+      a.paper_category || '',
+      a.supplier || (a.stock_breakdown ? `${a.stock_breakdown.length} suppliers` : ''),
+      a.current_stock_tons ?? '',
+      a.avg_daily_usage_tons ?? '',
+      a.days_remaining ?? '',
+      a.lead_time_days,
+      a.safety_buffer_days,
+      a.threshold_days,
+      a.lookback_days,
+      a.frequency
+    ]);
+  });
+  const csv = rows.map(r => r.map(c => {
+    const s = String(c);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  }).join(',')).join('\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `stock_alerts_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// Alerts events
+$('#alerts-refresh').addEventListener('click', () => { alertsState.loadedAt = null; fetchAndRenderAlerts(); });
+$('#alerts-export').addEventListener('click', exportAlertsCSV);
+$('#alerts-supplier-filter').addEventListener('change', e => {
+  alertsState.filterSupplier = e.target.value;
+  renderAlerts();
+});
+$$('.alert-sev-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    $$('.alert-sev-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    alertsState.filterSeverity = btn.dataset.sev;
+    renderAlerts();
+  });
+});
+$('#alert-modal-close').addEventListener('click', closeAlertDetail);
+$('#alert-detail-modal').addEventListener('click', e => {
+  if (e.target.id === 'alert-detail-modal') closeAlertDetail();
+});
 
 checkAuth();
 
