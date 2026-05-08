@@ -1192,14 +1192,15 @@ function parseScgLot(raw) {
   }
   
   // Format 2: compact — strip non-alphanumeric, ใช้ regex จับ pattern XX#A####XA หรือ XX####XA (ไม่มี A)
+  // s1 รองรับ alphanumeric 2 ตัว (เช่น "A0", "B1", "77") ตรงกับ SCG_PATTERN
   const compact = cleaned.replace(/[^A-Z0-9]/g, '');
   // Pattern A: XX#A####XA  (10 ตัว, มี A ที่ position 3)
-  let m = compact.match(/^([0-9]{2})([0-9])A([0-9]{4})([0-9][A-Z])$/);
+  let m = compact.match(/^([0-9A-Z]{2})([0-9])A([0-9]{4})([0-9][A-Z])$/);
   if (m) {
     return { s1: m[1], s2: m[2], s3: m[3], s4: m[4] };
   }
   // Pattern B: XX#####XA  (9 ตัว, ไม่มี A หน้าเลข 4 ตัว)
-  m = compact.match(/^([0-9]{2})([0-9])([0-9]{4})([0-9][A-Z])$/);
+  m = compact.match(/^([0-9A-Z]{2})([0-9])([0-9]{4})([0-9][A-Z])$/);
   if (m) {
     return { s1: m[1], s2: m[2], s3: m[3], s4: m[4] };
   }
