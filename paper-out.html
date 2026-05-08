@@ -1925,14 +1925,28 @@ function scanLoop(video) {
         }
         
         const lotUpper = lot.toUpperCase();
-        document.getElementById('lotInput').value = lotUpper;
         
-        // ถ้า lot มี dash → น่าจะเป็น SCG → auto-select supplier + split เข้า 4-box
-        if (lotUpper.includes('-') && SCG_PATTERN.test(lotUpper)) {
-          supplierSelect.value = 'SCG';
-          supplierSelect.dispatchEvent(new Event('change'));
-          splitScgLot(lotUpper);
+        // ลอง parse เป็น SCG ก่อน — รองรับทั้ง dashed (A0-5-A8383-1I)
+        // และ compact (A05A83831I) เหมือน paste handler
+        const scgParsed = parseScgLot(lotUpper);
+        if (scgParsed) {
+          // Build full SCG lot และตรวจกับ SCG_PATTERN อีกชั้นเพื่อความแน่ใจ
+          const fullScgLot = `${scgParsed.s1}-${scgParsed.s2}-A${scgParsed.s3}-${scgParsed.s4}`;
+          if (SCG_PATTERN.test(fullScgLot)) {
+            supplierSelect.value = 'SCG';
+            supplierSelect.dispatchEvent(new Event('change'));
+            // toggleScgMode (ใน change handler) จะเปิด 4-box และ focus scgS1
+            // จากนั้นเรา apply parsed values ลงทุกช่อง
+            applyScgParsedLot(scgParsed);
+            doLookup(normalize(fullScgLot));
+            stopScanner();
+            showToast('✓ Scan สำเร็จ: ' + fullScgLot, 'success');
+            return;
+          }
         }
+        
+        // ไม่ใช่ SCG format → ใส่ใน lotInput ปกติ
+        document.getElementById('lotInput').value = lotUpper;
         
         doLookup(normalize(lot));
         stopScanner();
