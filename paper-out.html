@@ -315,6 +315,70 @@ body {
 }
 .list-controls button:hover { background: #1e40af; }
 
+/* Advanced filter toggle */
+.btn-toggle-filter {
+  padding: 8px 12px; background: white; color: var(--text);
+  border: 1px solid var(--border-strong); border-radius: 7px;
+  font-size: 13px; font-weight: 600; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.btn-toggle-filter:hover { background: var(--bg); }
+.btn-toggle-filter.active {
+  background: var(--info-light); border-color: var(--info); color: var(--info);
+}
+.filter-badge {
+  background: var(--info); color: white; font-size: 11px;
+  padding: 1px 6px; border-radius: 9px; font-weight: 700;
+  min-width: 18px; text-align: center;
+}
+
+/* Advanced filter panel */
+.advanced-filter-panel {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 10px; padding: 12px; margin-bottom: 12px;
+  display: none;
+}
+.advanced-filter-panel.show { display: block; }
+.advanced-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+.adv-filter-field { display: flex; flex-direction: column; gap: 4px; }
+.adv-filter-field label {
+  font-size: 11px; font-weight: 700; color: var(--text-dim);
+  text-transform: uppercase; letter-spacing: 0.3px;
+}
+.adv-filter-field select, .adv-filter-field input {
+  padding: 8px 10px; border: 1px solid var(--border-strong);
+  border-radius: 7px; font-size: 13px; background: white; width: 100%;
+}
+.date-range-row {
+  display: flex; gap: 8px; align-items: center;
+}
+.date-range-row input { flex: 1; min-width: 0; }
+.date-range-row span {
+  font-size: 12px; color: var(--text-dim); white-space: nowrap;
+}
+.advanced-filter-actions {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);
+  gap: 8px; flex-wrap: wrap;
+}
+.filter-result-count {
+  font-size: 12px; color: var(--text-dim);
+}
+.filter-result-count b { color: var(--info); }
+.btn-clear-filter {
+  padding: 6px 12px; background: white; color: var(--text-dim);
+  border: 1px solid var(--border-strong); border-radius: 7px;
+  font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.btn-clear-filter:hover { background: var(--bg); color: var(--primary); }
+.btn-clear-filter:disabled {
+  opacity: 0.4; cursor: not-allowed;
+}
+
 /* Group view */
 .group-day {
   background: var(--panel);
@@ -772,9 +836,57 @@ body {
         <option value="week">7 วัน</option>
         <option value="month" selected>เดือนนี้</option>
         <option value="all">ทั้งหมด</option>
+        <option value="custom">📅 กำหนดเอง</option>
       </select>
+      <button id="btnToggleFilter" class="btn-toggle-filter" type="button">
+        🔧 ตัวกรอง <span id="filterBadge" class="filter-badge" style="display:none;">0</span>
+      </button>
       <button id="btnExport">📥 Export CSV</button>
       <button id="btnAdminLogin" class="btn-admin-login">🔐 Admin</button>
+    </div>
+
+    <!-- Advanced Filter Panel -->
+    <div id="advancedFilterPanel" class="advanced-filter-panel">
+      <div class="advanced-filter-grid">
+        <div class="adv-filter-field" id="customDateField" style="display:none;grid-column:1/-1;">
+          <label>📅 ช่วงวันที่</label>
+          <div class="date-range-row">
+            <input type="date" id="filterDateFrom">
+            <span>ถึง</span>
+            <input type="date" id="filterDateTo">
+          </div>
+        </div>
+        <div class="adv-filter-field">
+          <label>🏭 Supplier</label>
+          <select id="filterSupplier">
+            <option value="">ทั้งหมด</option>
+          </select>
+        </div>
+        <div class="adv-filter-field">
+          <label>📋 Paper Type</label>
+          <select id="filterPaperType">
+            <option value="">ทั้งหมด</option>
+          </select>
+        </div>
+        <div class="adv-filter-field">
+          <label>📏 Width (mm)</label>
+          <select id="filterWidth">
+            <option value="">ทั้งหมด</option>
+          </select>
+        </div>
+        <div class="adv-filter-field">
+          <label>⚙️ เครื่อง</label>
+          <select id="filterMachine">
+            <option value="">ทั้งหมด</option>
+          </select>
+        </div>
+      </div>
+      <div class="advanced-filter-actions">
+        <div class="filter-result-count" id="filterResultCount"></div>
+        <button id="btnClearFilter" class="btn-clear-filter" type="button" disabled>
+          ✕ ล้างตัวกรอง
+        </button>
+      </div>
     </div>
 
     <div id="outflowList">
@@ -1611,7 +1723,12 @@ async function loadOutflows() {
     .select('*')
     .order('created_at', { ascending: false });
   
-  if (period !== 'all') {
+  if (period === 'custom') {
+    const fromDate = document.getElementById('filterDateFrom').value;
+    const toDate = document.getElementById('filterDateTo').value;
+    if (fromDate) query = query.gte('outflow_date', fromDate);
+    if (toDate) query = query.lte('outflow_date', toDate);
+  } else if (period !== 'all') {
     const now = new Date();
     let from;
     if (period === 'today') from = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -1627,20 +1744,140 @@ async function loadOutflows() {
   }
   
   allOutflows = data || [];
+  rebuildFilterDropdowns();  // populate Supplier/Type/Width/Machine dropdowns from data
   renderList();
   renderStats();
 }
 
-function renderList() {
-  const search = document.getElementById('searchInput').value.trim().toUpperCase();
-  let filtered = allOutflows;
-  if (search) {
-    filtered = filtered.filter(o => 
-      (o.paper_lot_normalized || '').includes(normalize(search))
-    );
+// ====== Advanced Filter Helpers ======
+function getActiveFilters() {
+  return {
+    supplier: document.getElementById('filterSupplier').value,
+    paperType: document.getElementById('filterPaperType').value,
+    width: document.getElementById('filterWidth').value,
+    machine: document.getElementById('filterMachine').value,
+    search: document.getElementById('searchInput').value.trim().toUpperCase()
+  };
+}
+
+function countActiveFilters() {
+  const f = getActiveFilters();
+  let n = 0;
+  if (f.supplier) n++;
+  if (f.paperType) n++;
+  if (f.width) n++;
+  if (f.machine) n++;
+  // search ไม่นับเข้า badge เพราะมีช่องค้นหาของตัวเองอยู่แล้วด้านนอก
+  return n;
+}
+
+function getFilteredOutflows() {
+  const f = getActiveFilters();
+  return allOutflows.filter(o => {
+    if (f.supplier && (o.supplier_name || '') !== f.supplier) return false;
+    if (f.paperType && (o.paper_type || '') !== f.paperType) return false;
+    if (f.width && String(o.width_mm || '') !== f.width) return false;
+    if (f.machine && (o.machine_id || '') !== f.machine) return false;
+    if (f.search && !(o.paper_lot_normalized || '').includes(normalize(f.search))) return false;
+    return true;
+  });
+}
+
+// Build option list from data, optionally filtered by other selections (cascade)
+function uniqueValues(rows, key) {
+  const set = new Set();
+  rows.forEach(o => {
+    const v = o[key];
+    if (v !== null && v !== undefined && v !== '') set.add(String(v));
+  });
+  return Array.from(set).sort((a, b) => {
+    const na = Number(a), nb = Number(b);
+    if (!isNaN(na) && !isNaN(nb)) return na - nb;
+    return a.localeCompare(b);
+  });
+}
+
+function rebuildFilterDropdowns() {
+  // Cascade: each dropdown's options = unique values from rows that match ALL OTHER active filters
+  // (excluding the dropdown itself). This way changing supplier prunes paper_type/width/machine etc.
+  const current = getActiveFilters();
+  
+  const fillSelect = (selectId, key, otherFilters) => {
+    const sel = document.getElementById(selectId);
+    const prev = sel.value;
+    const matched = allOutflows.filter(o => {
+      for (const [k, v] of Object.entries(otherFilters)) {
+        if (!v) continue;
+        if (k === 'supplier' && (o.supplier_name || '') !== v) return false;
+        if (k === 'paperType' && (o.paper_type || '') !== v) return false;
+        if (k === 'width' && String(o.width_mm || '') !== v) return false;
+        if (k === 'machine' && (o.machine_id || '') !== v) return false;
+      }
+      return true;
+    });
+    const values = uniqueValues(matched, key);
+    
+    // Build option HTML
+    let html = '<option value="">ทั้งหมด</option>';
+    values.forEach(v => {
+      let label = v;
+      if (selectId === 'filterMachine') label = MACHINE_LABELS[v] || v;
+      html += `<option value="${escapeHtml(v)}">${escapeHtml(label)}</option>`;
+    });
+    sel.innerHTML = html;
+    
+    // Restore previous value if still valid; otherwise clear (auto-deselect orphan)
+    if (prev && values.includes(prev)) {
+      sel.value = prev;
+    } else if (prev) {
+      sel.value = '';
+    }
+  };
+  
+  fillSelect('filterSupplier', 'supplier_name', { paperType: current.paperType, width: current.width, machine: current.machine });
+  fillSelect('filterPaperType', 'paper_type', { supplier: current.supplier, width: current.width, machine: current.machine });
+  fillSelect('filterWidth', 'width_mm', { supplier: current.supplier, paperType: current.paperType, machine: current.machine });
+  fillSelect('filterMachine', 'machine_id', { supplier: current.supplier, paperType: current.paperType, width: current.width });
+}
+
+function updateFilterBadge() {
+  const n = countActiveFilters();
+  const badge = document.getElementById('filterBadge');
+  const btn = document.getElementById('btnToggleFilter');
+  const clearBtn = document.getElementById('btnClearFilter');
+  
+  if (n > 0) {
+    badge.textContent = n;
+    badge.style.display = 'inline-block';
+    btn.classList.add('active');
+    clearBtn.disabled = false;
+  } else {
+    badge.style.display = 'none';
+    btn.classList.remove('active');
+    clearBtn.disabled = true;
   }
+}
+
+function updateFilterResultCount() {
+  const total = allOutflows.length;
+  const filtered = getFilteredOutflows().length;
+  const el = document.getElementById('filterResultCount');
+  if (countActiveFilters() > 0 || document.getElementById('searchInput').value.trim()) {
+    el.innerHTML = `กำลังกรอง: <b>${filtered.toLocaleString()}</b> / ${total.toLocaleString()} รายการ`;
+  } else {
+    el.innerHTML = `ทั้งหมด <b>${total.toLocaleString()}</b> รายการ`;
+  }
+}
+
+function renderList() {
+  const filtered = getFilteredOutflows();
   
   const list = document.getElementById('outflowList');
+  
+  // Update sub-views that depend on filter state
+  updateFilterBadge();
+  updateFilterResultCount();
+  renderStats();  // stats now reflect filtered data
   
   if (filtered.length === 0) {
     list.innerHTML = '<div class="empty-state"><div class="icon">📭</div><div>ไม่พบรายการ</div></div>';
@@ -1787,12 +2024,14 @@ document.getElementById('outflowList').addEventListener('click', (e) => {
 });
 
 function renderStats() {
+  // Stats reflect currently-filtered data so user sees impact of their filters
+  const filtered = getFilteredOutflows();
   const today = new Date().toISOString().split('T')[0];
   const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
   
-  const todayList = allOutflows.filter(o => !o.voided && o.outflow_date === today);
-  const monthList = allOutflows.filter(o => !o.voided && o.outflow_date >= monthStart);
-  const preStockList = allOutflows.filter(o => !o.voided && o.outflow_reason === 'pre_stock');
+  const todayList = filtered.filter(o => !o.voided && o.outflow_date === today);
+  const monthList = filtered.filter(o => !o.voided && o.outflow_date >= monthStart);
+  const preStockList = filtered.filter(o => !o.voided && o.outflow_reason === 'pre_stock');
   
   document.getElementById('statToday').textContent = todayList.length;
   document.getElementById('statTodayKg').textContent = Math.round(todayList.reduce((s, o) => s + (Number(o.weight_kg) || 0), 0));
@@ -1820,15 +2059,78 @@ window.voidOutflow = async function(id, lot) {
   }
 };
 
-document.getElementById('searchInput').addEventListener('input', renderList);
-document.getElementById('filterPeriod').addEventListener('change', loadOutflows);
+document.getElementById('searchInput').addEventListener('input', () => {
+  // Search ส่งผลต่อ list อย่างเดียว (ไม่ rebuild dropdowns เพื่อไม่ให้กระโดด)
+  renderList();
+});
+
+document.getElementById('filterPeriod').addEventListener('change', (e) => {
+  const isCustom = e.target.value === 'custom';
+  const customField = document.getElementById('customDateField');
+  customField.style.display = isCustom ? 'flex' : 'none';
+  
+  if (isCustom) {
+    // Auto-open advanced panel and pre-fill with current month if empty
+    document.getElementById('advancedFilterPanel').classList.add('show');
+    const fromInput = document.getElementById('filterDateFrom');
+    const toInput = document.getElementById('filterDateTo');
+    if (!fromInput.value) {
+      const now = new Date();
+      fromInput.value = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+      toInput.value = now.toISOString().split('T')[0];
+    }
+    loadOutflows();
+  } else {
+    loadOutflows();
+  }
+});
+
+// Custom date range — reload only when both values present (or both cleared)
+['filterDateFrom', 'filterDateTo'].forEach(id => {
+  document.getElementById(id).addEventListener('change', () => {
+    if (document.getElementById('filterPeriod').value === 'custom') loadOutflows();
+  });
+});
+
+// Toggle advanced filter panel
+document.getElementById('btnToggleFilter').addEventListener('click', () => {
+  document.getElementById('advancedFilterPanel').classList.toggle('show');
+});
+
+// Cascade filter dropdowns
+['filterSupplier', 'filterPaperType', 'filterWidth', 'filterMachine'].forEach(id => {
+  document.getElementById(id).addEventListener('change', () => {
+    rebuildFilterDropdowns();  // cascade — prune other dropdowns based on new selection
+    renderList();
+  });
+});
+
+// Clear all filters
+document.getElementById('btnClearFilter').addEventListener('click', () => {
+  document.getElementById('filterSupplier').value = '';
+  document.getElementById('filterPaperType').value = '';
+  document.getElementById('filterWidth').value = '';
+  document.getElementById('filterMachine').value = '';
+  rebuildFilterDropdowns();
+  renderList();
+});
 
 // ====== Export CSV ======
 document.getElementById('btnExport').addEventListener('click', () => {
+  // Export the currently-filtered set so user gets exactly what they see
+  const exportRows = getFilteredOutflows();
+  const filterCount = countActiveFilters();
+  const hasSearch = document.getElementById('searchInput').value.trim();
+  
+  if (exportRows.length === 0) {
+    showToast('ไม่มีรายการที่ตรงกับตัวกรอง', 'error');
+    return;
+  }
+  
   const rows = [
     ['วันที่ตัดออก', 'เวลาบันทึก', 'เครื่อง', 'Paper Lot', 'Supplier', 'ประเภท', 'หน้ากว้าง', 'น้ำหนัก', 'Pre-stock', 'สถานะ']
   ];
-  allOutflows.forEach(o => {
+  exportRows.forEach(o => {
     rows.push([
       o.outflow_date || '',
       o.created_at || '',
@@ -1848,9 +2150,16 @@ document.getElementById('btnExport').addEventListener('click', () => {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `paper-out-${new Date().toISOString().split('T')[0]}.csv`;
+  const suffix = (filterCount > 0 || hasSearch) ? '-filtered' : '';
+  a.download = `paper-out${suffix}-${new Date().toISOString().split('T')[0]}.csv`;
   a.click();
   URL.revokeObjectURL(url);
+  
+  if (filterCount > 0 || hasSearch) {
+    showToast(`✓ Export ${exportRows.length} รายการ (มีตัวกรอง)`, 'success');
+  } else {
+    showToast(`✓ Export ${exportRows.length} รายการ`, 'success');
+  }
 });
 
 async function loadTabBadge() {
