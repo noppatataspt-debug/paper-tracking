@@ -1302,6 +1302,64 @@ function fmtDate(d) {
   if (isNaN(dt)) return '—';
   return dt.toLocaleDateString('th-TH', {year:'numeric', month:'short', day:'numeric'});
 }
+
+// ============================================================
+// Adaptive time-axis config for Chart.js
+// Chooses unit + displayFormats based on data span so multi-year
+// data shows years clearly instead of cramming daily ticks.
+// ============================================================
+function getTimeAxisConfig(points, extraOpts = {}) {
+  // points: array of {x: Date|string|number, ...}
+  let unit = 'day';
+  let stepSize;
+  
+  if (points && points.length > 0) {
+    const xs = points.map(p => +new Date(p.x)).filter(t => !isNaN(t));
+    if (xs.length >= 2) {
+      const spanMs = Math.max(...xs) - Math.min(...xs);
+      const spanDays = spanMs / (1000 * 60 * 60 * 24);
+      
+      if (spanDays > 730) {        // > 2 ปี → tick เป็นไตรมาส
+        unit = 'quarter';
+      } else if (spanDays > 365) { // 1–2 ปี → tick เป็นเดือน
+        unit = 'month';
+      } else if (spanDays > 120) { // 4–12 เดือน → tick เป็นเดือน
+        unit = 'month';
+      } else if (spanDays > 30) {  // 1–4 เดือน → tick เป็นสัปดาห์
+        unit = 'week';
+      } else {                     // ≤ 1 เดือน → tick เป็นวัน
+        unit = 'day';
+      }
+    }
+  }
+  
+  // displayFormats: ทุกระดับที่ "ใหญ่กว่าวัน" จะมีปีติดอยู่ด้วย
+  // เพื่อให้ multi-year data เห็นปีชัดเจน
+  const displayFormats = {
+    day: 'd MMM yy',          // 8 May 26
+    week: 'd MMM yy',         // 8 May 26
+    month: 'MMM yyyy',        // May 2026
+    quarter: "QQQ yyyy",      // Q2 2026
+    year: 'yyyy',             // 2026
+  };
+  
+  return {
+    type: 'time',
+    time: {
+      unit,
+      ...(stepSize ? { stepSize } : {}),
+      displayFormats,
+      tooltipFormat: 'd MMM yyyy',
+    },
+    ticks: {
+      font: { size: 10 },
+      maxRotation: 0,
+      autoSkipPadding: 14,
+      ...extraOpts.ticks,
+    },
+    ...extraOpts.scaleOpts,
+  };
+}
 function normalizeLot(s) {
   return String(s || '').trim().toUpperCase().replace(/[\s\-_]/g, '');
 }
@@ -1874,8 +1932,7 @@ function renderSmallMultiples(containerId, rows, dateField, activeParams, specs,
         responsive: true, maintainAspectRatio: false,
         interaction: { mode: 'nearest', axis: 'x', intersect: false },
         scales: {
-          x: { type: 'time', time: { unit: 'day' },
-               ticks: { font: { size: 10 }, maxRotation: 0, autoSkipPadding: 14 } },
+          x: getTimeAxisConfig(aggPoints),
           y: { ticks: { font: { size: 10 } },
                min: yMinFinal, max: yMaxFinal },
         },
@@ -2153,8 +2210,11 @@ async function loadTrend() {
         responsive: true, maintainAspectRatio: false,
         interaction: { mode: 'nearest', axis: 'x', intersect: false },
         scales: {
-          x: { type: 'time', time: { unit: 'day' },
-               title: { display: true, text: dateField === 'receive_date' ? 'Receive Date' : 'Production Date' } },
+          x: getTimeAxisConfig(aggPoints, {
+            scaleOpts: {
+              title: { display: true, text: dateField === 'receive_date' ? 'Receive Date' : 'Production Date' }
+            }
+          }),
           y: {
             title: { display: true, text: `${info.label} (${info.unit})` },
             min: (() => {
@@ -2567,7 +2627,7 @@ async function renderLookupComparison(lotResults) {
           responsive: true, maintainAspectRatio: false,
           interaction: { mode: 'nearest', intersect: false },
           scales: {
-            x: { type: 'time', time: { unit: 'month' }, ticks: { font: { size: 10 } } },
+            x: getTimeAxisConfig([...baselinePoints, ...searchedPoints]),
             y: {
               ticks: { font: { size: 10 } },
               min: yMin - pad,
@@ -4585,13 +4645,22 @@ async function renderCmpCharts() {
   }
 
   // ----- helper: chart options -----
-  function chartOptions(xLabel) {
+  function chartOptions(xLabel, datasets) {
+    // Flatten all data points across datasets so the time-axis adapts
+    // to the full date range visible in the chart.
+    const allPoints = [];
+    if (datasets) {
+      for (const ds of datasets) {
+        if (ds && Array.isArray(ds.data)) allPoints.push(...ds.data);
+      }
+    }
     return {
       responsive: true, maintainAspectRatio: false,
       interaction: { mode: 'nearest', intersect: false },
       scales: {
-        x: { type: 'time', time: { unit: 'day' },
-             title: { display: true, text: xLabel } },
+        x: getTimeAxisConfig(allPoints, {
+          scaleOpts: { title: { display: true, text: xLabel } }
+        }),
         y: { title: { display: true, text: `${info.label} (${info.unit})` } },
       },
       plugins: {
@@ -4619,10 +4688,11 @@ async function renderCmpCharts() {
   if (cmpChartProd) cmpChartProd.destroy();
   const ctx1 = $('#cmp-chart-prod')?.getContext('2d');
   if (ctx1) {
+    const ds1 = buildDatasets('production_date');
     cmpChartProd = new Chart(ctx1, {
       type: 'scatter',
-      data: { datasets: buildDatasets('production_date') },
-      options: chartOptions('Production Date (วันผลิตกระดาษ)'),
+      data: { datasets: ds1 },
+      options: chartOptions('Production Date (วันผลิตกระดาษ)', ds1),
     });
   }
 
@@ -4630,10 +4700,11 @@ async function renderCmpCharts() {
   if (cmpChartUsed) cmpChartUsed.destroy();
   const ctx2 = $('#cmp-chart-used')?.getContext('2d');
   if (ctx2) {
+    const ds2 = buildDatasets('used_for_product_date');
     cmpChartUsed = new Chart(ctx2, {
       type: 'scatter',
-      data: { datasets: buildDatasets('used_for_product_date') },
-      options: chartOptions('วันที่ใช้ผลิตสินค้า'),
+      data: { datasets: ds2 },
+      options: chartOptions('วันที่ใช้ผลิตสินค้า', ds2),
     });
   }
 }
