@@ -2131,16 +2131,16 @@ async function loadKPI() {
   grid.innerHTML = '<div class="loading-state"><span class="loading"></span> โหลด...</div>';
   try {
     const data = await fetchAllRows(() => supabase
-      .from('paper_invoices')
-      .select('id, weight_kg, remaining_weight_kg, price_per_kg, receive_date')
-      .eq('status', 'in_stock'));
+      .from('current_stock_invoices')
+      .select('id, weight_kg, computed_remaining_kg, price_per_kg, receive_date')
+      .eq('computed_status', 'in_stock'));
     if (!isRequestStillCurrent('kpi', myToken)) return;
     
     if (!isRequestStillCurrent('kpi', myToken)) return;
     
     const totalRolls = data.length;
-    const totalKg = data.reduce((s, r) => s + parseFloat(r.remaining_weight_kg || 0), 0);
-    const totalValue = data.reduce((s, r) => s + parseFloat(r.remaining_weight_kg || 0) * parseFloat(r.price_per_kg || 0), 0);
+    const totalKg = data.reduce((s, r) => s + parseFloat(r.computed_remaining_kg || 0), 0);
+    const totalValue = data.reduce((s, r) => s + parseFloat(r.computed_remaining_kg || 0) * parseFloat(r.price_per_kg || 0), 0);
     const avgPrice = totalKg > 0 ? totalValue / totalKg : 0;
     const oldRolls = data.filter(r => { const d = daysSince(r.receive_date); return d !== null && d > 90; }).length;
     
@@ -2258,9 +2258,9 @@ async function loadSupplierCategory() {
   wrap.innerHTML = '<div class="loading-state"><span class="loading"></span></div>';
   try {
     const data = await fetchAllRows(() => supabase
-      .from('paper_invoices')
-      .select('supplier, paper_category, weight_kg, remaining_weight_kg, price_per_kg')
-      .eq('status', 'in_stock')
+      .from('current_stock_invoices')
+      .select('supplier, paper_category, weight_kg, computed_remaining_kg, price_per_kg')
+      .eq('computed_status', 'in_stock')
       .not('paper_category', 'is', null));
     if (!isRequestStillCurrent('supplierCategory', myToken)) return;
     
@@ -2268,7 +2268,7 @@ async function loadSupplierCategory() {
     const sums = new Map();
     for (const r of (data || [])) {
       const sup = r.supplier || '(ไม่ระบุ)';
-      const remaining = parseFloat(r.remaining_weight_kg || 0);
+      const remaining = parseFloat(r.computed_remaining_kg || 0);
       const value = remaining * parseFloat(r.price_per_kg || 0);
       
       if (!sums.has(sup)) sums.set(sup, { rolls: 0, kg: 0, value: 0 });
@@ -2313,9 +2313,9 @@ async function loadCategory() {
   grid.innerHTML = '<div class="loading-state"><span class="loading"></span></div>';
   try {
     const data = await fetchAllRows(() => supabase
-      .from('paper_invoices')
-      .select('paper_category, weight_kg, remaining_weight_kg, price_per_kg')
-      .eq('status', 'in_stock').not('paper_category', 'is', null));
+      .from('current_stock_invoices')
+      .select('paper_category, weight_kg, computed_remaining_kg, price_per_kg')
+      .eq('computed_status', 'in_stock').not('paper_category', 'is', null));
     if (!isRequestStillCurrent('category', myToken)) return;
     
     if (!isRequestStillCurrent('category', myToken)) return;
@@ -2326,8 +2326,8 @@ async function loadCategory() {
       if (!cats.has(c)) cats.set(c, { rolls: 0, kg: 0, value: 0 });
       const item = cats.get(c);
       item.rolls += 1;
-      item.kg += parseFloat(r.remaining_weight_kg || 0);
-      item.value += parseFloat(r.remaining_weight_kg || 0) * parseFloat(r.price_per_kg || 0);
+      item.kg += parseFloat(r.computed_remaining_kg || 0);
+      item.value += parseFloat(r.computed_remaining_kg || 0) * parseFloat(r.price_per_kg || 0);
     }
     
     let html = '';
@@ -2735,9 +2735,9 @@ async function loadAging() {
   
   try {
     const data = await fetchAllRows(() => supabase
-      .from('paper_invoices')
-      .select('id, paper_lot, supplier, paper_type, paper_category, width_mm, weight_kg, remaining_weight_kg, receive_date, price_per_kg')
-      .eq('status', 'in_stock').not('receive_date', 'is', null));
+      .from('current_stock_invoices')
+      .select('id, paper_lot, supplier, paper_type, paper_category, width_mm, weight_kg, computed_remaining_kg, receive_date, price_per_kg')
+      .eq('computed_status', 'in_stock').not('receive_date', 'is', null));
     if (!isRequestStillCurrent('aging', myToken)) return;
     
     // โหลด outflow 30 วันล่าสุดสำหรับ sparkline trend
@@ -2771,7 +2771,7 @@ async function loadAging() {
     for (const r of (data || [])) {
       const d = daysSince(r.receive_date);
       if (d === null) continue;
-      const kg = parseFloat(r.remaining_weight_kg) || 0;
+      const kg = parseFloat(r.computed_remaining_kg) || 0;
       const price = parseFloat(r.price_per_kg) || 0;
       const value = kg * price;
       const cat = AGING_CATS.includes(r.paper_category) ? r.paper_category : null;
@@ -3323,11 +3323,11 @@ async function loadTrend() {
     // กราฟจะใช้สูตร: stock_end_of_M = stock_end_of_(M+1) − in_(M+1) + out_(M+1)
     // (ย้อนคำนวณจากสต๊อกจริงล่าสุด)
     const stockNow = await fetchAllRows(() => supabase
-      .from('paper_invoices').select('remaining_weight_kg')
-      .eq('status', 'in_stock'));
+      .from('current_stock_invoices').select('computed_remaining_kg')
+      .eq('computed_status', 'in_stock'));
     if (!isRequestStillCurrent('trend', myToken)) return;
     
-    const currentStock = (stockNow || []).reduce((s, r) => s + parseFloat(r.remaining_weight_kg || 0), 0);
+    const currentStock = (stockNow || []).reduce((s, r) => s + parseFloat(r.computed_remaining_kg || 0), 0);
     
     const monthMap = new Map();
     for (const m of months) monthMap.set(m, { in: 0, out: 0 });
@@ -3402,9 +3402,9 @@ async function loadProjects() {
   wrap.innerHTML = '<div class="loading-state"><span class="loading"></span></div>';
   try {
     const data = await fetchAllRows(() => supabase
-      .from('paper_invoices')
-      .select('project_code, paper_type, weight_kg, remaining_weight_kg, price_per_kg')
-      .eq('status', 'in_stock').eq('supplier', 'SCG').not('project_code', 'is', null));
+      .from('current_stock_invoices')
+      .select('project_code, paper_type, weight_kg, computed_remaining_kg, price_per_kg')
+      .eq('computed_status', 'in_stock').eq('supplier', 'SCG').not('project_code', 'is', null));
     if (!isRequestStillCurrent('projects', myToken)) return;
     
     const groups = new Map();
@@ -3413,8 +3413,8 @@ async function loadProjects() {
       if (!groups.has(key)) groups.set(key, { project: r.project_code, type: r.paper_type, rolls: 0, kg: 0, value: 0 });
       const g = groups.get(key);
       g.rolls += 1;
-      g.kg += parseFloat(r.remaining_weight_kg || 0);
-      g.value += parseFloat(r.remaining_weight_kg || 0) * parseFloat(r.price_per_kg || 0);
+      g.kg += parseFloat(r.computed_remaining_kg || 0);
+      g.value += parseFloat(r.computed_remaining_kg || 0) * parseFloat(r.price_per_kg || 0);
     }
     
     const arr = Array.from(groups.values()).sort((a, b) => b.value - a.value);
@@ -3456,9 +3456,9 @@ async function loadSupplierValue() {
   wrap.innerHTML = '<div class="loading-state"><span class="loading"></span></div>';
   try {
     const data = await fetchAllRows(() => supabase
-      .from('paper_invoices')
-      .select('supplier, paper_type, weight_kg, remaining_weight_kg, price_per_kg')
-      .eq('status', 'in_stock'));
+      .from('current_stock_invoices')
+      .select('supplier, paper_type, weight_kg, computed_remaining_kg, price_per_kg')
+      .eq('computed_status', 'in_stock'));
     if (!isRequestStillCurrent('supvalue', myToken)) return;
     
     // Group: supplier > paper_type
@@ -3466,7 +3466,7 @@ async function loadSupplierValue() {
     for (const r of (data || [])) {
       const sup = r.supplier || '(ไม่ระบุ)';
       const type = r.paper_type || '(none)';
-      const remaining = parseFloat(r.remaining_weight_kg || 0);
+      const remaining = parseFloat(r.computed_remaining_kg || 0);
       const price = parseFloat(r.price_per_kg || 0);
       const value = remaining * price;
       
@@ -4042,9 +4042,9 @@ async function loadFilterTab() {
     $('#flt-result-wrap').innerHTML = '<div class="loading-state"><span class="loading"></span> โหลดข้อมูล...</div>';
     try {
       const data = await fetchAllRows(() => supabase
-        .from('paper_invoices')
-        .select('id, paper_lot, supplier, paper_type, paper_category, width_mm, weight_kg, remaining_weight_kg, status, receive_date')
-        .eq('status', 'in_stock'));
+        .from('current_stock_invoices')
+        .select('id, paper_lot, supplier, paper_type, paper_category, width_mm, weight_kg, computed_remaining_kg, computed_status, receive_date, invoice_no, project_code')
+        .eq('computed_status', 'in_stock'));
       if (!isRequestStillCurrent('filter', myToken)) return;
       _stockCache = data || [];
     } catch (err) {
@@ -4221,8 +4221,8 @@ async function searchByPaperLot() {
     const upperLots = lots.map(l => l.toUpperCase().replace(/-/g, ''));
     
     const data = await fetchAllRows(() => supabase
-      .from('paper_invoices')
-      .select('id, paper_lot, paper_lot_normalized, supplier, invoice_no, paper_type, paper_category, width_mm, weight_kg, remaining_weight_kg, price_per_kg, price_per_roll, status, invoice_date, receive_date')
+      .from('current_stock_invoices')
+      .select('id, paper_lot, paper_lot_normalized, supplier, invoice_no, paper_type, paper_category, width_mm, weight_kg, remaining_weight_kg, computed_remaining_kg, computed_status, price_per_kg, price_per_roll, status, invoice_date, receive_date')
       .or(`paper_lot.in.(${lots.map(l => `"${l}"`).join(',')}),paper_lot_normalized.in.(${upperLots.map(l => `"${l}"`).join(',')})`));
     
     const found = data || [];
@@ -4259,9 +4259,9 @@ async function searchByPaperLot() {
     const sorted = [...found].sort((a, b) => (a.paper_lot || '').localeCompare(b.paper_lot || ''));
     
     for (const r of sorted) {
-      const statusBadge = r.status === 'in_stock' 
+      const statusBadge = r.computed_status === 'in_stock' 
         ? '<span style="display:inline-block;padding:3px 10px;background:#dcfce7;color:#15803d;border-radius:999px;font-size:11px;font-weight:700;">in_stock</span>'
-        : `<span style="display:inline-block;padding:3px 10px;background:#fee2e2;color:#991b1b;border-radius:999px;font-size:11px;font-weight:700;">${escapeHtml(r.status || '-')}</span>`;
+        : `<span style="display:inline-block;padding:3px 10px;background:#fee2e2;color:#991b1b;border-radius:999px;font-size:11px;font-weight:700;">${escapeHtml(r.computed_status || '-')}</span>`;
       
       html += `<tr>
         <td><b>${escapeHtml(r.paper_lot)}</b></td>
@@ -4270,7 +4270,7 @@ async function searchByPaperLot() {
         <td>${escapeHtml(r.paper_type || '-')}</td>
         <td class="right">${r.width_mm ? fmtNum(r.width_mm) : '-'}</td>
         <td class="right">${fmtKgFull(r.weight_kg)}</td>
-        <td class="right">${fmtKgFull(r.remaining_weight_kg)}</td>
+        <td class="right">${fmtKgFull(r.computed_remaining_kg)}</td>
         ${showMoney ? `<td class="right">${r.price_per_kg ? fmtMoneyExact(r.price_per_kg) : '-'}</td><td class="right">${r.price_per_roll ? fmtMoneyExact(r.price_per_roll) : '-'}</td>` : ''}
         <td class="center">${statusBadge}</td>
         <td>${r.receive_date ? formatDateTH(r.receive_date) : '-'}</td>
@@ -4280,7 +4280,7 @@ async function searchByPaperLot() {
     // summary
     const totalRolls = found.length;
     const totalKg = found.reduce((s, r) => s + (Number(r.weight_kg) || 0), 0);
-    const remainingKg = found.reduce((s, r) => s + (Number(r.remaining_weight_kg) || 0), 0);
+    const remainingKg = found.reduce((s, r) => s + (Number(r.computed_remaining_kg) || 0), 0);
     const totalValue = found.reduce((s, r) => s + (Number(r.price_per_roll) || 0), 0);
     
     html += `<tr style="background:#1e293b;color:white;font-weight:700;">
@@ -4330,7 +4330,7 @@ function showFilterResult() {
     const sup = r.supplier || '-';
     const typ = r.paper_type || '-';
     const wid = r.width_mm || 0;
-    const remaining = Number(r.remaining_weight_kg) || 0;
+    const remaining = Number(r.computed_remaining_kg) || 0;
     
     if (!grouped.has(sup)) grouped.set(sup, new Map());
     const supMap = grouped.get(sup);
@@ -4474,7 +4474,7 @@ function openStockDetailModal(supplier, paperType, widthMm) {
     return da.localeCompare(db);
   });
 
-  const totalKg = matchingRolls.reduce((s, r) => s + (parseFloat(r.remaining_weight_kg) || 0), 0);
+  const totalKg = matchingRolls.reduce((s, r) => s + (parseFloat(r.computed_remaining_kg) || 0), 0);
 
   _stockModalState.rolls = matchingRolls;
   _stockModalState.title = `${supplier} · ${paperType} · ${fmtNum(wid)}mm`;
@@ -4492,7 +4492,7 @@ function openStockDetailModal(supplier, paperType, widthMm) {
       <td class="center">${i + 1}</td>
       <td>${escapeHtml(r.paper_lot || '—')}</td>
       <td>${escapeHtml(r.invoice_no || '—')}</td>
-      <td class="right">${fmtKgFull(r.remaining_weight_kg)}</td>
+      <td class="right">${fmtKgFull(r.computed_remaining_kg)}</td>
       <td>${escapeHtml(r.receive_date || '—')}</td>
       <td class="right" style="${ageStyle}">${days !== null ? days + ' วัน' : '—'}</td>
       <td>${escapeHtml(r.project_code || '—')}</td>
@@ -4540,7 +4540,7 @@ function exportStockDetailCSV() {
     r.supplier || '',
     r.paper_type || '',
     r.width_mm || '',
-    r.remaining_weight_kg || 0,
+    r.computed_remaining_kg || 0,
     r.receive_date || '',
     daysSince(r.receive_date) ?? '',
     r.project_code || ''
@@ -5631,11 +5631,11 @@ async function openAlertDetail(idx) {
         .eq('voided', false)
         .gte('outflow_date', date180)
         .order('outflow_date', { ascending: true }),
-      supabase.from('paper_invoices')
-        .select('paper_lot, supplier, weight_kg, remaining_weight_kg, receive_date, paper_category')
+      supabase.from('current_stock_invoices')
+        .select('paper_lot, supplier, weight_kg, computed_remaining_kg, receive_date, paper_category')
         .eq('paper_type', a.paper_type)
-        .eq('status', 'in_stock')
-        .gt('remaining_weight_kg', 0)
+        .eq('computed_status', 'in_stock')
+        .gt('computed_remaining_kg', 0)
         .order('receive_date', { ascending: true })
     ]);
 
@@ -5891,13 +5891,13 @@ function renderInvoicesList(invoices) {
     wrap.innerHTML = '<div style="background:#fee2e2; padding:10px 14px; border-radius:8px; font-size:13px; color:#7f1d1d;">⚠️ ไม่พบ invoice ที่ยังในสต็อก</div>';
     return;
   }
-  const total = invoices.reduce((s, r) => s + parseFloat(r.remaining_weight_kg || 0), 0);
+  const total = invoices.reduce((s, r) => s + parseFloat(r.computed_remaining_kg || 0), 0);
   const rows = invoices.map(r => {
     const days = daysSince(r.receive_date);
     return `<tr>
       <td>${escapeHtml(r.paper_lot)}</td>
       <td>${escapeHtml(r.supplier || '—')}</td>
-      <td class="right">${fmtKgFull(r.remaining_weight_kg)} kg</td>
+      <td class="right">${fmtKgFull(r.computed_remaining_kg)} kg</td>
       <td class="right">${escapeHtml(r.receive_date || '—')}</td>
       <td class="right" style="color:${days > 90 ? '#dc2626' : 'inherit'};">${days !== null ? days + ' วัน' : '—'}</td>
     </tr>`;
