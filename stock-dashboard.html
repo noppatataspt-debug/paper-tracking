@@ -5245,9 +5245,17 @@ function renderAlertSection(severity, rows) {
   `;
 }
 
+// Track Chart.js instances per modal open so we can destroy them on close
+let alertModalCharts = [];
+
 async function openAlertDetail(idx) {
   const a = alertsState.data?.alerts?.[idx];
   if (!a) return;
+
+  // destroy any leftover charts from previous opens
+  alertModalCharts.forEach(c => { try { c.destroy(); } catch(e) {} });
+  alertModalCharts = [];
+
   $('#alert-detail-modal').style.display = 'flex';
   $('#alert-modal-title').innerHTML = `${escapeHtml(a.paper_type)} <span class="alert-cat-pill" style="font-size:13px;">${escapeHtml(a.paper_category || '—')}</span>`;
   const sevLabel = { stockout: '⚫ Stockout', critical: '🔴 Critical', warning: '🟡 Warning' }[a.severity] || a.severity;
@@ -5256,186 +5264,289 @@ async function openAlertDetail(idx) {
   $('#alert-modal-subtitle').innerHTML = `${sevLabel} · Supplier: <b>${escapeHtml(supplierTxt)}</b> · จะใช้หมดใน <b>${days}</b>`;
 
   const body = $('#alert-modal-body');
-  body.innerHTML = '<div class="loading-state"><span class="loading"></span> โหลดรายละเอียด...</div>';
 
-  try {
-    // Build sections
-    const sections = [];
+  const stockTons = (a.current_stock_tons ?? 0).toFixed(2);
+  const useTons = (a.avg_daily_usage_tons ?? 0).toFixed(3);
+  const recommendedTons = ((a.avg_daily_usage_tons ?? 0) * (a.lead_time_days + a.safety_buffer_days * 2)).toFixed(2);
 
-    // Section 1: Overview
-    const stockTons = (a.current_stock_tons ?? 0).toFixed(2);
-    const useTons = (a.avg_daily_usage_tons ?? 0).toFixed(3);
-    const recommendedTons = ((a.avg_daily_usage_tons ?? 0) * (a.lead_time_days + a.safety_buffer_days * 2)).toFixed(2);
+  body.innerHTML = `
+    <div style="margin-bottom:18px;">
+      <div style="font-size:14px; font-weight:700; margin-bottom:10px;">📊 การใช้รายวัน 30 วันล่าสุด</div>
+      <div id="alert-daily-chart-wrap" style="height:250px; position:relative;">
+        <div class="loading-state"><span class="loading"></span> โหลด...</div>
+      </div>
+    </div>
 
-    sections.push(`
-      <div style="margin-bottom:18px;">
-        <div style="font-size:14px; font-weight:700; margin-bottom:10px;">📋 ข้อมูลภาพรวม</div>
-        <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:10px; font-size:14px;">
-          <div style="background:var(--panel-2); padding:12px; border-radius:8px;">
-            <div style="font-size:12px; color:var(--text-dim); margin-bottom:4px;">Stock ปัจจุบัน</div>
-            <div style="font-size:18px; font-weight:700; font-family:var(--mono);">${stockTons} ตัน</div>
-          </div>
-          <div style="background:var(--panel-2); padding:12px; border-radius:8px;">
-            <div style="font-size:12px; color:var(--text-dim); margin-bottom:4px;">ใช้เฉลี่ย/วัน</div>
-            <div style="font-size:18px; font-weight:700; font-family:var(--mono);">${useTons} ตัน</div>
-          </div>
-          <div style="background:var(--panel-2); padding:12px; border-radius:8px;">
-            <div style="font-size:12px; color:var(--text-dim); margin-bottom:4px;">Lead time + Buffer</div>
-            <div style="font-size:18px; font-weight:700; font-family:var(--mono);">${a.lead_time_days} + ${a.safety_buffer_days} วัน</div>
-          </div>
-          <div style="background:#dcfce7; padding:12px; border-radius:8px;">
-            <div style="font-size:12px; color:#166534; margin-bottom:4px;">💡 แนะนำสั่ง</div>
-            <div style="font-size:18px; font-weight:700; font-family:var(--mono); color:#166534;">${recommendedTons} ตัน</div>
-          </div>
+    <div style="margin-bottom:18px;">
+      <div style="font-size:14px; font-weight:700; margin-bottom:10px;">📈 ยอดใช้รวม 6 เดือนล่าสุด</div>
+      <div id="alert-monthly-chart-wrap" style="height:250px; position:relative;">
+        <div class="loading-state"><span class="loading"></span> โหลด...</div>
+      </div>
+    </div>
+
+    <div style="margin-bottom:18px;">
+      <div style="font-size:14px; font-weight:700; margin-bottom:10px;">📋 ข้อมูลภาพรวม</div>
+      <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:10px; font-size:14px;">
+        <div style="background:var(--panel-2); padding:12px; border-radius:8px;">
+          <div style="font-size:12px; color:var(--text-dim); margin-bottom:4px;">Stock ปัจจุบัน</div>
+          <div style="font-size:18px; font-weight:700; font-family:var(--mono);">${stockTons} ตัน</div>
         </div>
-        <div style="font-size:12px; color:var(--text-dim); margin-top:8px;">
-          คำนวณจากค่าใช้เฉลี่ยใน ${a.lookback_days} วันย้อนหลัง · แจ้งเมื่อ stock ≤ ${a.threshold_days} วัน
+        <div style="background:var(--panel-2); padding:12px; border-radius:8px;">
+          <div style="font-size:12px; color:var(--text-dim); margin-bottom:4px;">ใช้เฉลี่ย/วัน</div>
+          <div style="font-size:18px; font-weight:700; font-family:var(--mono);">${useTons} ตัน</div>
+        </div>
+        <div style="background:var(--panel-2); padding:12px; border-radius:8px;">
+          <div style="font-size:12px; color:var(--text-dim); margin-bottom:4px;">Lead time + Buffer</div>
+          <div style="font-size:18px; font-weight:700; font-family:var(--mono);">${a.lead_time_days} + ${a.safety_buffer_days} วัน</div>
+        </div>
+        <div style="background:#dcfce7; padding:12px; border-radius:8px;">
+          <div style="font-size:12px; color:#166534; margin-bottom:4px;">💡 แนะนำสั่ง</div>
+          <div style="font-size:18px; font-weight:700; font-family:var(--mono); color:#166534;">${recommendedTons} ตัน</div>
         </div>
       </div>
-    `);
+      <div style="font-size:12px; color:var(--text-dim); margin-top:8px;">
+        คำนวณจากค่าใช้เฉลี่ยใน ${a.lookback_days} วันย้อนหลัง · แจ้งเมื่อ stock ≤ ${a.threshold_days} วัน
+      </div>
+    </div>
 
-    // Section 2: Stock breakdown (Liner cross-supplier)
-    if (a.stock_breakdown && a.stock_breakdown.length > 0) {
-      const bdRows = a.stock_breakdown.map(b => `
-        <tr>
-          <td>${escapeHtml(b.supplier)}</td>
-          <td class="right">${(b.stock_kg / 1000).toFixed(2)} ตัน</td>
-          <td class="right">${(b.used_kg / 1000).toFixed(2)} ตัน</td>
-          <td class="right">${(b.avg_daily_kg / 1000).toFixed(3)} ตัน</td>
-        </tr>
-      `).join('');
-      sections.push(`
-        <div style="margin-bottom:18px;">
-          <div style="font-size:14px; font-weight:700; margin-bottom:10px;">📦 Stock breakdown ต่อ Supplier</div>
-          <table class="alert-table" style="border:1px solid var(--border); border-radius:8px;">
-            <thead>
+    ${a.stock_breakdown && a.stock_breakdown.length > 0 ? `
+      <div style="margin-bottom:18px;">
+        <div style="font-size:14px; font-weight:700; margin-bottom:10px;">📦 Stock breakdown ต่อ Supplier</div>
+        <table class="alert-table" style="border:1px solid var(--border); border-radius:8px;">
+          <thead>
+            <tr>
+              <th>Supplier</th>
+              <th class="right">Stock</th>
+              <th class="right">ใช้รวม (lookback)</th>
+              <th class="right">ใช้/วัน</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${a.stock_breakdown.map(b => `
               <tr>
-                <th>Supplier</th>
-                <th class="right">Stock</th>
-                <th class="right">ใช้รวม (lookback)</th>
-                <th class="right">ใช้/วัน</th>
+                <td>${escapeHtml(b.supplier)}</td>
+                <td class="right">${(b.stock_kg / 1000).toFixed(2)} ตัน</td>
+                <td class="right">${(b.used_kg / 1000).toFixed(2)} ตัน</td>
+                <td class="right">${(b.avg_daily_kg / 1000).toFixed(3)} ตัน</td>
               </tr>
-            </thead>
-            <tbody>${bdRows}</tbody>
-          </table>
-        </div>
-      `);
-    }
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    ` : ''}
 
-    body.innerHTML = sections.join('');
+    <div>
+      <div style="font-size:14px; font-weight:700; margin-bottom:10px;">📋 Invoice ที่ยังในสต็อก</div>
+      <div id="alert-invoices-wrap"><div class="loading-state"><span class="loading"></span> โหลด...</div></div>
+    </div>
+  `;
 
-    // Section 3: Load in-stock invoices + recent outflows
-    const loadingDiv = document.createElement('div');
-    loadingDiv.innerHTML = '<div style="font-size:13px; color:var(--text-dim); text-align:center; padding:14px;"><span class="loading"></span> โหลดรายละเอียด invoice + outflow ...</div>';
-    body.appendChild(loadingDiv);
+  try {
+    // Fetch in parallel: 30 days outflow (daily chart), 6 months outflow (monthly chart), in-stock invoices
+    const today = new Date();
+    const date30 = new Date(today.getTime() - 30 * 86400000).toISOString().slice(0, 10);
+    const date180 = new Date(today.getTime() - 180 * 86400000).toISOString().slice(0, 10);
 
-    const [invoicesRes, outflowsRes] = await Promise.all([
+    const [outflows30Res, outflows180Res, invoicesRes] = await Promise.all([
+      supabase.from('paper_outflows')
+        .select('outflow_date, weight_kg')
+        .eq('paper_type', a.paper_type)
+        .eq('voided', false)
+        .gte('outflow_date', date30)
+        .order('outflow_date', { ascending: true }),
+      supabase.from('paper_outflows')
+        .select('outflow_date, weight_kg')
+        .eq('paper_type', a.paper_type)
+        .eq('voided', false)
+        .gte('outflow_date', date180)
+        .order('outflow_date', { ascending: true }),
       supabase.from('paper_invoices')
         .select('paper_lot, supplier, weight_kg, remaining_weight_kg, receive_date, paper_category')
         .eq('paper_type', a.paper_type)
         .eq('status', 'in_stock')
         .gt('remaining_weight_kg', 0)
-        .order('receive_date', { ascending: true }),
-      supabase.from('paper_outflows')
-        .select('outflow_date, supplier_name, weight_kg')
-        .eq('paper_type', a.paper_type)
-        .eq('voided', false)
-        .gte('outflow_date', new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10))
-        .order('outflow_date', { ascending: false })
+        .order('receive_date', { ascending: true })
     ]);
 
-    body.removeChild(loadingDiv);
+    renderDailyChart(outflows30Res.data || []);
+    renderMonthlyChart(outflows180Res.data || []);
+    renderInvoicesList(invoicesRes.data || []);
 
-    const invoices = invoicesRes.data || [];
-    const outflows = outflowsRes.data || [];
-
-    // In-stock invoices
-    let invHtml;
-    if (!invoices.length) {
-      invHtml = '<div style="background:#fee2e2; padding:10px 14px; border-radius:8px; font-size:13px; color:#7f1d1d;">⚠️ ไม่พบ invoice ที่ยังในสต็อก</div>';
-    } else {
-      const invTotal = invoices.reduce((s, r) => s + parseFloat(r.remaining_weight_kg || 0), 0);
-      const invRows = invoices.map(r => {
-        const days = daysSince(r.receive_date);
-        return `<tr>
-          <td>${escapeHtml(r.paper_lot)}</td>
-          <td>${escapeHtml(r.supplier || '—')}</td>
-          <td class="right">${fmtKgFull(r.remaining_weight_kg)} kg</td>
-          <td class="right">${escapeHtml(r.receive_date || '—')}</td>
-          <td class="right" style="color:${days > 90 ? '#dc2626' : 'inherit'};">${days !== null ? days + ' วัน' : '—'}</td>
-        </tr>`;
-      }).join('');
-      invHtml = `
-        <table class="alert-table" style="border:1px solid var(--border); border-radius:8px;">
-          <thead>
-            <tr>
-              <th>Paper Lot</th>
-              <th>Supplier</th>
-              <th class="right">น้ำหนัก</th>
-              <th class="right">รับเข้า</th>
-              <th class="right">อายุ</th>
-            </tr>
-          </thead>
-          <tbody>${invRows}</tbody>
-          <tfoot><tr style="font-weight:700; background:var(--panel-2);">
-            <td colspan="2">รวม ${invoices.length} ม้วน</td>
-            <td class="right">${fmtKgFull(invTotal)} kg</td>
-            <td colspan="2"></td>
-          </tr></tfoot>
-        </table>
-      `;
-    }
-
-    // Outflow chart (group by date)
-    let outflowHtml;
-    if (!outflows.length) {
-      outflowHtml = '<div style="font-size:13px; color:var(--text-dim);">ไม่พบ outflow ใน 30 วันล่าสุด</div>';
-    } else {
-      const byDate = {};
-      outflows.forEach(o => {
-        const d = o.outflow_date;
-        byDate[d] = (byDate[d] || 0) + parseFloat(o.weight_kg || 0);
-      });
-      const dates = Object.keys(byDate).sort();
-      const maxKg = Math.max(...Object.values(byDate));
-      const totalKg = outflows.reduce((s, r) => s + parseFloat(r.weight_kg || 0), 0);
-      const bars = dates.map(d => {
-        const kg = byDate[d];
-        const pct = (kg / maxKg) * 100;
-        return `
-          <div style="display:flex; align-items:center; gap:8px; font-size:12px; margin-bottom:3px;">
-            <span style="width:90px; color:var(--text-dim); font-family:var(--mono);">${d}</span>
-            <div style="flex:1; background:var(--panel-2); border-radius:4px; height:18px; position:relative;">
-              <div style="background:var(--accent); height:100%; width:${pct}%; border-radius:4px;"></div>
-            </div>
-            <span style="width:80px; text-align:right; font-family:var(--mono);">${fmtKgFull(kg)} kg</span>
-          </div>
-        `;
-      }).join('');
-      outflowHtml = `
-        <div style="font-size:13px; color:var(--text-dim); margin-bottom:8px;">รวม ${fmtKgFull(totalKg)} kg ใน ${dates.length} วัน</div>
-        <div style="max-height:240px; overflow-y:auto;">${bars}</div>
-      `;
-    }
-
-    body.insertAdjacentHTML('beforeend', `
-      <div style="margin-bottom:18px;">
-        <div style="font-size:14px; font-weight:700; margin-bottom:10px;">📋 Invoice ที่ยังในสต็อก</div>
-        ${invHtml}
-      </div>
-      <div>
-        <div style="font-size:14px; font-weight:700; margin-bottom:10px;">📊 การจ่ายออก 30 วันล่าสุด</div>
-        ${outflowHtml}
-      </div>
-    `);
   } catch (e) {
     console.error('[Alert detail] error:', e);
     body.innerHTML = `<div class="alert-empty-state"><div class="big">⚠️</div><div>โหลดรายละเอียดไม่สำเร็จ</div><div style="font-size:13px; color:var(--danger); margin-top:6px;">${escapeHtml(e.message || String(e))}</div></div>`;
   }
 }
 
+function renderDailyChart(outflows) {
+  const wrap = $('#alert-daily-chart-wrap');
+  if (!wrap) return;
+  if (!outflows.length) {
+    wrap.innerHTML = '<div style="font-size:13px; color:var(--text-dim); text-align:center; padding:30px;">ไม่พบ outflow ใน 30 วันล่าสุด</div>';
+    return;
+  }
+
+  // Build complete 30-day series (fill missing dates with 0)
+  const today = new Date();
+  const days = [];
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(today.getTime() - i * 86400000);
+    days.push(d.toISOString().slice(0, 10));
+  }
+  const byDate = {};
+  outflows.forEach(o => {
+    const d = o.outflow_date;
+    byDate[d] = (byDate[d] || 0) + parseFloat(o.weight_kg || 0);
+  });
+  const labels = days.map(d => d.slice(5)); // MM-DD
+  const data = days.map(d => byDate[d] || 0);
+
+  wrap.innerHTML = '<canvas></canvas>';
+  const ctx = wrap.querySelector('canvas').getContext('2d');
+  const chart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'kg',
+        data,
+        backgroundColor: '#2563eb',
+        borderRadius: 3,
+        maxBarThickness: 18,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: items => `วันที่ ${days[items[0].dataIndex]}`,
+            label: ctx => `${fmtKgFull(ctx.parsed.y)} kg`
+          }
+        }
+      },
+      scales: {
+        x: { ticks: { font: { size: 10 }, maxRotation: 60, minRotation: 60, autoSkip: true, maxTicksLimit: 15 }, grid: { display: false } },
+        y: { beginAtZero: true, ticks: { font: { size: 11 }, callback: v => v >= 1000 ? (v/1000).toFixed(0) + 'k' : v }, title: { display: true, text: 'kg', font: { size: 11 } } }
+      }
+    }
+  });
+  alertModalCharts.push(chart);
+}
+
+function renderMonthlyChart(outflows) {
+  const wrap = $('#alert-monthly-chart-wrap');
+  if (!wrap) return;
+  if (!outflows.length) {
+    wrap.innerHTML = '<div style="font-size:13px; color:var(--text-dim); text-align:center; padding:30px;">ไม่พบ outflow ใน 6 เดือนล่าสุด</div>';
+    return;
+  }
+
+  // Build 6 month buckets including current month
+  const now = new Date();
+  const buckets = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    buckets.push({
+      key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+      label: d.toLocaleDateString('th-TH', { month: 'short', year: '2-digit' }),
+      total: 0,
+      isCurrent: i === 0,
+    });
+  }
+  outflows.forEach(o => {
+    const ym = (o.outflow_date || '').slice(0, 7);
+    const bucket = buckets.find(b => b.key === ym);
+    if (bucket) bucket.total += parseFloat(o.weight_kg || 0);
+  });
+
+  const labels = buckets.map(b => b.label + (b.isCurrent ? ' *' : ''));
+  const data = buckets.map(b => b.total);
+  const colors = buckets.map(b => b.isCurrent ? '#94a3b8' : '#2563eb'); // current month muted
+
+  wrap.innerHTML = '<canvas></canvas>';
+  const ctx = wrap.querySelector('canvas').getContext('2d');
+  const chart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'kg',
+        data,
+        backgroundColor: colors,
+        borderRadius: 4,
+        maxBarThickness: 50,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: items => buckets[items[0].dataIndex].label + (buckets[items[0].dataIndex].isCurrent ? ' (เดือนปัจจุบัน — ยังไม่จบเดือน)' : ''),
+            label: ctx => `${fmtKgFull(ctx.parsed.y)} kg`
+          }
+        }
+      },
+      scales: {
+        x: { ticks: { font: { size: 12 } }, grid: { display: false } },
+        y: { beginAtZero: true, ticks: { font: { size: 11 }, callback: v => v >= 1000 ? (v/1000).toFixed(0) + 'k' : v }, title: { display: true, text: 'kg', font: { size: 11 } } }
+      }
+    }
+  });
+  alertModalCharts.push(chart);
+
+  // Add note about current month under chart
+  if (buckets.some(b => b.isCurrent)) {
+    wrap.insertAdjacentHTML('afterend', `<div style="font-size:11px; color:var(--text-muted); margin-top:4px;">* เดือนปัจจุบันยังไม่จบ</div>`);
+  }
+}
+
+function renderInvoicesList(invoices) {
+  const wrap = $('#alert-invoices-wrap');
+  if (!wrap) return;
+  if (!invoices.length) {
+    wrap.innerHTML = '<div style="background:#fee2e2; padding:10px 14px; border-radius:8px; font-size:13px; color:#7f1d1d;">⚠️ ไม่พบ invoice ที่ยังในสต็อก</div>';
+    return;
+  }
+  const total = invoices.reduce((s, r) => s + parseFloat(r.remaining_weight_kg || 0), 0);
+  const rows = invoices.map(r => {
+    const days = daysSince(r.receive_date);
+    return `<tr>
+      <td>${escapeHtml(r.paper_lot)}</td>
+      <td>${escapeHtml(r.supplier || '—')}</td>
+      <td class="right">${fmtKgFull(r.remaining_weight_kg)} kg</td>
+      <td class="right">${escapeHtml(r.receive_date || '—')}</td>
+      <td class="right" style="color:${days > 90 ? '#dc2626' : 'inherit'};">${days !== null ? days + ' วัน' : '—'}</td>
+    </tr>`;
+  }).join('');
+  wrap.innerHTML = `
+    <table class="alert-table" style="border:1px solid var(--border); border-radius:8px;">
+      <thead>
+        <tr>
+          <th>Paper Lot</th>
+          <th>Supplier</th>
+          <th class="right">น้ำหนัก</th>
+          <th class="right">รับเข้า</th>
+          <th class="right">อายุ</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr style="font-weight:700; background:var(--panel-2);">
+        <td colspan="2">รวม ${invoices.length} ม้วน</td>
+        <td class="right">${fmtKgFull(total)} kg</td>
+        <td colspan="2"></td>
+      </tr></tfoot>
+    </table>
+  `;
+}
+
 function closeAlertDetail() {
   $('#alert-detail-modal').style.display = 'none';
+  alertModalCharts.forEach(c => { try { c.destroy(); } catch(e) {} });
+  alertModalCharts = [];
 }
 
 function exportAlertsCSV() {
