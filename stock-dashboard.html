@@ -222,6 +222,11 @@ body {
 /* Zebra for filter result table */
 .flt-result-table tbody tr:nth-child(even):not(.subtotal-row):not(.grand-total-row) { background: #f0f9ff; }
 .flt-result-table tbody tr:hover:not(.subtotal-row):not(.grand-total-row) { background: #e0f2fe !important; }
+.flt-detail-row { transition: background 0.12s; }
+.flt-detail-row:hover { background: #dbeafe !important; }
+@media print {
+  .flt-detail-row { cursor: default !important; }
+}
 
 /* Zebra for invoice rolls table */
 .invoice-rolls-table tbody tr:nth-child(even) { background: #f0f9ff; }
@@ -1479,7 +1484,7 @@ body {
     <button class="tab-btn" data-tab="trend">📊 Trend</button>
     <button class="tab-btn" data-tab="value" data-manager-only>💰 มูลค่า</button>
     <button class="tab-btn" data-tab="invoice" data-manager-only>📥 ใบ Invoice</button>
-    <button class="tab-btn" data-tab="filter">🔍 ค้นหา & พิมพ์</button>
+    <button class="tab-btn" data-tab="filter">🔍 ตรวจสอบ Stock</button>
     <button class="tab-btn" data-tab="usage">📅 ยอดใช้</button>
     <button class="tab-btn" data-tab="alerts">🚨 Alerts</button>
   </div>
@@ -1641,7 +1646,7 @@ body {
   <!-- ============ TAB: FILTER & PRINT ============ -->
   <div class="tab-content" id="tab-filter">
     <div class="section no-print">
-      <div class="section-title">🔍 ค้นหา & พิมพ์ Stock คงเหลือ</div>
+      <div class="section-title">🔍 ตรวจสอบ Stock คงเหลือ</div>
       <div style="font-size:13px;color:var(--text-dim);margin-bottom:14px;">
         💡 เลือก Supplier / ประเภทกระดาษ / หน้ากว้าง → กดแสดงผล → กดพิมพ์เพื่อเป็น PDF
       </div>
@@ -1790,6 +1795,25 @@ body {
       <button id="alert-modal-close" style="background:none; border:none; font-size:24px; cursor:pointer; color:var(--text-dim); padding:0; line-height:1;">✕</button>
     </div>
     <div id="alert-modal-body" style="padding:20px 22px;">
+      <div class="loading-state"><span class="loading"></span> โหลด...</div>
+    </div>
+  </div>
+</div>
+
+<div id="stock-detail-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:9999; align-items:center; justify-content:center; padding:16px;">
+  <div style="background:white; border-radius:14px; max-width:920px; width:100%; max-height:90vh; display:flex; flex-direction:column; box-shadow:0 10px 40px rgba(0,0,0,0.3);">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; padding:18px 22px; border-bottom:1px solid var(--border);">
+      <div>
+        <div id="stock-modal-title" style="font-size:20px; font-weight:700;">—</div>
+        <div id="stock-modal-subtitle" style="font-size:14px; color:var(--text-dim); margin-top:4px;">—</div>
+      </div>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <button class="btn" id="stock-modal-csv" style="font-size:13px;">📥 Export CSV</button>
+        <button class="btn" id="stock-modal-print" style="font-size:13px; background:var(--accent); color:white; border-color:var(--accent);">🖨️ พิมพ์</button>
+        <button id="stock-modal-close" style="background:none; border:none; font-size:24px; cursor:pointer; color:var(--text-dim); padding:0; line-height:1; margin-left:6px;">✕</button>
+      </div>
+    </div>
+    <div id="stock-modal-body" style="padding:20px 22px; overflow-y:auto;">
       <div class="loading-state"><span class="loading"></span> โหลด...</div>
     </div>
   </div>
@@ -4294,7 +4318,7 @@ function showFilterResult() {
         supRolls += cell.rolls;
         supKg += cell.kg;
         
-        html += `<tr>
+        html += `<tr class="flt-detail-row" data-supplier="${escapeHtml(sup)}" data-paper-type="${escapeHtml(typ)}" data-width="${wid}" style="cursor:pointer;" title="คลิกเพื่อดูรายละเอียดม้วน">
           <td class="center">${seq++}</td>
           <td class="thai-text">${firstSupRow ? escapeHtml(sup) : ''}</td>
           <td class="thai-text">${firstTypRow ? escapeHtml(typ) : ''}</td>
@@ -4325,6 +4349,17 @@ function showFilterResult() {
   
   html += '</tbody></table></div></div>';
   wrap.innerHTML = html;
+
+  // Attach click handlers to detail rows
+  wrap.querySelectorAll('.flt-detail-row').forEach(tr => {
+    tr.addEventListener('click', () => {
+      openStockDetailModal(
+        tr.dataset.supplier,
+        tr.dataset.paperType,
+        tr.dataset.width
+      );
+    });
+  });
 }
 
 function buildFilterPrintHeader() {
@@ -4346,6 +4381,177 @@ function buildFilterPrintHeader() {
       <div>วันที่พิมพ์: ${formatDateTH(new Date().toISOString().slice(0, 10))}</div>
     </div>
   `;
+}
+
+// =================================================================
+// ===== Stock Detail Modal (เปิดจากการคลิก row ใน filter result) =====
+// =================================================================
+let _stockModalState = { rolls: [], title: '', subtitle: '' };
+
+function openStockDetailModal(supplier, paperType, widthMm) {
+  // Filter rolls from cache matching this supplier+type+width
+  const wid = parseInt(widthMm, 10);
+  const matchingRolls = (_stockCache || []).filter(r =>
+    (r.supplier || '-') === supplier &&
+    (r.paper_type || '-') === paperType &&
+    (r.width_mm || 0) === wid
+  );
+
+  if (!matchingRolls.length) {
+    alert('ไม่พบข้อมูลม้วน');
+    return;
+  }
+
+  // Sort by receive_date ascending (oldest first — FIFO awareness)
+  matchingRolls.sort((a, b) => {
+    const da = a.receive_date || '';
+    const db = b.receive_date || '';
+    return da.localeCompare(db);
+  });
+
+  const totalKg = matchingRolls.reduce((s, r) => s + (parseFloat(r.remaining_weight_kg) || 0), 0);
+
+  _stockModalState.rolls = matchingRolls;
+  _stockModalState.title = `${supplier} · ${paperType} · ${fmtNum(wid)}mm`;
+  _stockModalState.subtitle = `${matchingRolls.length} ม้วน · ${fmtKgFull(totalKg)} kg`;
+
+  $('#stock-modal-title').textContent = _stockModalState.title;
+  $('#stock-modal-subtitle').textContent = _stockModalState.subtitle;
+  $('#stock-detail-modal').style.display = 'flex';
+
+  // Render table
+  const rows = matchingRolls.map((r, i) => {
+    const days = daysSince(r.receive_date);
+    const ageStyle = days !== null && days > 90 ? 'color:#dc2626; font-weight:700;' : '';
+    return `<tr>
+      <td class="center">${i + 1}</td>
+      <td>${escapeHtml(r.paper_lot || '—')}</td>
+      <td>${escapeHtml(r.invoice_no || '—')}</td>
+      <td class="right">${fmtKgFull(r.remaining_weight_kg)}</td>
+      <td>${escapeHtml(r.receive_date || '—')}</td>
+      <td class="right" style="${ageStyle}">${days !== null ? days + ' วัน' : '—'}</td>
+      <td>${escapeHtml(r.project_code || '—')}</td>
+    </tr>`;
+  }).join('');
+
+  $('#stock-modal-body').innerHTML = `
+    <div id="stock-detail-print-area">
+      <table class="alert-table" style="border:1px solid var(--border); border-radius:8px; width:100%;">
+        <thead>
+          <tr>
+            <th class="center" style="width:42px;">#</th>
+            <th>Paper Lot</th>
+            <th>Invoice No</th>
+            <th class="right">น้ำหนักคงเหลือ (kg)</th>
+            <th>วันที่รับเข้า</th>
+            <th class="right">อายุ</th>
+            <th>Project Code</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+        <tfoot>
+          <tr style="font-weight:700; background:var(--panel-2);">
+            <td colspan="3">รวม ${matchingRolls.length} ม้วน</td>
+            <td class="right">${fmtKgFull(totalKg)}</td>
+            <td colspan="3"></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  `;
+}
+
+function closeStockDetailModal() {
+  $('#stock-detail-modal').style.display = 'none';
+}
+
+function exportStockDetailCSV() {
+  if (!_stockModalState.rolls.length) return;
+  const header = ['#', 'Paper Lot', 'Invoice No', 'Supplier', 'ประเภทกระดาษ', 'หน้ากว้าง (mm)', 'น้ำหนักคงเหลือ (kg)', 'วันที่รับเข้า', 'อายุ (วัน)', 'Project Code'];
+  const rows = _stockModalState.rolls.map((r, i) => [
+    i + 1,
+    r.paper_lot || '',
+    r.invoice_no || '',
+    r.supplier || '',
+    r.paper_type || '',
+    r.width_mm || '',
+    r.remaining_weight_kg || 0,
+    r.receive_date || '',
+    daysSince(r.receive_date) ?? '',
+    r.project_code || ''
+  ]);
+  const csv = [header, ...rows].map(row =>
+    row.map(c => {
+      const s = String(c);
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    }).join(',')
+  ).join('\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const safeName = _stockModalState.title.replace(/[^\w\s-]/g, '').replace(/\s+/g, '_');
+  a.download = `stock_${safeName}_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function printStockDetail() {
+  if (!_stockModalState.rolls.length) return;
+  const tableHtml = $('#stock-detail-print-area').innerHTML;
+  const w = window.open('', '_blank', 'width=800,height=900');
+  if (!w) {
+    alert('เบราว์เซอร์บล็อก popup — กรุณาอนุญาต popup ของเว็บนี้');
+    return;
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  const dateTH = formatDateTH(today);
+  w.document.write(`
+    <!DOCTYPE html>
+    <html lang="th">
+    <head>
+      <meta charset="UTF-8">
+      <title>รายละเอียด Stock — ${_stockModalState.title}</title>
+      <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+      <style>
+        body { font-family: 'IBM Plex Sans Thai', sans-serif; padding: 20px; color: #0f172a; font-size: 13px; }
+        .header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:18px; padding-bottom:12px; border-bottom:2px solid #1e293b; }
+        .header h2 { margin: 0 0 4px; font-size: 18px; }
+        .header .right { text-align: right; font-size: 11px; }
+        .doc-no { font-weight: 700; font-size: 13px; }
+        .info { font-size: 12px; color: #475569; margin-top: 4px; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        th { background: #e2e8f0; padding: 8px 10px; text-align: left; border: 1px solid #cbd5e1; font-weight: 700; }
+        td { padding: 7px 10px; border: 1px solid #e2e8f0; font-family: 'JetBrains Mono', monospace; }
+        td.right, th.right { text-align: right; }
+        td.center, th.center { text-align: center; }
+        tfoot td { font-weight: 700; background: #fef3c7; }
+        @media print { body { padding: 12px; } }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <div>
+          <h2>รายละเอียด Stock คงเหลือ</h2>
+          <div style="font-size:11px;color:#475569;">บริษัท เอเชียเปเปอร์ทิ้ว จำกัด · Asia Paper Tube Co., Ltd.</div>
+          <div class="info">
+            ${escapeHtml(_stockModalState.title)}<br>
+            <b>${escapeHtml(_stockModalState.subtitle)}</b>
+          </div>
+        </div>
+        <div class="right">
+          <div class="doc-no">FM-SL-03</div>
+          <div>วันที่พิมพ์: ${dateTH}</div>
+        </div>
+      </div>
+      ${tableHtml}
+      <script>
+        window.onload = function() { setTimeout(() => { window.print(); }, 250); };
+      <\/script>
+    </body>
+    </html>
+  `);
+  w.document.close();
 }
 
 
@@ -4874,7 +5080,7 @@ const PRINT_CONFIG = {
     headerBuilder: 'invoice'
   },
   filter: {
-    name: '🔍 ค้นหา & พิมพ์',
+    name: '🔍 ตรวจสอบ Stock',
     orientation: 'portrait',
     sections: [
       { id: 'flt-result-wrap', label: 'ผลการค้นหา', default: true }
@@ -5711,6 +5917,19 @@ $$('.alert-sev-btn').forEach(btn => {
 $('#alert-modal-close').addEventListener('click', closeAlertDetail);
 $('#alert-detail-modal').addEventListener('click', e => {
   if (e.target.id === 'alert-detail-modal') closeAlertDetail();
+});
+
+$('#stock-modal-close').addEventListener('click', closeStockDetailModal);
+$('#stock-modal-csv').addEventListener('click', exportStockDetailCSV);
+$('#stock-modal-print').addEventListener('click', printStockDetail);
+$('#stock-detail-modal').addEventListener('click', e => {
+  if (e.target.id === 'stock-detail-modal') closeStockDetailModal();
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    if ($('#stock-detail-modal').style.display === 'flex') closeStockDetailModal();
+    else if ($('#alert-detail-modal').style.display === 'flex') closeAlertDetail();
+  }
 });
 
 checkAuth();
