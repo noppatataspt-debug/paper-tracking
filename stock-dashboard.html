@@ -849,6 +849,7 @@ body {
 }
 .chip-search:focus { outline: 2px solid var(--accent); }
 .chip.hidden { display: none; }
+.chip.cascade-hidden { display: none; }
 
 /* Invoice card */
 .invoice-card {
@@ -4084,20 +4085,19 @@ function renderChipList(prefix, items) {
 function toggleChip(e, set) {
   const chip = e.target.closest('.chip');
   if (!chip) return;
+  if (chip.classList.contains('cascade-hidden')) return; // ignore clicks on hidden chips
   const val = chip.dataset.val;
   
   if (val === '__ALL__') {
-    // toggle all
+    // toggle all (only currently visible chips)
     const group = chip.parentElement;
-    const allChips = [...group.querySelectorAll('.chip:not(.all-chip)')];
+    const visibleChips = [...group.querySelectorAll('.chip:not(.all-chip):not(.cascade-hidden)')];
     if (chip.classList.contains('selected')) {
-      // unselect all
       chip.classList.remove('selected');
-      allChips.forEach(c => c.classList.remove('selected'));
-      set.clear();
+      visibleChips.forEach(c => { c.classList.remove('selected'); set.delete(c.dataset.val); });
     } else {
       chip.classList.add('selected');
-      allChips.forEach(c => { c.classList.add('selected'); set.add(c.dataset.val); });
+      visibleChips.forEach(c => { c.classList.add('selected'); set.add(c.dataset.val); });
     }
   } else {
     // toggle individual
@@ -4108,11 +4108,75 @@ function toggleChip(e, set) {
       chip.classList.add('selected');
       set.add(val);
     }
-    // update "all" chip state
+    // update "all" chip state — based on visible non-all chips
     const group = chip.parentElement;
     const allChip = group.querySelector('.all-chip');
-    const allChips = [...group.querySelectorAll('.chip:not(.all-chip)')];
-    const allSelected = allChips.every(c => c.classList.contains('selected'));
+    const visibleChips = [...group.querySelectorAll('.chip:not(.all-chip):not(.cascade-hidden)')];
+    const allSelected = visibleChips.length > 0 && visibleChips.every(c => c.classList.contains('selected'));
+    allChip.classList.toggle('selected', allSelected);
+  }
+
+  // Apply cascading filter after any selection change
+  applyCascadeFilter();
+}
+
+// =================================================================
+// Cascade filter — hide chips that have no matching rolls based on
+// current OTHER filters. Auto-deselect orphaned selections.
+// Pattern: Supplier > paper_type > width
+// =================================================================
+function applyCascadeFilter() {
+  if (!_stockCache) return;
+
+  // Compute valid sets for each field — filter cache by OTHER fields only
+  // (not by the field itself, so all that field's options remain available)
+  const validSuppliers = computeValidValues('supplier');
+  const validTypes     = computeValidValues('paper_type');
+  const validWidths    = computeValidValues('width_mm');
+
+  // Hide chips that are not valid; auto-deselect orphans
+  applyChipVisibility($('#flt-suppliers'), validSuppliers, _filter.suppliers);
+  applyChipVisibility($('#flt-types'),     validTypes,     _filter.types);
+  applyChipVisibility($('#flt-widths'),    validWidths,    _filter.widths);
+}
+
+// Compute set of valid values for a given field, filtered by OTHER selected filters
+function computeValidValues(field) {
+  const valid = new Set();
+  for (const r of _stockCache) {
+    // Apply all other filters EXCEPT the one we're computing
+    if (field !== 'supplier' && _filter.suppliers.size > 0 && !_filter.suppliers.has(r.supplier)) continue;
+    if (field !== 'paper_type' && _filter.types.size > 0 && !_filter.types.has(r.paper_type)) continue;
+    if (field !== 'width_mm' && _filter.widths.size > 0 && !_filter.widths.has(String(r.width_mm))) continue;
+    
+    const val = field === 'width_mm' ? String(r[field]) : r[field];
+    if (val) valid.add(val);
+  }
+  return valid;
+}
+
+// Hide chips not in validSet; auto-deselect orphaned selections
+function applyChipVisibility(container, validSet, selectionSet) {
+  if (!container) return;
+  const chips = container.querySelectorAll('.chip:not(.all-chip)');
+  chips.forEach(c => {
+    const val = c.dataset.val;
+    if (validSet.has(val)) {
+      c.classList.remove('cascade-hidden');
+    } else {
+      c.classList.add('cascade-hidden');
+      // Auto-deselect orphans (Option 2 behavior)
+      if (c.classList.contains('selected')) {
+        c.classList.remove('selected');
+        selectionSet.delete(val);
+      }
+    }
+  });
+  // Update "ทั้งหมด" chip state based on visible chips
+  const allChip = container.querySelector('.all-chip');
+  if (allChip) {
+    const visibleChips = [...container.querySelectorAll('.chip:not(.all-chip):not(.cascade-hidden)')];
+    const allSelected = visibleChips.length > 0 && visibleChips.every(c => c.classList.contains('selected'));
     allChip.classList.toggle('selected', allSelected);
   }
 }
@@ -4127,6 +4191,7 @@ function clearFilter() {
   if ($('#flt-types-search')) $('#flt-types-search').value = '';
   if ($('#flt-widths-search')) $('#flt-widths-search').value = '';
   $$('.filter-section .chip').forEach(c => c.classList.remove('hidden'));
+  $$('.filter-section .chip').forEach(c => c.classList.remove('cascade-hidden'));
 }
 
 function clearLotSearch() {
