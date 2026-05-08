@@ -5461,28 +5461,73 @@ function renderMonthlyChart(outflows) {
     if (bucket) bucket.total += parseFloat(o.weight_kg || 0);
   });
 
-  const labels = buckets.map(b => b.label + (b.isCurrent ? ' *' : ''));
-  const data = buckets.map(b => b.total / 1000); // kg → tons
-  const colors = buckets.map(b => b.isCurrent ? '#94a3b8' : '#2563eb'); // current month muted
+  // ---- Forecast for current month (Hybrid C) ----
+  // forecast = linear_extrapolation × elapsed_ratio + historical_avg × (1 - elapsed_ratio)
+  // where:
+  //   linear_extrapolation = total_so_far / days_elapsed × days_in_month
+  //   historical_avg       = mean of last 3 completed months (excl current)
+  //   elapsed_ratio        = days_elapsed / days_in_month
+  const currentBucket = buckets[buckets.length - 1];
+  const daysElapsed = now.getDate(); // 1..31
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const elapsedRatio = daysElapsed / daysInMonth;
 
-  // Custom plugin: draw value labels above each bar
+  const completedBuckets = buckets.slice(0, -1).filter(b => b.total > 0);
+  const last3 = completedBuckets.slice(-3);
+  const histAvg = last3.length > 0
+    ? last3.reduce((s, b) => s + b.total, 0) / last3.length
+    : 0;
+
+  const linearExtrap = daysElapsed > 0
+    ? (currentBucket.total / daysElapsed) * daysInMonth
+    : 0;
+
+  const forecastTotal = (linearExtrap * elapsedRatio) + (histAvg * (1 - elapsedRatio));
+  // Forecast is for the WHOLE month — remaining = forecast - actual (clamped >= 0)
+  const forecastRemaining = Math.max(0, forecastTotal - currentBucket.total);
+
+  // Datasets: actual (bottom) + forecast (top, only on current month)
+  const actualData   = buckets.map(b => b.total / 1000);
+  const forecastData = buckets.map(b => b.isCurrent ? forecastRemaining / 1000 : 0);
+
+  const labels = buckets.map(b => b.label + (b.isCurrent ? ' *' : ''));
+  const actualColors = buckets.map(b => b.isCurrent ? '#94a3b8' : '#2563eb');
+
+  // Plugin: draw labels above each stacked bar group
   const dataLabelsPlugin = {
     id: 'monthlyDataLabels',
     afterDatasetsDraw(chart) {
       const { ctx } = chart;
-      const meta = chart.getDatasetMeta(0);
+      const meta0 = chart.getDatasetMeta(0); // actual
+      const meta1 = chart.getDatasetMeta(1); // forecast
       ctx.save();
       ctx.font = '600 12px "IBM Plex Sans Thai", sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'bottom';
-      meta.data.forEach((bar, i) => {
-        const value = data[i];
-        if (value <= 0) return;
-        const label = value.toFixed(2);
-        const x = bar.x;
-        const y = bar.y - 4;
-        ctx.fillStyle = colors[i];
-        ctx.fillText(label, x, y);
+
+      meta0.data.forEach((bar, i) => {
+        const isCurrent = buckets[i].isCurrent;
+        const actual = actualData[i];
+        const forecast = forecastData[i];
+
+        if (isCurrent) {
+          // Stacked: show "actual / forecast_total" above the top of forecast bar
+          const topBar = meta1.data[i];
+          const x = topBar.x;
+          const y = topBar.y - 4;
+          const fcTotal = actual + forecast;
+          if (fcTotal > 0) {
+            ctx.fillStyle = '#475569';
+            ctx.fillText(`${actual.toFixed(2)} / ${fcTotal.toFixed(2)}`, x, y);
+          }
+        } else {
+          // Normal month: just the value
+          if (actual <= 0) return;
+          const x = bar.x;
+          const y = bar.y - 4;
+          ctx.fillStyle = '#2563eb';
+          ctx.fillText(actual.toFixed(2), x, y);
+        }
       });
       ctx.restore();
     }
@@ -5494,38 +5539,77 @@ function renderMonthlyChart(outflows) {
     type: 'bar',
     data: {
       labels,
-      datasets: [{
-        label: 'tons',
-        data,
-        backgroundColor: colors,
-        borderRadius: 4,
-        maxBarThickness: 50,
-      }]
+      datasets: [
+        {
+          label: 'actual',
+          data: actualData,
+          backgroundColor: actualColors,
+          borderRadius: 0,
+          maxBarThickness: 50,
+          stack: 'main',
+        },
+        {
+          label: 'forecast',
+          data: forecastData,
+          backgroundColor: 'rgba(148, 163, 184, 0.3)',
+          borderColor: '#94a3b8',
+          borderWidth: 1.5,
+          borderDash: [4, 4],
+          borderSkipped: false,
+          borderRadius: 0,
+          maxBarThickness: 50,
+          stack: 'main',
+        }
+      ]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
-      layout: { padding: { top: 22 } }, // headroom for value labels
+      layout: { padding: { top: 26 } },
       plugins: {
         legend: { display: false },
         tooltip: {
           callbacks: {
-            title: items => buckets[items[0].dataIndex].label + (buckets[items[0].dataIndex].isCurrent ? ' (เดือนปัจจุบัน — ยังไม่จบเดือน)' : ''),
-            label: ctx => `${ctx.parsed.y.toFixed(2)} ตัน  (${fmtKgFull(ctx.parsed.y * 1000)} kg)`
+            title: items => {
+              const i = items[0].dataIndex;
+              return buckets[i].label + (buckets[i].isCurrent ? ' (เดือนปัจจุบัน)' : '');
+            },
+            label: items => {
+              const i = items.dataIndex;
+              const ds = items.dataset.label;
+              if (ds === 'actual') {
+                if (buckets[i].isCurrent) {
+                  return `ใช้ไปแล้ว: ${actualData[i].toFixed(2)} ตัน (${daysElapsed}/${daysInMonth} วัน)`;
+                }
+                return `${actualData[i].toFixed(2)} ตัน  (${fmtKgFull(actualData[i] * 1000)} kg)`;
+              } else if (ds === 'forecast') {
+                if (forecastData[i] > 0) {
+                  const total = (actualData[i] + forecastData[i]).toFixed(2);
+                  return `Forecast (ที่เหลือ): ${forecastData[i].toFixed(2)} ตัน  →  รวมทั้งเดือน ${total} ตัน`;
+                }
+                return null;
+              }
+            }
           }
         }
       },
       scales: {
-        x: { ticks: { font: { size: 12 } }, grid: { display: false } },
-        y: { beginAtZero: true, ticks: { font: { size: 11 } }, title: { display: true, text: 'ตัน', font: { size: 11 } } }
+        x: { stacked: true, ticks: { font: { size: 12 } }, grid: { display: false } },
+        y: { stacked: true, beginAtZero: true, ticks: { font: { size: 11 } }, title: { display: true, text: 'ตัน', font: { size: 11 } } }
       }
     },
     plugins: [dataLabelsPlugin]
   });
   alertModalCharts.push(chart);
 
-  // Add note about current month under chart
-  if (buckets.some(b => b.isCurrent)) {
-    wrap.insertAdjacentHTML('afterend', `<div style="font-size:11px; color:var(--text-muted); margin-top:4px;">* เดือนปัจจุบันยังไม่จบ</div>`);
+  // Note + forecast formula explanation
+  if (currentBucket.isCurrent) {
+    const noteHtml = `
+      <div style="font-size:11px; color:var(--text-muted); margin-top:6px; line-height:1.6;">
+        * เดือน ${currentBucket.label} ยังไม่จบ — แท่งเส้นประสีเทาคือ <b>Forecast ส่วนที่เหลือ</b><br>
+        Forecast = (extrapolate จาก ${daysElapsed}/${daysInMonth} วัน × ${(elapsedRatio*100).toFixed(0)}%) + (เฉลี่ย ${last3.length} เดือนก่อนหน้า × ${((1-elapsedRatio)*100).toFixed(0)}%) = <b>${(forecastTotal/1000).toFixed(2)} ตัน</b>
+      </div>
+    `;
+    wrap.insertAdjacentHTML('afterend', noteHtml);
   }
 }
 
