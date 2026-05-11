@@ -3296,10 +3296,20 @@ function exportTraceFormXLSX(data, params, invoiceMap) {
       const promises = sheets.map(path => {
         if (!zip.file(path)) return Promise.resolve();
         return zip.file(path).async('string').then(xml => {
+          // OOXML schema requires strict element order:
+          //   sheetData → mergeCells → ... → pageMargins → pageSetup → ... → ignoredErrors
+          // xlsx-js-style writes <ignoredErrors> as the last element, so we must insert
+          // pageMargins/pageSetup BEFORE <ignoredErrors>, not before </worksheet>.
           const pageBlock = '<pageMargins left="0.3" right="0.3" top="0.4" bottom="0.4" header="0.2" footer="0.2"/>' +
                             '<pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="0"/>';
-          let newXml = xml.replace(/<pageMargins[^/]*\/>/g, '');
-          newXml = newXml.replace('</worksheet>', pageBlock + '</worksheet>');
+          // Remove any existing pageMargins/pageSetup first
+          let newXml = xml.replace(/<pageMargins[^/]*\/>/g, '').replace(/<pageSetup[^/]*\/>/g, '');
+          // Insert before <ignoredErrors> if present, otherwise before </worksheet>
+          if (newXml.indexOf('<ignoredErrors') !== -1) {
+            newXml = newXml.replace('<ignoredErrors', pageBlock + '<ignoredErrors');
+          } else {
+            newXml = newXml.replace('</worksheet>', pageBlock + '</worksheet>');
+          }
           zip.file(path, newXml);
         });
       });
