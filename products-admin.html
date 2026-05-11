@@ -991,7 +991,17 @@ document.querySelectorAll('.chip[data-filter]').forEach(chip => {
 document.getElementById('btn-add').addEventListener('click', () => openProductModal(null));
 document.getElementById('btn-modal-cancel').addEventListener('click', closeProductModal);
 document.getElementById('btn-modal-save').addEventListener('click', saveProduct);
-document.getElementById('product-name-input').addEventListener('input', updateValidationFeedback);
+document.getElementById('product-name-input').addEventListener('input', (e) => {
+  // Auto-normalize: uppercase ทุกตัวยกเว้น x (เพราะ x เป็นตัวคั่นขนาด)
+  let normalized = e.target.value.replace(/[a-wyz]/g, c => c.toUpperCase());
+  normalized = normalized.replace(/(\d|\.)X(\d|T)/g, '$1x$2');
+  if (normalized !== e.target.value) {
+    const cursorPos = e.target.selectionStart;
+    e.target.value = normalized;
+    e.target.setSelectionRange(cursorPos, cursorPos);
+  }
+  updateValidationFeedback();
+});
 document.getElementById('btn-confirm-cancel').addEventListener('click', closeDeleteModal);
 document.getElementById('btn-confirm-delete').addEventListener('click', confirmDelete);
 

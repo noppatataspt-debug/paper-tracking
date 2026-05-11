@@ -1491,6 +1491,16 @@ function renderProductRows() {
       commitRowValue(idx);
     }, 150));
     input.addEventListener('input', () => {
+      // Auto-normalize: uppercase ทุกตัวอักษรยกเว้น x (เพราะ x เป็นตัวคั่นขนาด)
+      // 1. Uppercase a-w, y, z → A-W, Y, Z (เหลือ x lowercase)
+      // 2. Normalize X → x ตอนใช้เป็นตัวคั่น เช่น 45X45 → 45x45, 234XT7.5 → 234xT7.5
+      let normalized = input.value.replace(/[a-wyz]/g, c => c.toUpperCase());
+      normalized = normalized.replace(/(\d|\.)X(\d|T)/g, '$1x$2');
+      if (normalized !== input.value) {
+        const cursorPos = input.selectionStart;
+        input.value = normalized;
+        input.setSelectionRange(cursorPos, cursorPos);
+      }
       productEntries[idx].value = input.value;
       const trimmed = input.value.trim();
       if (DATA.products.includes(trimmed)) {
