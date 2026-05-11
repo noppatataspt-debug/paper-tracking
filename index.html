@@ -2213,60 +2213,94 @@ function validateProductPattern(name) {
   if (!name) return { valid: true, suggested: null, reason: '' };
   const s = String(name).trim();
 
-  // Exempt: SKIC/TKIC/VKPC group
-  if (/^(SKIC|TKIC|VKPC)/.test(s)) {
-    return { valid: true, suggested: null, reason: 'exempt-skic-group' };
+  // Helper: uppercase พิมพ์เล็กล้วน (preserve mixed case เช่น KLiT, SMi, TPl และ Thai)
+  const upPrefix = (p) => /^[a-z\.&\@]+$/.test(p) ? p.toUpperCase() : p;
+
+  // Helper: ตรวจว่า prefix ASCII-letters พิมพ์เล็กล้วน (ต้อง normalize เป็น uppercase)
+  const needsUppercase = (p) => /^[a-z\.&\@]+$/.test(p);
+
+  // Exempt: SKIC/TKIC/VKPC group (case-insensitive)
+  if (/^(SKIC|TKIC|VKPC)/i.test(s)) {
+    // ถ้า user พิมพ์เล็ก → suggest uppercase
+    if (needsUppercase(s.split(/[-_\d]/)[0])) {
+      return {
+        valid: false,
+        suggested: s.toUpperCase(),
+        reason: 'lowercase-skic',
+        message: 'ชื่อกลุ่ม SKIC ควรเป็นพิมพ์ใหญ่ทั้งหมด',
+        label: '⚠️ ตัวพิมพ์'
+      };
+    }
+    return { valid: true, suggested: null, reason: 'exempt-skic-group', label: '✓ ยกเว้น (SKIC group)' };
   }
 
   // Plain name (no digit/dash/x/underscore) → OK
   if (!/[-_0-9xX]/.test(s)) {
-    return { valid: true, suggested: null, reason: 'plain-name' };
+    if (needsUppercase(s)) {
+      return {
+        valid: false,
+        suggested: upPrefix(s),
+        reason: 'lowercase-plain',
+        message: 'ชื่อสินค้าควรเป็นพิมพ์ใหญ่',
+        label: '⚠️ ตัวพิมพ์'
+      };
+    }
+    return { valid: true, suggested: null, reason: 'plain-name', label: '✓ ชื่อล้วน' };
   }
 
-  // Pattern: <prefix>-<digits with x> e.g. AT-234xT7.5, AGC-45x45x3x1950
-  if (/^[A-Za-zก-๙&\.\@]+-\d+(\.\d+)?[xX]/.test(s)) {
-    return { valid: true, suggested: null, reason: 'correct-dash-x' };
+  // Pattern: <prefix>-<digits with x> — ถูก ยกเว้นถ้า prefix พิมพ์เล็ก
+  const correctMatch = s.match(/^([A-Za-zก-๙&\.\@]+)-(\d+(?:\.\d+)?[xX].*)$/);
+  if (correctMatch) {
+    const prefix = correctMatch[1];
+    if (needsUppercase(prefix)) {
+      return {
+        valid: false,
+        suggested: upPrefix(prefix) + '-' + correctMatch[2],
+        reason: 'lowercase-prefix',
+        message: 'ชื่อลูกค้าควรเป็นพิมพ์ใหญ่',
+        label: '⚠️ ตัวพิมพ์'
+      };
+    }
+    return { valid: true, suggested: null, reason: 'correct-dash-x', label: '✓ ถูก pattern' };
   }
 
-  // Pattern: <prefix>-<digits>$ (code only, like SKIC-4400 but for non-SKIC) → warn, suggest keep
-  if (/^[A-Za-zก-๙]+-\d+$/.test(s)) {
+  // Pattern: <prefix>-<digits>$ (code only)
+  const codeOnly = s.match(/^([A-Za-zก-๙]+)-(\d+)$/);
+  if (codeOnly) {
+    const prefix = codeOnly[1];
+    const fixed = needsUppercase(prefix) ? upPrefix(prefix) + '-' + codeOnly[2] : s;
     return {
-      valid: false,
-      suggested: s,
-      reason: 'code-only',
-      message: 'ชื่อนี้เป็นรหัสล้วน ไม่มีขนาด — ตรง pattern SKIC-4400 หรือเปล่า? ถ้าใช่ก็บันทึกได้'
+      valid: false, suggested: fixed, reason: 'code-only',
+      message: 'ชื่อนี้เป็นรหัสล้วน — ถ้าเป็น pattern SKIC-4400 ก็บันทึกได้',
+      label: '⚠️ รหัสล้วน'
     };
   }
 
-  // Pattern: <prefix>-<num>-T<num> e.g. PMV-590-T5 → suggest PMV-590xT5
-  const dashTMatch = s.match(/^([A-Za-zก-๙]+)-(\d+(?:\.\d+)?)-T(\d+(?:\.\d+)?)(.*)$/);
-  if (dashTMatch) {
+  // Pattern: <prefix>-<num>-T<num> → fix to <prefix>-<num>xT<num>
+  const dT = s.match(/^([A-Za-zก-๙]+)-(\d+(?:\.\d+)?)-T(\d+(?:\.\d+)?)(.*)$/i);
+  if (dT) {
     return {
       valid: false,
-      suggested: `${dashTMatch[1]}-${dashTMatch[2]}xT${dashTMatch[3]}${dashTMatch[4]}`,
+      suggested: `${upPrefix(dT[1])}-${dT[2]}xT${dT[3]}${dT[4]}`,
       reason: 'dash-T-needs-fix',
-      message: 'พบ pattern ที่ใช้ "-" คั่นขนาด ควรใช้ "x" แทน'
+      message: 'ใช้ "-" คั่นขนาด ควรใช้ "x" แทน',
+      label: '⚠️ pattern ผิด'
     };
   }
 
-  // Pattern: <prefix><digit>x... (no dash) → suggest add dash
-  const noDashMatch = s.match(/^([^-]*?)(\d+[xX].*)$/);
-  if (noDashMatch && noDashMatch[1].length > 0 && !/\d$/.test(noDashMatch[1])) {
+  // Pattern: <prefix><digit>x... (no dash) → add dash
+  const nD = s.match(/^([^-]*?)(\d+[xX].*)$/);
+  if (nD && nD[1].length > 0 && !/\d$/.test(nD[1])) {
     return {
       valid: false,
-      suggested: `${noDashMatch[1]}-${noDashMatch[2]}`,
+      suggested: `${upPrefix(nD[1])}-${nD[2]}`,
       reason: 'no-dash-needs-fix',
-      message: 'พบ pattern ที่ไม่มี "-" คั่นชื่อกับขนาด ควรเพิ่ม "-" ระหว่างชื่อลูกค้ากับขนาด'
+      message: 'ไม่มี "-" คั่นชื่อกับขนาด',
+      label: '⚠️ ขาด dash'
     };
   }
 
-  // Default: pattern แปลก → warn
-  return {
-    valid: false,
-    suggested: null,
-    reason: 'unknown-pattern',
-    message: 'ชื่อนี้ไม่ตรง pattern มาตรฐาน (ลูกค้า-ขนาด คั่นด้วย x)'
-  };
+  return { valid: false, suggested: null, reason: 'unknown', message: 'pattern ไม่ตรงมาตรฐาน', label: '⚠️ pattern แปลก' };
 }
 
 // แสดง modal ยืนยันชื่อสินค้าที่ไม่ตรง pattern

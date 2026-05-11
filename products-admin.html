@@ -475,42 +475,78 @@ function showToast(msg, type) {
 function validateProductPattern(name) {
   if (!name) return { valid: true, suggested: null, reason: '' };
   const s = String(name).trim();
-  if (/^(SKIC|TKIC|VKPC)/.test(s)) {
+
+  const upPrefix = (p) => /^[a-z\.&\@]+$/.test(p) ? p.toUpperCase() : p;
+  const needsUppercase = (p) => /^[a-z\.&\@]+$/.test(p);
+
+  if (/^(SKIC|TKIC|VKPC)/i.test(s)) {
+    if (needsUppercase(s.split(/[-_\d]/)[0])) {
+      return {
+        valid: false, suggested: s.toUpperCase(),
+        reason: 'lowercase-skic', message: 'ชื่อกลุ่ม SKIC ควรเป็นพิมพ์ใหญ่ทั้งหมด',
+        label: '⚠️ ตัวพิมพ์'
+      };
+    }
     return { valid: true, suggested: null, reason: 'exempt-skic-group', label: '✓ ยกเว้น (SKIC group)' };
   }
+
   if (!/[-_0-9xX]/.test(s)) {
+    if (needsUppercase(s)) {
+      return {
+        valid: false, suggested: upPrefix(s),
+        reason: 'lowercase-plain', message: 'ชื่อสินค้าควรเป็นพิมพ์ใหญ่',
+        label: '⚠️ ตัวพิมพ์'
+      };
+    }
     return { valid: true, suggested: null, reason: 'plain-name', label: '✓ ชื่อล้วน' };
   }
-  if (/^[A-Za-zก-๙&\.\@]+-\d+(\.\d+)?[xX]/.test(s)) {
+
+  const correctMatch = s.match(/^([A-Za-zก-๙&\.\@]+)-(\d+(?:\.\d+)?[xX].*)$/);
+  if (correctMatch) {
+    const prefix = correctMatch[1];
+    if (needsUppercase(prefix)) {
+      return {
+        valid: false, suggested: upPrefix(prefix) + '-' + correctMatch[2],
+        reason: 'lowercase-prefix', message: 'ชื่อลูกค้าควรเป็นพิมพ์ใหญ่',
+        label: '⚠️ ตัวพิมพ์'
+      };
+    }
     return { valid: true, suggested: null, reason: 'correct-dash-x', label: '✓ ถูก pattern' };
   }
-  if (/^[A-Za-zก-๙]+-\d+$/.test(s)) {
+
+  const codeOnly = s.match(/^([A-Za-zก-๙]+)-(\d+)$/);
+  if (codeOnly) {
+    const prefix = codeOnly[1];
+    const fixed = needsUppercase(prefix) ? upPrefix(prefix) + '-' + codeOnly[2] : s;
     return {
-      valid: false, suggested: s, reason: 'code-only',
+      valid: false, suggested: fixed, reason: 'code-only',
       message: 'ชื่อนี้เป็นรหัสล้วน — ถ้าเป็น pattern SKIC-4400 ก็บันทึกได้',
       label: '⚠️ รหัสล้วน'
     };
   }
-  const dT = s.match(/^([A-Za-zก-๙]+)-(\d+(?:\.\d+)?)-T(\d+(?:\.\d+)?)(.*)$/);
+
+  const dT = s.match(/^([A-Za-zก-๙]+)-(\d+(?:\.\d+)?)-T(\d+(?:\.\d+)?)(.*)$/i);
   if (dT) {
     return {
       valid: false,
-      suggested: `${dT[1]}-${dT[2]}xT${dT[3]}${dT[4]}`,
+      suggested: `${upPrefix(dT[1])}-${dT[2]}xT${dT[3]}${dT[4]}`,
       reason: 'dash-T-needs-fix',
       message: 'ใช้ "-" คั่นขนาด ควรใช้ "x" แทน',
       label: '⚠️ pattern ผิด'
     };
   }
+
   const nD = s.match(/^([^-]*?)(\d+[xX].*)$/);
   if (nD && nD[1].length > 0 && !/\d$/.test(nD[1])) {
     return {
       valid: false,
-      suggested: `${nD[1]}-${nD[2]}`,
+      suggested: `${upPrefix(nD[1])}-${nD[2]}`,
       reason: 'no-dash-needs-fix',
       message: 'ไม่มี "-" คั่นชื่อกับขนาด',
       label: '⚠️ ขาด dash'
     };
   }
+
   return { valid: false, suggested: null, reason: 'unknown', message: 'pattern ไม่ตรงมาตรฐาน', label: '⚠️ pattern แปลก' };
 }
 
