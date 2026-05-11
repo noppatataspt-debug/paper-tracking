@@ -721,6 +721,7 @@
     <a href="dashboard.html" class="nav-link">🔍 สอบกลับวัตถุดิบ (Tracking)</a>
     <a href="stock-dashboard.html" class="nav-link">📦 Stock</a>
     <a href="qa-dashboard.html" class="nav-link">🧪 คุณภาพ (QA)</a>
+    <a href="products-admin.html" class="nav-link">📦 จัดการสินค้า</a>
   </div>
 
   <div class="stepper">
@@ -2202,8 +2203,208 @@ async function loadMasterData() {
   }
 }
 
+// --- Pattern validation for new product names (ISO9001 compliance) ---
+// rules:
+//   - SKIC/TKIC/VKPC group → exempt (รหัสล้วน)
+//   - <prefix>-<size with x> → ถูก (เช่น AT-234xT7.5, AGC-45x45x3x1950)
+//   - ชื่อล้วน (ไม่มี digit/dash) → ถูก (เช่น TVP, MMP)
+// returns: { valid: bool, suggested: string|null, reason: string }
+function validateProductPattern(name) {
+  if (!name) return { valid: true, suggested: null, reason: '' };
+  const s = String(name).trim();
+
+  // Exempt: SKIC/TKIC/VKPC group
+  if (/^(SKIC|TKIC|VKPC)/.test(s)) {
+    return { valid: true, suggested: null, reason: 'exempt-skic-group' };
+  }
+
+  // Plain name (no digit/dash/x/underscore) → OK
+  if (!/[-_0-9xX]/.test(s)) {
+    return { valid: true, suggested: null, reason: 'plain-name' };
+  }
+
+  // Pattern: <prefix>-<digits with x> e.g. AT-234xT7.5, AGC-45x45x3x1950
+  if (/^[A-Za-zก-๙&\.\@]+-\d+(\.\d+)?[xX]/.test(s)) {
+    return { valid: true, suggested: null, reason: 'correct-dash-x' };
+  }
+
+  // Pattern: <prefix>-<digits>$ (code only, like SKIC-4400 but for non-SKIC) → warn, suggest keep
+  if (/^[A-Za-zก-๙]+-\d+$/.test(s)) {
+    return {
+      valid: false,
+      suggested: s,
+      reason: 'code-only',
+      message: 'ชื่อนี้เป็นรหัสล้วน ไม่มีขนาด — ตรง pattern SKIC-4400 หรือเปล่า? ถ้าใช่ก็บันทึกได้'
+    };
+  }
+
+  // Pattern: <prefix>-<num>-T<num> e.g. PMV-590-T5 → suggest PMV-590xT5
+  const dashTMatch = s.match(/^([A-Za-zก-๙]+)-(\d+(?:\.\d+)?)-T(\d+(?:\.\d+)?)(.*)$/);
+  if (dashTMatch) {
+    return {
+      valid: false,
+      suggested: `${dashTMatch[1]}-${dashTMatch[2]}xT${dashTMatch[3]}${dashTMatch[4]}`,
+      reason: 'dash-T-needs-fix',
+      message: 'พบ pattern ที่ใช้ "-" คั่นขนาด ควรใช้ "x" แทน'
+    };
+  }
+
+  // Pattern: <prefix><digit>x... (no dash) → suggest add dash
+  const noDashMatch = s.match(/^([^-]*?)(\d+[xX].*)$/);
+  if (noDashMatch && noDashMatch[1].length > 0 && !/\d$/.test(noDashMatch[1])) {
+    return {
+      valid: false,
+      suggested: `${noDashMatch[1]}-${noDashMatch[2]}`,
+      reason: 'no-dash-needs-fix',
+      message: 'พบ pattern ที่ไม่มี "-" คั่นชื่อกับขนาด ควรเพิ่ม "-" ระหว่างชื่อลูกค้ากับขนาด'
+    };
+  }
+
+  // Default: pattern แปลก → warn
+  return {
+    valid: false,
+    suggested: null,
+    reason: 'unknown-pattern',
+    message: 'ชื่อนี้ไม่ตรง pattern มาตรฐาน (ลูกค้า-ขนาด คั่นด้วย x)'
+  };
+}
+
+// แสดง modal ยืนยันชื่อสินค้าที่ไม่ตรง pattern
+// returns Promise<{accept: bool, replacements: Map<originalName, newName>}>
+function showProductPatternModal(invalidProducts) {
+  return new Promise((resolve) => {
+    // Build modal HTML
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+      position:fixed; top:0; left:0; right:0; bottom:0;
+      background:rgba(0,0,0,0.6); z-index:10000;
+      display:flex; align-items:center; justify-content:center;
+      padding:16px;
+    `;
+
+    const card = document.createElement('div');
+    card.style.cssText = `
+      background:white; border-radius:16px; max-width:560px; width:100%;
+      max-height:90vh; overflow-y:auto;
+      padding:24px; box-shadow:0 10px 40px rgba(0,0,0,0.3);
+    `;
+
+    let body = `
+      <div style="margin-bottom:16px;">
+        <div style="font-size:20px; font-weight:700; color:#dc2626; margin-bottom:6px;">
+          ⚠️ ชื่อสินค้าไม่ตรง pattern มาตรฐาน
+        </div>
+        <div style="font-size:13px; color:#666;">
+          ตามมาตรฐาน ISO9001 ของบริษัท: <strong>ชื่อลูกค้า</strong>-<strong>ขนาด</strong> (คั่นด้วย x)<br>
+          ยกเว้นกลุ่ม SKIC/TKIC/VKPC
+        </div>
+      </div>
+      <div style="border:1px solid #e5e7eb; border-radius:10px; padding:12px; margin-bottom:16px; background:#fafafa;">
+    `;
+
+    invalidProducts.forEach((p, idx) => {
+      const hasSuggestion = !!p.validation.suggested && p.validation.suggested !== p.name;
+      body += `
+        <div style="padding:10px 0; ${idx > 0 ? 'border-top:1px solid #e5e7eb;' : ''}">
+          <div style="display:flex; align-items:center; gap:8px; font-size:14px; margin-bottom:4px;">
+            <span style="color:#dc2626; font-weight:600;">${escapeHtml(p.name)}</span>
+          </div>
+          <div style="font-size:12px; color:#666; margin-bottom:6px;">
+            ${escapeHtml(p.validation.message || 'pattern ไม่ตรงมาตรฐาน')}
+          </div>
+          ${hasSuggestion ? `
+            <div style="display:flex; align-items:center; gap:8px; padding:8px 10px; background:#ecfdf5; border:1px solid #10b981; border-radius:6px;">
+              <span style="font-size:12px; color:#065f46;">แนะนำ:</span>
+              <strong style="color:#065f46; font-size:14px;">${escapeHtml(p.validation.suggested)}</strong>
+              <button class="btn-use-suggest" data-idx="${idx}" style="
+                margin-left:auto; padding:4px 10px; font-size:12px;
+                background:#10b981; color:white; border:none; border-radius:4px;
+                cursor:pointer; font-weight:600;
+              ">ใช้</button>
+            </div>
+          ` : ''}
+        </div>
+      `;
+    });
+
+    body += `
+      </div>
+      <div style="display:flex; gap:8px; justify-content:flex-end;">
+        <button id="pat-cancel" style="
+          padding:10px 20px; border:1.5px solid #d1d5db; background:white;
+          border-radius:8px; cursor:pointer; font-weight:600; font-size:14px;
+        ">← กลับไปแก้ไข</button>
+        <button id="pat-confirm" style="
+          padding:10px 20px; border:none; background:#dc2626; color:white;
+          border-radius:8px; cursor:pointer; font-weight:600; font-size:14px;
+        ">บันทึกตามที่กรอก</button>
+      </div>
+    `;
+
+    card.innerHTML = body;
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+
+    const replacements = new Map();
+
+    // "ใช้" button — apply suggestion
+    card.querySelectorAll('.btn-use-suggest').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.dataset.idx);
+        const p = invalidProducts[idx];
+        replacements.set(p.name, p.validation.suggested);
+        // visual confirmation
+        btn.textContent = '✓ ใช้แล้ว';
+        btn.style.background = '#059669';
+        btn.disabled = true;
+      });
+    });
+
+    card.querySelector('#pat-cancel').addEventListener('click', () => {
+      document.body.removeChild(overlay);
+      resolve({ accept: false, replacements });
+    });
+    card.querySelector('#pat-confirm').addEventListener('click', () => {
+      document.body.removeChild(overlay);
+      resolve({ accept: true, replacements });
+    });
+  });
+}
+
 // --- Submit batch to Supabase ---
 async function submitBatch() {
+  // Pattern validation for NEW products being added to master (ISO9001 compliance)
+  // เฉพาะสินค้าใหม่ (isNew=true) — ของเก่าไม่ตรวจ ปล่อยให้ admin แก้ใน products-admin
+  const newProducts = state.products.filter(p => p.isNew);
+  if (newProducts.length > 0) {
+    const validationResults = newProducts.map(p => ({
+      name: p.name,
+      product: p,
+      validation: validateProductPattern(p.name)
+    }));
+    const invalidOnes = validationResults.filter(r => !r.validation.valid);
+    if (invalidOnes.length > 0) {
+      const result = await showProductPatternModal(invalidOnes);
+      if (!result.accept) {
+        // user cancelled — กลับไปแก้ไข
+        return;
+      }
+      // apply replacements
+      if (result.replacements.size > 0) {
+        state.products.forEach(p => {
+          if (result.replacements.has(p.name)) {
+            p.name = result.replacements.get(p.name);
+          }
+        });
+        // ถ้าชื่อใหม่ตรงกับสินค้าที่มีใน master อยู่แล้ว → flip isNew=false
+        state.products.forEach(p => {
+          if (DATA.products.includes(p.name)) {
+            p.isNew = false;
+          }
+        });
+      }
+    }
+  }
   // Backdate safeguard — final guard before writing to DB
   if (state.date) {
     const todayObj = new Date();

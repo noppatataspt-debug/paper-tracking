@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>จัดการสินค้า — Asia Paper Tube</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --panel-2: #eef1f6;
+    --text: #1a202c;
+    --text-dim: #6b7280;
+    --border: #e5e7eb;
+    --accent: #2563eb;
+    --accent-2: #1d4ed8;
+    --success: #10b981;
+    --warning: #f59e0b;
+    --danger: #dc2626;
+    --tag-bg: #dbeafe;
+    --tag-color: #1e3a8a;
+  }
+  body {
+    font-family: 'IBM Plex Sans Thai', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+  .container { max-width: 1200px; margin: 0 auto; padding: 16px; }
+
+  header {
+    background: linear-gradient(135deg, #1e40af, #2563eb);
+    color: white;
+    padding: 20px 16px;
+    margin-bottom: 16px;
+    border-radius: 0 0 16px 16px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }
+  header h1 { font-size: 22px; margin-bottom: 4px; }
+  header p { font-size: 13px; opacity: 0.9; }
+  header .header-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+  .nav-link {
+    color: rgba(255,255,255,0.85);
+    text-decoration: none;
+    font-size: 13px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    background: rgba(255,255,255,0.1);
+    transition: background 0.15s;
+  }
+  .nav-link:hover { background: rgba(255,255,255,0.2); }
+
+  .panel {
+    background: var(--panel);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    border: 1px solid var(--border);
+  }
+  .panel-title {
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .toolbar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .search-wrap {
+    flex: 1;
+    min-width: 220px;
+    position: relative;
+  }
+  .search-input {
+    width: 100%;
+    padding: 10px 14px 10px 36px;
+    background: var(--panel-2);
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    font-size: 14px;
+    color: var(--text);
+    font-family: inherit;
+  }
+  .search-input:focus { outline: none; border-color: var(--accent); background: white; }
+  .search-icon {
+    position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+    color: var(--text-dim); font-size: 14px;
+  }
+
+  .btn {
+    padding: 10px 16px;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.05s;
+    font-family: inherit;
+  }
+  .btn:hover { opacity: 0.9; }
+  .btn:active { transform: translateY(1px); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-primary { background: var(--accent); color: white; }
+  .btn-secondary { background: var(--panel-2); color: var(--text); border: 1.5px solid var(--border); }
+  .btn-danger { background: var(--danger); color: white; }
+  .btn-success { background: var(--success); color: white; }
+  .btn-sm { padding: 6px 10px; font-size: 13px; }
+
+  /* Stats cards */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .stat-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    text-align: center;
+  }
+  .stat-card .num { font-size: 22px; font-weight: 800; color: var(--accent); }
+  .stat-card .label { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+  .stat-card.warn .num { color: var(--warning); }
+  .stat-card.err .num { color: var(--danger); }
+
+  /* Filter chips */
+  .filters {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+  .chip {
+    padding: 6px 12px;
+    background: var(--panel-2);
+    border: 1.5px solid var(--border);
+    border-radius: 16px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    user-select: none;
+  }
+  .chip:hover { background: var(--tag-bg); border-color: var(--accent); }
+  .chip.active { background: var(--accent); color: white; border-color: var(--accent); }
+  .chip-count { opacity: 0.7; font-weight: 500; margin-left: 4px; }
+
+  /* Product table */
+  .product-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+  }
+  .product-table th {
+    background: var(--panel-2);
+    padding: 10px 12px;
+    text-align: left;
+    font-weight: 700;
+    font-size: 12px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    border-bottom: 1.5px solid var(--border);
+  }
+  .product-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+  .product-table tr:hover { background: var(--panel-2); }
+  .product-table .col-name { font-weight: 600; }
+  .product-table .col-status { text-align: center; }
+  .product-table .col-actions { text-align: right; width: 160px; }
+  .product-table .col-uses { width: 80px; text-align: center; color: var(--text-dim); }
+
+  .status-tag {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .status-ok { background: #d1fae5; color: #065f46; }
+  .status-warn { background: #fef3c7; color: #92400e; }
+  .status-err { background: #fee2e2; color: #991b1b; }
+  .status-inactive { background: #f3f4f6; color: #6b7280; }
+
+  .empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-dim);
+    font-size: 14px;
+  }
+  .empty .emoji { font-size: 40px; margin-bottom: 12px; display: block; }
+
+  /* Modal */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 9999;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal {
+    background: white;
+    border-radius: 16px;
+    max-width: 520px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    padding: 24px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+  }
+  .modal h2 { font-size: 18px; margin-bottom: 12px; }
+  .form-group { margin-bottom: 14px; }
+  .form-group label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: var(--text-dim);
+  }
+  .form-group input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: inherit;
+  }
+  .form-group input:focus { outline: none; border-color: var(--accent); }
+  .modal-error {
+    display: none;
+    padding: 8px 12px;
+    background: #fee;
+    border: 1px solid #fcc;
+    color: #c00;
+    border-radius: 6px;
+    font-size: 13px;
+    margin-bottom: 12px;
+  }
+  .modal-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 16px;
+  }
+
+  /* Validation panel */
+  .validation-panel {
+    background: #fffbeb;
+    border: 1px solid #fbbf24;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+    font-size: 13px;
+    color: #92400e;
+    display: none;
+  }
+  .validation-panel.show { display: block; }
+  .validation-panel strong { color: #78350f; }
+  .validation-panel .suggest-btn {
+    background: var(--success);
+    color: white;
+    border: none;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-left: 8px;
+  }
+
+  .toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--text);
+    color: white;
+    padding: 12px 18px;
+    border-radius: 8px;
+    font-size: 14px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+    z-index: 10000;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .toast.show { opacity: 1; }
+  .toast.error { background: var(--danger); }
+  .toast.success { background: var(--success); }
+</style>
+</head>
+<body>
+
+<!-- Admin login modal (reuse pattern from dashboard) -->
+<div id="admin-login-modal" class="modal-overlay">
+  <div class="modal">
+    <h2>🔐 Admin Login</h2>
+    <p style="font-size:13px;color:var(--text-dim);margin-bottom:14px;">
+      หน้านี้สำหรับ admin เท่านั้น กรุณา login เพื่อจัดการสินค้า
+    </p>
+    <div class="form-group">
+      <label>Username</label>
+      <input type="text" id="admin-login-username" autocomplete="username">
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="admin-login-password" autocomplete="current-password">
+    </div>
+    <div id="admin-login-error" class="modal-error"></div>
+    <div class="modal-actions">
+      <button id="btn-back-home" class="btn btn-secondary">← กลับหน้าหลัก</button>
+      <button id="btn-admin-do-login" class="btn btn-primary">เข้าสู่ระบบ</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add/Edit Product Modal -->
+<div id="product-modal" class="modal-overlay">
+  <div class="modal">
+    <h2 id="product-modal-title">เพิ่มสินค้าใหม่</h2>
+    <div class="form-group">
+      <label>ชื่อสินค้า (Product Name)</label>
+      <input type="text" id="product-name-input" placeholder="เช่น AT-234xT7.5 หรือ TVP">
+    </div>
+    <div id="validation-feedback" class="validation-panel">
+      <div id="validation-message"></div>
+    </div>
+    <div class="form-group">
+      <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+        <input type="checkbox" id="product-active-input" checked style="width:auto;">
+        <span>Active (แสดงในรายการเลือกสินค้า)</span>
+      </label>
+    </div>
+    <div id="product-modal-error" class="modal-error"></div>
+    <div class="modal-actions">
+      <button id="btn-modal-cancel" class="btn btn-secondary">ยกเลิก</button>
+      <button id="btn-modal-save" class="btn btn-primary">บันทึก</button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm Delete Modal -->
+<div id="confirm-delete-modal" class="modal-overlay">
+  <div class="modal" style="max-width:420px;">
+    <h2 style="color:var(--danger);">⚠️ ยืนยันการลบ</h2>
+    <p style="font-size:14px; margin-bottom:8px;">ต้องการลบสินค้า <strong id="confirm-delete-name"></strong> หรือไม่?</p>
+    <p style="font-size:13px; color:var(--text-dim); margin-bottom:16px;">
+      <span id="confirm-delete-warning"></span>
+    </p>
+    <div class="modal-actions">
+      <button id="btn-confirm-cancel" class="btn btn-secondary">ยกเลิก</button>
+      <button id="btn-confirm-delete" class="btn btn-danger">ลบสินค้า</button>
+    </div>
+  </div>
+</div>
+
+<header>
+  <div class="container">
+    <div class="header-row">
+      <div>
+        <h1>📦 จัดการสินค้า</h1>
+        <p>Master list ของสินค้าทั้งหมด — เพิ่ม / แก้ไข / ลบ / ตรวจ pattern</p>
+      </div>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <a href="index.html" class="nav-link">📤 บันทึกการผลิต</a>
+        <a href="dashboard.html" class="nav-link">🔍 สอบกลับ</a>
+        <button id="btn-admin-status" class="nav-link" style="border:none; cursor:pointer;">🔐 Admin</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="container">
+  <!-- Stats -->
+  <div class="stats">
+    <div class="stat-card">
+      <div class="num" id="stat-total">0</div>
+      <div class="label">สินค้าทั้งหมด</div>
+    </div>
+    <div class="stat-card">
+      <div class="num" id="stat-active" style="color:var(--success)">0</div>
+      <div class="label">Active</div>
+    </div>
+    <div class="stat-card">
+      <div class="num" id="stat-inactive" style="color:var(--text-dim)">0</div>
+      <div class="label">Inactive</div>
+    </div>
+    <div class="stat-card warn">
+      <div class="num" id="stat-pattern-issues">0</div>
+      <div class="label">⚠️ Pattern ผิด</div>
+    </div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <div class="search-wrap">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="search-input" class="search-input" placeholder="ค้นหาชื่อสินค้า...">
+    </div>
+    <button id="btn-add" class="btn btn-primary">+ เพิ่มสินค้าใหม่</button>
+  </div>
+
+  <!-- Filters -->
+  <div class="filters">
+    <div class="chip active" data-filter="all">ทั้งหมด <span class="chip-count" id="cnt-all">0</span></div>
+    <div class="chip" data-filter="active">Active <span class="chip-count" id="cnt-active">0</span></div>
+    <div class="chip" data-filter="inactive">Inactive <span class="chip-count" id="cnt-inactive">0</span></div>
+    <div class="chip" data-filter="pattern-issues">⚠️ Pattern ผิด <span class="chip-count" id="cnt-issues">0</span></div>
+    <div class="chip" data-filter="unused">ไม่เคยใช้ <span class="chip-count" id="cnt-unused">0</span></div>
+  </div>
+
+  <!-- Product list -->
+  <div class="panel">
+    <div id="product-list-container">
+      <div class="empty">
+        <span class="emoji">⏳</span>
+        <div>กำลังโหลดข้อมูล...</div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<div id="toast" class="toast"></div>
+
+<script type="module">
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+const SUPABASE_URL = 'https://lfrwghrlxaordpxrqyij.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxmcndnaHJseGFvcmRweHJxeWlqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MzQ5MjgsImV4cCI6MjA5MjQxMDkyOH0.M13hI5TUqEL8iVmGM3pWcjbyULSx_n7VPgI2TcHnNZA';
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ==================== ADMIN AUTH (Phase C Hybrid) ====================
+let currentAdmin = null;
+const savedAdmin = sessionStorage.getItem('paper_admin');
+if (savedAdmin) {
+  try { currentAdmin = JSON.parse(savedAdmin); } catch(e) {}
+}
+
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c]));
+}
+
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show';
+  if (type === 'error' || type === true) t.classList.add('error');
+  else if (type === 'success') t.classList.add('success');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// ==================== PATTERN VALIDATION ====================
+function validateProductPattern(name) {
+  if (!name) return { valid: true, suggested: null, reason: '' };
+  const s = String(name).trim();
+  if (/^(SKIC|TKIC|VKPC)/.test(s)) {
+    return { valid: true, suggested: null, reason: 'exempt-skic-group', label: '✓ ยกเว้น (SKIC group)' };
+  }
+  if (!/[-_0-9xX]/.test(s)) {
+    return { valid: true, suggested: null, reason: 'plain-name', label: '✓ ชื่อล้วน' };
+  }
+  if (/^[A-Za-zก-๙&\.\@]+-\d+(\.\d+)?[xX]/.test(s)) {
+    return { valid: true, suggested: null, reason: 'correct-dash-x', label: '✓ ถูก pattern' };
+  }
+  if (/^[A-Za-zก-๙]+-\d+$/.test(s)) {
+    return {
+      valid: false, suggested: s, reason: 'code-only',
+      message: 'ชื่อนี้เป็นรหัสล้วน — ถ้าเป็น pattern SKIC-4400 ก็บันทึกได้',
+      label: '⚠️ รหัสล้วน'
+    };
+  }
+  const dT = s.match(/^([A-Za-zก-๙]+)-(\d+(?:\.\d+)?)-T(\d+(?:\.\d+)?)(.*)$/);
+  if (dT) {
+    return {
+      valid: false,
+      suggested: `${dT[1]}-${dT[2]}xT${dT[3]}${dT[4]}`,
+      reason: 'dash-T-needs-fix',
+      message: 'ใช้ "-" คั่นขนาด ควรใช้ "x" แทน',
+      label: '⚠️ pattern ผิด'
+    };
+  }
+  const nD = s.match(/^([^-]*?)(\d+[xX].*)$/);
+  if (nD && nD[1].length > 0 && !/\d$/.test(nD[1])) {
+    return {
+      valid: false,
+      suggested: `${nD[1]}-${nD[2]}`,
+      reason: 'no-dash-needs-fix',
+      message: 'ไม่มี "-" คั่นชื่อกับขนาด',
+      label: '⚠️ ขาด dash'
+    };
+  }
+  return { valid: false, suggested: null, reason: 'unknown', message: 'pattern ไม่ตรงมาตรฐาน', label: '⚠️ pattern แปลก' };
+}
+
+// ==================== ADMIN LOGIN FLOW ====================
+function showLoginModal() {
+  document.getElementById('admin-login-modal').classList.add('show');
+  setTimeout(() => document.getElementById('admin-login-username').focus(), 50);
+}
+function hideLoginModal() {
+  document.getElementById('admin-login-modal').classList.remove('show');
+}
+
+async function doAdminLogin() {
+  const username = document.getElementById('admin-login-username').value.trim();
+  const password = document.getElementById('admin-login-password').value;
+  const errorDiv = document.getElementById('admin-login-error');
+  const btn = document.getElementById('btn-admin-do-login');
+
+  if (!username || !password) {
+    errorDiv.textContent = 'กรุณากรอก username และ password';
+    errorDiv.style.display = 'block';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'กำลังตรวจสอบ...';
+  errorDiv.style.display = 'none';
+
+  try {
+    const { data, error } = await supabase
+      .rpc('verify_admin_login', { p_username: username, p_password: password });
+    if (error) throw error;
+    if (data && data.length > 0) {
+      const u = data[0];
+      if (u.out_lockout_seconds > 0) {
+        const min = Math.ceil(u.out_lockout_seconds / 60);
+        errorDiv.textContent = `🔒 Login ผิดเกิน 5 ครั้ง — ถูก block อีก ${min} นาที`;
+        errorDiv.style.display = 'block';
+        return;
+      }
+      if (!u.out_id) {
+        errorDiv.textContent = '❌ Username หรือ Password ไม่ถูกต้อง';
+        errorDiv.style.display = 'block';
+        return;
+      }
+      currentAdmin = {
+        id: u.out_id,
+        username: u.out_username,
+        full_name: u.out_full_name,
+        role: u.out_role,
+        session_token: u.out_session_token
+      };
+      sessionStorage.setItem('paper_admin', JSON.stringify(currentAdmin));
+      hideLoginModal();
+      updateAdminBar();
+      loadProducts();
+    } else {
+      errorDiv.textContent = '❌ Username หรือ Password ไม่ถูกต้อง';
+      errorDiv.style.display = 'block';
+    }
+  } catch (err) {
+    errorDiv.textContent = '❌ ' + (err.message || err);
+    errorDiv.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'เข้าสู่ระบบ';
+  }
+}
+
+function updateAdminBar() {
+  const btn = document.getElementById('btn-admin-status');
+  if (currentAdmin && currentAdmin.username) {
+    btn.textContent = `👤 ${currentAdmin.username} 🚪`;
+    btn.title = 'คลิกเพื่อ logout';
+  } else {
+    btn.textContent = '🔐 Login';
+  }
+}
+
+async function logout() {
+  if (currentAdmin?.session_token) {
+    try {
+      await supabase.rpc('admin_logout', { p_token: currentAdmin.session_token });
+    } catch (e) { console.warn('logout RPC failed:', e); }
+  }
+  sessionStorage.removeItem('paper_admin');
+  currentAdmin = null;
+  updateAdminBar();
+  showLoginModal();
+}
+
+// ==================== DATA STATE ====================
+let allProducts = [];        // [{ product_name, is_active, use_count }]
+let currentFilter = 'all';
+let currentSearch = '';
+let editingProduct = null;   // null = adding new, else editing existing
+
+async function loadProducts() {
+  const container = document.getElementById('product-list-container');
+  container.innerHTML = '<div class="empty"><span class="emoji">⏳</span><div>กำลังโหลด...</div></div>';
+
+  try {
+    // Get products + count usage in batch_products
+    const [{ data: products, error: prodErr }, { data: usage, error: usageErr }] = await Promise.all([
+      supabase.from('products').select('product_name, is_active').order('product_name'),
+      supabase.from('batch_products').select('product_name')
+    ]);
+    if (prodErr) throw prodErr;
+    if (usageErr) throw usageErr;
+
+    // Tally usage
+    const useCounts = {};
+    (usage || []).forEach(u => {
+      useCounts[u.product_name] = (useCounts[u.product_name] || 0) + 1;
+    });
+
+    allProducts = (products || []).map(p => ({
+      product_name: p.product_name,
+      is_active: p.is_active !== false,
+      use_count: useCounts[p.product_name] || 0,
+      validation: validateProductPattern(p.product_name)
+    }));
+
+    renderStats();
+    renderProductList();
+  } catch (err) {
+    console.error('Load failed:', err);
+    container.innerHTML = `<div class="empty"><span class="emoji">⚠️</span><div>โหลดล้มเหลว: ${escapeHtml(err.message || err)}</div></div>`;
+  }
+}
+
+function renderStats() {
+  const total = allProducts.length;
+  const active = allProducts.filter(p => p.is_active).length;
+  const inactive = total - active;
+  const issues = allProducts.filter(p => !p.validation.valid).length;
+  const unused = allProducts.filter(p => p.use_count === 0).length;
+
+  document.getElementById('stat-total').textContent = total;
+  document.getElementById('stat-active').textContent = active;
+  document.getElementById('stat-inactive').textContent = inactive;
+  document.getElementById('stat-pattern-issues').textContent = issues;
+
+  document.getElementById('cnt-all').textContent = total;
+  document.getElementById('cnt-active').textContent = active;
+  document.getElementById('cnt-inactive').textContent = inactive;
+  document.getElementById('cnt-issues').textContent = issues;
+  document.getElementById('cnt-unused').textContent = unused;
+}
+
+function renderProductList() {
+  const container = document.getElementById('product-list-container');
+  let filtered = [...allProducts];
+
+  // Apply filter
+  if (currentFilter === 'active') filtered = filtered.filter(p => p.is_active);
+  else if (currentFilter === 'inactive') filtered = filtered.filter(p => !p.is_active);
+  else if (currentFilter === 'pattern-issues') filtered = filtered.filter(p => !p.validation.valid);
+  else if (currentFilter === 'unused') filtered = filtered.filter(p => p.use_count === 0);
+
+  // Apply search
+  if (currentSearch) {
+    const q = currentSearch.toLowerCase();
+    filtered = filtered.filter(p => p.product_name.toLowerCase().includes(q));
+  }
+
+  if (filtered.length === 0) {
+    container.innerHTML = '<div class="empty"><span class="emoji">📭</span><div>ไม่พบสินค้าตามเงื่อนไข</div></div>';
+    return;
+  }
+
+  let html = `
+    <table class="product-table">
+      <thead>
+        <tr>
+          <th>ชื่อสินค้า</th>
+          <th class="col-status">Pattern</th>
+          <th class="col-status">สถานะ</th>
+          <th class="col-uses">ใช้ไป</th>
+          <th class="col-actions">จัดการ</th>
+        </tr>
+      </thead>
+      <tbody>
+  `;
+
+  filtered.forEach(p => {
+    const v = p.validation;
+    const statusClass = v.valid ? (v.reason === 'exempt-skic-group' ? 'status-ok' : 'status-ok')
+                                : (v.reason === 'code-only' ? 'status-warn' : 'status-err');
+    const activeClass = p.is_active ? 'status-ok' : 'status-inactive';
+    const activeLabel = p.is_active ? 'Active' : 'Inactive';
+
+    html += `
+      <tr data-name="${escapeHtml(p.product_name)}">
+        <td class="col-name">${escapeHtml(p.product_name)}</td>
+        <td class="col-status">
+          <span class="status-tag ${statusClass}" title="${escapeHtml(v.message || v.reason)}">${escapeHtml(v.label)}</span>
+        </td>
+        <td class="col-status">
+          <span class="status-tag ${activeClass}">${activeLabel}</span>
+        </td>
+        <td class="col-uses">${p.use_count}</td>
+        <td class="col-actions">
+          <button class="btn btn-sm btn-secondary" data-action="edit" data-name="${escapeHtml(p.product_name)}">✏️ แก้ไข</button>
+          <button class="btn btn-sm btn-danger" data-action="delete" data-name="${escapeHtml(p.product_name)}">🗑️</button>
+        </td>
+      </tr>
+    `;
+  });
+
+  html += '</tbody></table>';
+  container.innerHTML = html;
+
+  // wire up action buttons
+  container.querySelectorAll('button[data-action]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const name = btn.dataset.name;
+      const action = btn.dataset.action;
+      const product = allProducts.find(p => p.product_name === name);
+      if (!product) return;
+      if (action === 'edit') openProductModal(product);
+      else if (action === 'delete') openDeleteModal(product);
+    });
+  });
+}
+
+// ==================== ADD / EDIT PRODUCT ====================
+function openProductModal(product) {
+  editingProduct = product;
+  const title = document.getElementById('product-modal-title');
+  const input = document.getElementById('product-name-input');
+  const active = document.getElementById('product-active-input');
+  const err = document.getElementById('product-modal-error');
+  err.style.display = 'none';
+
+  if (product) {
+    title.textContent = 'แก้ไขสินค้า';
+    input.value = product.product_name;
+    active.checked = product.is_active;
+  } else {
+    title.textContent = 'เพิ่มสินค้าใหม่';
+    input.value = '';
+    active.checked = true;
+  }
+
+  document.getElementById('product-modal').classList.add('show');
+  updateValidationFeedback();
+  setTimeout(() => input.focus(), 50);
+}
+
+function closeProductModal() {
+  document.getElementById('product-modal').classList.remove('show');
+  editingProduct = null;
+}
+
+function updateValidationFeedback() {
+  const input = document.getElementById('product-name-input');
+  const panel = document.getElementById('validation-feedback');
+  const msg = document.getElementById('validation-message');
+  const name = input.value.trim();
+
+  if (!name) {
+    panel.classList.remove('show');
+    return;
+  }
+  const v = validateProductPattern(name);
+  if (v.valid) {
+    panel.classList.remove('show');
+    return;
+  }
+  let html = `<strong>${escapeHtml(v.label)}</strong> — ${escapeHtml(v.message || '')}`;
+  if (v.suggested && v.suggested !== name) {
+    html += `<br><div style="margin-top:6px;">แนะนำ: <strong>${escapeHtml(v.suggested)}</strong><button class="suggest-btn" id="btn-use-suggest">ใช้</button></div>`;
+  }
+  msg.innerHTML = html;
+  panel.classList.add('show');
+
+  // wire suggest button
+  const sb = document.getElementById('btn-use-suggest');
+  if (sb) {
+    sb.addEventListener('click', () => {
+      input.value = v.suggested;
+      updateValidationFeedback();
+      input.focus();
+    });
+  }
+}
+
+async function saveProduct() {
+  const input = document.getElementById('product-name-input');
+  const activeInput = document.getElementById('product-active-input');
+  const err = document.getElementById('product-modal-error');
+  const btn = document.getElementById('btn-modal-save');
+
+  const newName = input.value.trim();
+  const isActive = activeInput.checked;
+
+  if (!newName) {
+    err.textContent = 'กรุณากรอกชื่อสินค้า';
+    err.style.display = 'block';
+    return;
+  }
+
+  // Check duplicate (only if it's a new product, or name changed)
+  const isDuplicate = allProducts.some(p =>
+    p.product_name === newName &&
+    (!editingProduct || editingProduct.product_name !== newName)
+  );
+  if (isDuplicate) {
+    err.textContent = 'มีสินค้าชื่อนี้อยู่แล้ว';
+    err.style.display = 'block';
+    return;
+  }
+
+  // Validate pattern; if invalid, confirm
+  const v = validateProductPattern(newName);
+  if (!v.valid) {
+    const ok = confirm(
+      `⚠️ ชื่อ "${newName}" ไม่ตรง pattern มาตรฐาน\n\n` +
+      `${v.message || 'pattern ผิด'}\n\n` +
+      (v.suggested && v.suggested !== newName ? `แนะนำ: ${v.suggested}\n\n` : '') +
+      `ยืนยันบันทึกตามที่กรอกไหม?`
+    );
+    if (!ok) return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'กำลังบันทึก...';
+  err.style.display = 'none';
+
+  try {
+    if (editingProduct && editingProduct.product_name !== newName) {
+      // Rename: update batch_products first, then products
+      const { error: bpErr } = await supabase
+        .from('batch_products')
+        .update({ product_name: newName })
+        .eq('product_name', editingProduct.product_name);
+      if (bpErr) throw bpErr;
+      const { error: pErr } = await supabase
+        .from('products')
+        .update({ product_name: newName, is_active: isActive })
+        .eq('product_name', editingProduct.product_name);
+      if (pErr) throw pErr;
+      showToast('✓ แก้ไขเรียบร้อย', 'success');
+    } else if (editingProduct) {
+      // Only is_active changed
+      const { error } = await supabase
+        .from('products')
+        .update({ is_active: isActive })
+        .eq('product_name', editingProduct.product_name);
+      if (error) throw error;
+      showToast('✓ อัปเดตเรียบร้อย', 'success');
+    } else {
+      // New product
+      const { error } = await supabase
+        .from('products')
+        .insert({ product_name: newName, is_active: isActive });
+      if (error) throw error;
+      showToast('✓ เพิ่มสินค้าเรียบร้อย', 'success');
+    }
+    closeProductModal();
+    loadProducts();
+  } catch (e) {
+    err.textContent = '❌ ' + (e.message || e);
+    err.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'บันทึก';
+  }
+}
+
+// ==================== DELETE ====================
+let deletingProduct = null;
+function openDeleteModal(product) {
+  deletingProduct = product;
+  document.getElementById('confirm-delete-name').textContent = product.product_name;
+  const warning = document.getElementById('confirm-delete-warning');
+  if (product.use_count > 0) {
+    warning.innerHTML = `⚠️ สินค้านี้ถูกใช้ในการผลิตไปแล้ว <strong>${product.use_count}</strong> ครั้ง — ` +
+      `การลบจะลบเฉพาะออกจาก master list ข้อมูลผลิตเก่าจะยังคงอยู่ แต่จะไม่สามารถเลือกสินค้านี้ในรอบใหม่`;
+  } else {
+    warning.textContent = 'สินค้านี้ยังไม่เคยถูกใช้ในการผลิต ลบได้ปลอดภัย';
+  }
+  document.getElementById('confirm-delete-modal').classList.add('show');
+}
+
+function closeDeleteModal() {
+  document.getElementById('confirm-delete-modal').classList.remove('show');
+  deletingProduct = null;
+}
+
+async function confirmDelete() {
+  if (!deletingProduct) return;
+  const btn = document.getElementById('btn-confirm-delete');
+  btn.disabled = true;
+  btn.textContent = 'กำลังลบ...';
+  try {
+    const { error } = await supabase
+      .from('products')
+      .delete()
+      .eq('product_name', deletingProduct.product_name);
+    if (error) throw error;
+    showToast('✓ ลบเรียบร้อย', 'success');
+    closeDeleteModal();
+    loadProducts();
+  } catch (e) {
+    showToast('❌ ' + (e.message || e), 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'ลบสินค้า';
+  }
+}
+
+// ==================== EVENT WIRING ====================
+document.getElementById('btn-admin-do-login').addEventListener('click', doAdminLogin);
+document.getElementById('btn-back-home').addEventListener('click', () => {
+  window.location.href = 'index.html';
+});
+document.getElementById('admin-login-password').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doAdminLogin();
+});
+document.getElementById('btn-admin-status').addEventListener('click', () => {
+  if (currentAdmin && currentAdmin.username) {
+    if (confirm('ต้องการ logout ใช่ไหม?')) logout();
+  } else {
+    showLoginModal();
+  }
+});
+
+document.getElementById('search-input').addEventListener('input', e => {
+  currentSearch = e.target.value;
+  renderProductList();
+});
+document.querySelectorAll('.chip[data-filter]').forEach(chip => {
+  chip.addEventListener('click', () => {
+    document.querySelectorAll('.chip[data-filter]').forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+    currentFilter = chip.dataset.filter;
+    renderProductList();
+  });
+});
+document.getElementById('btn-add').addEventListener('click', () => openProductModal(null));
+document.getElementById('btn-modal-cancel').addEventListener('click', closeProductModal);
+document.getElementById('btn-modal-save').addEventListener('click', saveProduct);
+document.getElementById('product-name-input').addEventListener('input', updateValidationFeedback);
+document.getElementById('btn-confirm-cancel').addEventListener('click', closeDeleteModal);
+document.getElementById('btn-confirm-delete').addEventListener('click', confirmDelete);
+
+// Init: require login first
+updateAdminBar();
+if (currentAdmin && currentAdmin.session_token) {
+  loadProducts();
+} else {
+  showLoginModal();
+}
+</script>
+
+</body>
+</html>
