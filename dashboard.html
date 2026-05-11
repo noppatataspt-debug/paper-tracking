@@ -2916,31 +2916,70 @@ function exportTraceFormXLSX(data, params, invoiceMap) {
     if (!m) return iso;
     return `${m[3]}-${m[2]}-${m[1].slice(2)}`;
   }
-  // แยก "AT-234xT7.5" → product="AT", size="234xT7.5"
-  // ใช้ dash แรกเป็นตัวคั่นชื่อลูกค้ากับขนาด เฉพาะตอนที่ส่วนหลัง dash ดูเหมือนขนาดจริง
-  // (มี x/X หรือ T+ตัวเลข) เพื่อไม่ให้ "SKIC-4400" หรือ "77-4-A7914" ถูกแยกผิด
+  // แยก product/size — v7 logic (scan-based)
+  // จับรูปแบบหลายแบบ:
+  //   "AT-234xT7.5"          → AT / 234xT7.5
+  //   "AGC45x45x3x1950"      → AGC / 45x45x3x1950  (ไม่มี dash)
+  //   "AQP-100-T4.5"         → AQP / 100-T4.5      (3-part dash + T-format)
+  //   "TCC55x55x4.5x1100"    → TCC / 55x55x4.5x1100
+  //   "FMTx542"              → FMT / x542
+  //   "50x50x3x1030"         → (empty) / 50x50x3x1030
+  //   "HKT_505xT15"          → HKT / 505xT15        (underscore separator)
+  //   "บ.ก.ด50x50x2x700"     → บ.ก.ด / 50x50x2x700  (Thai prefix)
+  //   "PP&P-153xT15"         → PP&P / 153xT15        (special char prefix)
+  // ปล่อยรวมไม่แยก:
+  //   "SKIC", "TVP"                   → ชื่อล้วน
+  //   "SKIC-4400", "G-12501"          → รหัสล้วน (ไม่มี xT/T-format ตามมา)
+  //   "SKIC-TKIC", "HKT-SNP"          → combo
+  //   "SKIC6750-SKIC5370-SKIC4400"    → combo
+  //   "HSL,CP,PNC,MCT"                → combo คั่นด้วย comma
   function splitProductSize(name) {
     if (!name) return { product: '', size: '' };
-    const s = String(name);
-    // หา dash แรก
-    const dashIdx = s.indexOf('-');
-    if (dashIdx > 0) {
-      const before = s.slice(0, dashIdx);
-      const after = s.slice(dashIdx + 1);
-      // ขนาดจริงต้องมี 'x' หรือ 'X' (เช่น "234xT7.5") หรือ T+ตัวเลข (เช่น "T15.75")
-      if (/[xX]/.test(after) || /^T\d/.test(after)) {
+    const s = String(name).trim();
+
+    // Pattern 1: หา position แรกของ "<digit>(+.digit)<x>" — ใช้เป็นจุดแบ่ง
+    // ครอบคลุม: AGC45x45..., AT-234xT7.5, 3TP50x50..., บ.ก.ด50x50...
+    const m1 = s.match(/\d+(?:\.\d+)?[xX]/);
+    if (m1 && m1.index > 0) {
+      const prefix = s.slice(0, m1.index).replace(/[-_ ,]+$/, '');
+      const size = s.slice(m1.index);
+      return { product: prefix, size: size };
+    } else if (m1 && m1.index === 0) {
+      // ขนาดล้วน ไม่มี prefix
+      return { product: '', size: s };
+    }
+
+    // Pattern 2: letter+x+digit (FMTx542) — ไม่มีเลขก่อน x
+    const m2 = s.match(/^([A-Za-zก-๙]+)([xX]\d.*)$/);
+    if (m2) return { product: m2[1], size: m2[2] };
+
+    // Pattern 3: มี dash/underscore — ตรวจ 3-part AAA-NN-TM (FSK-39-T6, AQP-100-T4.5)
+    const sepMatch = s.match(/[-_]/);
+    if (!sepMatch) return { product: s, size: '' };
+
+    const idx = sepMatch.index;
+    const before = s.slice(0, idx);
+    const after = s.slice(idx + 1);
+
+    // ส่วนหลังไม่มีตัวเลข → combo
+    if (!/\d/.test(after)) return { product: s, size: '' };
+
+    // ส่วนหลังเริ่ม <letters><digits> → combo
+    if (/^[A-Za-zก-๙]+\d/.test(after)) return { product: s, size: '' };
+
+    // ส่วนหลังเริ่มด้วยเลขล้วน — ตรวจว่ามี T+digit ต่อมาไหม
+    const firstPart = after.split(/[-_]/)[0];
+    if (/^\d+\.?\d*$/.test(firstPart)) {
+      const rest = after.split(/[-_]/, 2);
+      if (rest.length > 1 && /^T\d/.test(rest[1])) {
         return { product: before, size: after };
       }
+      // ไม่มี T-format → รหัสล้วน
+      return { product: s, size: '' };
     }
-    // fallback: ลอง space (เผื่อชื่อเก่าที่ใช้ space)
-    const spaceMatch = s.match(/^(\S+)\s+(.+)$/);
-    if (spaceMatch) {
-      const second = spaceMatch[2];
-      if (/[xX]/.test(second) || /^T\d/.test(second)) {
-        return { product: spaceMatch[1], size: second };
-      }
-    }
-    return { product: name, size: '' };
+
+    // อื่นๆ — แยกได้
+    return { product: before, size: after };
   }
 
   // เรียงตามวันที่ → สินค้า → ประเภท → lot
