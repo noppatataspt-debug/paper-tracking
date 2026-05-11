@@ -2468,14 +2468,14 @@ document.getElementById('btnDoDelete').addEventListener('click', async () => {
     const headerRowIdx = aoa.length - 1;
 
     const sorted = [...outflows].sort((a, b) =>
-      (a.outflow_date || a.production_date || '').localeCompare(b.outflow_date || b.production_date || '') ||
+      (a.outflow_date || '').localeCompare(b.outflow_date || '') ||
       (a.supplier || a.supplier_name || '').localeCompare(b.supplier || b.supplier_name || '') ||
       (a.paper_lot || '').localeCompare(b.paper_lot || '')
     );
     const dataStartIdx = aoa.length;
     sorted.forEach(o => {
       aoa.push([
-        fmtDate(o.outflow_date || o.production_date),
+        fmtDate(o.outflow_date),
         'ส่งออก',
         o.paper_lot || '',
         o.supplier || o.supplier_name || '',
@@ -2635,7 +2635,7 @@ async function fetchIsoData() {
   const supp = document.getElementById('iso-supplier').value;
   if (!from || !to) return [];
   let q = supabase.from('paper_outflows')
-    .select('outflow_date, production_date, paper_lot, supplier_name, paper_type, width_mm, weight_kg')
+    .select('outflow_date, paper_lot, supplier_name, paper_type, width_mm, weight_kg')
     .gte('outflow_date', from).lte('outflow_date', to)
     .order('outflow_date', { ascending: true });
   if (supp) q = q.eq('supplier_name', supp);
