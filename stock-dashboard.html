@@ -1391,6 +1391,8 @@ body {
   border-radius: 4px; border: 1px solid var(--border);
 }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 </head>
 <body>
 
@@ -1406,6 +1408,7 @@ body {
     <a href="dashboard.html" class="nav-link">🔍 สอบกลับวัตถุดิบ (Tracking)</a>
     <a href="stock-dashboard.html" class="nav-link active">📦 Stock</a>
     <a href="qa-dashboard.html" class="nav-link">🧪 คุณภาพ (QA)</a>
+    <a href="products-admin.html" class="nav-link">📦 จัดการสินค้า</a>
   </div>
 </header>
 
@@ -1488,6 +1491,7 @@ body {
     <button class="tab-btn" data-tab="filter">🔍 ตรวจสอบ Stock</button>
     <button class="tab-btn" data-tab="usage">📅 ยอดใช้</button>
     <button class="tab-btn" data-tab="alerts">🚨 Alerts</button>
+    <button class="tab-btn" data-tab="iso-form">📄 แบบฟอร์ม Stock</button>
   </div>
 
   <div class="tab-content active" id="tab-overview">
@@ -1783,6 +1787,24 @@ body {
     <div id="alerts-critical-section"></div>
     <div id="alerts-warning-section"></div>
     <div id="alerts-empty" style="display:none;"></div>
+  </div>
+
+  <!-- ============ ISO FORM (FM-SL-02) ============ -->
+  <div class="tab-content" id="tab-iso-form">
+    <div class="section" style="padding:20px;">
+      <h2 style="margin-bottom: 12px;">📄 แบบฟอร์ม Stock (FM-SL-02)</h2>
+      <p style="color: var(--text-dim); margin-bottom: 16px; font-size: 14px;">
+        สร้างไฟล์ Excel รายงานตรวจนับ Stock ปัจจุบัน (ตามม้วนที่ยังคงเหลือใน in_stock) สำหรับ ISO9001 audit
+      </p>
+
+      <div id="iso-stock-preview" style="margin-bottom: 16px; padding: 16px; background: #f9fafb; border-radius: 8px; font-size: 14px;">
+        ⏳ กำลังคำนวณยอดคงเหลือ...
+      </div>
+
+      <button class="btn" id="btn-iso-stock-export" style="background: var(--accent, #2563eb); color: white; padding: 10px 20px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer;">
+        📥 Export ฟอร์ม FM-SL-02
+      </button>
+    </div>
   </div>
 </div>
 
@@ -2117,6 +2139,7 @@ function loadActiveTab() {
     case 'filter': loadFilterTab(); break;
     case 'usage': loadUsageTab(); break;
     case 'alerts': loadAlertsTab(); break;
+    case 'iso-form': setupIsoForm(); break;
   }
 }
 
@@ -5994,6 +6017,222 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     if ($('#stock-detail-modal').style.display === 'flex') closeStockDetailModal();
     else if ($('#alert-detail-modal').style.display === 'flex') closeAlertDetail();
+  }
+});
+
+// ============================================================
+// FM-SL-02 ISO Form Exporter (Stock — Sheet 3 Pivot)
+// ============================================================
+(function(global) {
+  'use strict';
+  function setStyle(ws, addr, style) {
+    if (!ws[addr]) ws[addr] = { t: 's', v: '' };
+    ws[addr].s = style;
+  }
+  const thinBorder = {
+    top:    { style: 'thin', color: { rgb: '000000' } },
+    bottom: { style: 'thin', color: { rgb: '000000' } },
+    left:   { style: 'thin', color: { rgb: '000000' } },
+    right:  { style: 'thin', color: { rgb: '000000' } }
+  };
+  const HEADER_FILL_YELLOW = { fgColor: { rgb: 'FFE699' } };
+  const SUPP_FILLS = {
+    'Ching Mei': { fgColor: { rgb: 'BDD7EE' } },
+    'Muda':      { fgColor: { rgb: '9DC3E6' } },
+    'MPK':       { fgColor: { rgb: 'FCE4D6' } },
+    'SCG':       { fgColor: { rgb: 'C5E0B4' } },
+    'UTP':       { fgColor: { rgb: 'FFD966' } },
+    'AP':        { fgColor: { rgb: 'D9E1F2' } },
+    'NTPM':      { fgColor: { rgb: 'F4B084' } },
+    'United Paper': { fgColor: { rgb: 'D9E1F2' } }
+  };
+  const F_TITLE = { name: 'TH SarabunPSK', sz: 16, bold: true };
+  const F_HEADER = { name: 'TH SarabunPSK', sz: 14, bold: true };
+  const F_BODY = { name: 'TH SarabunPSK', sz: 13 };
+  const F_DOC = { name: 'TH SarabunPSK', sz: 13, bold: true };
+
+  function buildStockSheet(invoices) {
+    const aoa = [];
+    aoa.push(['', '', 'ชื่อ : Asiapapertube Co.,Ltd / บริษัท เอเชียเปเปอร์ทิ้วจำกัด', '', '', 'หมายเลขเอกสาร', 'FM - SL- 02']);
+    aoa.push(['', '', 'ใบรายงานการรับ-ออกคลังและตรวจนับ ม้วนกระดาษ Jumbo Roll', '', '', 'แก้ไขครั้งที่ : 01', 'หน้าที่ 3 / 3']);
+    aoa.push(['', '', '', '', '', 'วันที่ประกาศใช้ : 1 สิงหาคม 2566', '']);
+    aoa.push([]);
+    const now = new Date();
+    const dateStr = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+    aoa.push(['', '', `รายงานตรวจนับ ณ วันที่ ${dateStr}`, '', '', '', '']);
+    aoa.push([]);
+    aoa.push(['ลำดับ', 'Supplier', 'ประเภทกระดาษ', 'หน้ากว้าง (mm.)', 'จำนวนม้วนคงเหลือ', 'น้ำหนักคงเหลือ (kg.)']);
+    const headerRowIdx = aoa.length - 1;
+
+    const pivot = {};
+    invoices.forEach(inv => {
+      const supp = inv.supplier || '(ไม่ระบุ)';
+      const type = inv.paper_type || '(ไม่ระบุ)';
+      const width = inv.width_mm != null ? String(inv.width_mm) : '(ไม่ระบุ)';
+      const weight = Number(inv.computed_remaining_kg != null ? inv.computed_remaining_kg : inv.weight_kg || 0);
+      if (!pivot[supp]) pivot[supp] = {};
+      if (!pivot[supp][type]) pivot[supp][type] = {};
+      if (!pivot[supp][type][width]) pivot[supp][type][width] = { rolls: 0, weight: 0 };
+      pivot[supp][type][width].rolls++;
+      pivot[supp][type][width].weight += weight;
+    });
+
+    const dataStartIdx = aoa.length;
+    let seq = 1;
+    let grandRolls = 0, grandWeight = 0;
+    const subtotalRows = [];
+
+    Object.keys(pivot).sort().forEach(supp => {
+      const types = pivot[supp];
+      let suppRolls = 0, suppWeight = 0;
+      Object.keys(types).sort().forEach(type => {
+        const widths = types[type];
+        Object.keys(widths).sort((a, b) => Number(a) - Number(b)).forEach(w => {
+          const cell = widths[w];
+          aoa.push([seq++, supp, type, w !== '(ไม่ระบุ)' ? Number(w) : w, cell.rolls, Math.round(cell.weight)]);
+          suppRolls += cell.rolls;
+          suppWeight += cell.weight;
+        });
+      });
+      aoa.push([`${supp} Result`, '', '', '', suppRolls, Math.round(suppWeight)]);
+      subtotalRows.push(aoa.length - 1);
+      grandRolls += suppRolls;
+      grandWeight += suppWeight;
+    });
+
+    const grandRowIdx = aoa.length;
+    aoa.push(['Total Result', '', '', '', grandRolls, Math.round(grandWeight)]);
+    const dataEndIdx = aoa.length - 1;
+
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols'] = [{ wch: 14 }, { wch: 16 }, { wch: 18 }, { wch: 14 }, { wch: 18 }, { wch: 18 }];
+    ws['!rows'] = [];
+    ws['!rows'][0] = { hpt: 26 }; ws['!rows'][1] = { hpt: 22 }; ws['!rows'][2] = { hpt: 22 }; ws['!rows'][headerRowIdx] = { hpt: 40 };
+    ws['!merges'] = [
+      { s: { r: 0, c: 2 }, e: { r: 0, c: 4 } },
+      { s: { r: 1, c: 2 }, e: { r: 1, c: 4 } },
+      { s: { r: 4, c: 2 }, e: { r: 4, c: 5 } }
+    ];
+
+    for (let r = 0; r <= 2; r++) for (let c = 0; c <= 6; c++) {
+      const isTitle = (r === 1 && c === 2);
+      const isCompany = (r === 0 && c === 2);
+      const isDocNo = (c >= 5);
+      setStyle(ws, XLSX.utils.encode_cell({ r, c }), {
+        font: isTitle ? F_TITLE : (isDocNo ? F_DOC : (isCompany ? F_HEADER : F_BODY)),
+        alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+        fill: HEADER_FILL_YELLOW, border: thinBorder
+      });
+    }
+    setStyle(ws, XLSX.utils.encode_cell({ r: 4, c: 2 }), {
+      font: { ...F_HEADER, italic: true },
+      alignment: { horizontal: 'center', vertical: 'center' }
+    });
+    for (let c = 0; c <= 5; c++) {
+      setStyle(ws, XLSX.utils.encode_cell({ r: headerRowIdx, c }), {
+        font: F_HEADER, alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+        fill: HEADER_FILL_YELLOW, border: thinBorder
+      });
+    }
+    for (let r = dataStartIdx; r <= dataEndIdx; r++) {
+      const isSubtotal = subtotalRows.includes(r);
+      const isGrand = (r === grandRowIdx);
+      const supplier = aoa[r][1];
+      const suppFill = SUPP_FILLS[supplier];
+      for (let c = 0; c <= 5; c++) {
+        setStyle(ws, XLSX.utils.encode_cell({ r, c }), {
+          font: (isSubtotal || isGrand) ? F_HEADER : F_BODY,
+          alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+          fill: isGrand ? HEADER_FILL_YELLOW : (isSubtotal ? { fgColor: { rgb: 'F2F2F2' } } : ((c === 1 && suppFill) ? suppFill : undefined)),
+          border: thinBorder,
+          numFmt: (c === 4 || c === 5) ? '#,##0' : undefined
+        });
+      }
+    }
+    return ws;
+  }
+
+  async function exportFmSl02(data) {
+    if (typeof XLSX === 'undefined') { alert('Excel library กำลังโหลด...'); return; }
+    if (!data || data.length === 0) { alert('ไม่มีข้อมูลให้ export'); return; }
+    const ws = buildStockSheet(data);
+    const fname = `FM-SL-02_stock_${timestamp()}.xlsx`;
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'ตรวจนับ Stock');
+    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    if (typeof JSZip !== 'undefined') {
+      try {
+        const zip = await JSZip.loadAsync(wbout);
+        const xml = await zip.file('xl/worksheets/sheet1.xml').async('string');
+        const pageBlock = '<pageMargins left="0.3" right="0.3" top="0.4" bottom="0.4" header="0.2" footer="0.2"/><pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="0"/>';
+        let newXml = xml.replace(/<pageMargins[^/]*\/>/g, '').replace(/<pageSetup[^/]*\/>/g, '');
+        if (newXml.indexOf('<ignoredErrors') !== -1) newXml = newXml.replace('<ignoredErrors', pageBlock + '<ignoredErrors');
+        else newXml = newXml.replace('</worksheet>', pageBlock + '</worksheet>');
+        zip.file('xl/worksheets/sheet1.xml', newXml);
+        const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = fname;
+        document.body.appendChild(a); a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        return;
+      } catch (err) { console.warn('JSZip failed:', err); }
+    }
+    XLSX.writeFile(wb, fname);
+  }
+  function timestamp() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+  global.FmSl02ExportStock = exportFmSl02;
+})(window);
+
+// ============================================================
+// ISO Form Tab Setup (Stock)
+// ============================================================
+let isoStockData = null;
+async function setupIsoForm() {
+  const preview = $('#iso-stock-preview');
+  preview.innerHTML = '⏳ กำลังคำนวณยอดคงเหลือ...';
+  try {
+    const data = await fetchAllRows(() => supabase
+      .from('current_stock_invoices')
+      .select('supplier, paper_type, width_mm, weight_kg, computed_remaining_kg')
+      .eq('computed_status', 'in_stock'));
+    isoStockData = data || [];
+    const totalRolls = isoStockData.length;
+    const totalWeight = isoStockData.reduce((s, r) => s + Number(r.computed_remaining_kg != null ? r.computed_remaining_kg : r.weight_kg || 0), 0);
+    const suppliers = new Set(isoStockData.map(r => r.supplier).filter(Boolean));
+    preview.innerHTML = `
+      <div style="font-size: 16px; margin-bottom: 8px;"><strong>Stock ปัจจุบัน</strong></div>
+      <div>คงเหลือ <strong>${totalRolls.toLocaleString()}</strong> ม้วน · 
+      น้ำหนักรวม <strong>${Math.round(totalWeight).toLocaleString()}</strong> kg · 
+      <strong>${suppliers.size}</strong> supplier</div>
+      <div style="margin-top: 8px; color: var(--text-dim); font-size: 12px;">รายงานตรวจนับ ณ วันที่ ${new Date().toLocaleDateString('th-TH')}</div>
+    `;
+    $('#btn-iso-stock-export').disabled = false;
+  } catch (e) {
+    preview.innerHTML = '⚠️ โหลดไม่ได้: ' + (e.message || e);
+  }
+}
+
+document.getElementById('btn-iso-stock-export').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-iso-stock-export');
+  if (!isoStockData || isoStockData.length === 0) {
+    alert('ยังไม่มีข้อมูล Stock');
+    return;
+  }
+  btn.disabled = true;
+  const orig = btn.textContent;
+  btn.textContent = '⏳ กำลังสร้างไฟล์...';
+  try {
+    await window.FmSl02ExportStock(isoStockData);
+  } catch (e) {
+    alert('⚠️ Export ไม่สำเร็จ: ' + (e.message || e));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = orig;
   }
 });
 
