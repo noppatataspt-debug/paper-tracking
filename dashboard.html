@@ -7,6 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -2892,6 +2894,433 @@ function formatThaiDate(isoDate) {
   return `${day} ${month} ${year} (${wd})`;
 }
 
+// ==================== EXPORT TRACE FORM (FM-SW-03 ใบบันทึกการใช้กระดาษประจำวัน) ====================
+// สร้างไฟล์ Excel ตามแบบฟอร์ม ISO9001 ของบริษัท สำหรับใช้ตอน auditor audit
+function exportTraceFormXLSX(data, params, invoiceMap) {
+  if (typeof XLSX === 'undefined') {
+    alert('กำลังโหลด Excel library — กรุณารอสักครู่แล้วกดอีกครั้ง');
+    return;
+  }
+  if (!data || data.length === 0) {
+    alert('ไม่มีข้อมูลให้ export');
+    return;
+  }
+  invoiceMap = invoiceMap || {};
+
+  // ===== แปลง scan record เป็น row ของฟอร์ม FM-SW-03 (10 คอลัมน์) =====
+  // A: Barcode | B: วันที่ใช้ (ว-ด-ป) | C: เครื่องที่ผลิต | D: สินค้า | E: ขนาด (IDxความหนาxความยาว)
+  // F: ประเภทกระดาษ | G: วันที่ตัดกระดาษ (ว-ด-ป) | H: ม้วนที่ | I: Slitter เครื่องที่ | J: ล็อตจัมโบ้
+  function fmtThaiShortDate(iso) {
+    if (!iso) return '';
+    const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) return iso;
+    return `${m[3]}-${m[2]}-${m[1].slice(2)}`;
+  }
+  // แยก "TVP 273xT15.75" → product="TVP", size="273xT15.75"
+  // เฉพาะตอนที่ส่วนหลัง space ดูเหมือนขนาดจริง (มี x หรือ T ตัวเลข) เพื่อไม่ให้ "SKIC 4400" ถูกแยกผิด
+  function splitProductSize(name) {
+    if (!name) return { product: '', size: '' };
+    const m = String(name).match(/^(\S+)\s+(.+)$/);
+    if (m) {
+      const second = m[2];
+      // ขนาดจริงต้องมี 'x' หรือ 'X' (เช่น "273xT15.75") หรือ T+ตัวเลข (เช่น "T15.75")
+      if (/[xX]/.test(second) || /^T\d/.test(second)) {
+        return { product: m[1], size: second };
+      }
+    }
+    return { product: name, size: '' };
+  }
+
+  // เรียงตามวันที่ → สินค้า → ประเภท → lot
+  const sorted = [...data].sort((a, b) =>
+    (a.production_date || '').localeCompare(b.production_date || '') ||
+    (a.product_name || '').localeCompare(b.product_name || '') ||
+    (a.paper_type || '').localeCompare(b.paper_type || '') ||
+    (a.jumbo_lot || '').localeCompare(b.jumbo_lot || '')
+  );
+
+  // ===== สร้าง Worksheet (AOA = array of arrays) =====
+  const aoa = [];
+
+  // Row 1-3: Header (โลโก้ใน A1, ข้อมูลบริษัทตรงกลาง, เลขเอกสารขวา)
+  aoa.push(['', '', '', 'ชื่อ : Asia Papertube Co.,Ltd / บริษัท เอเชียเปเปอร์ทิ้วจำกัด', '', '', '', '', 'FM-SW-03', '']);
+  aoa.push(['', '', '', '', '', '', '', '', 'แก้ไขครั้งที่ : 01', 'หน้าที่ 1/1']);
+  aoa.push(['', '', '', 'ใบบันทึกการใช้กระดาษประจำวัน', '', '', '', '', 'วันที่ประกาศใช้ : 1 สิงหาคม 2566', '']);
+
+  // Row 4: ว่าง (spacing)
+  aoa.push([]);
+
+  // Row 5: หัวคอลัมน์
+  aoa.push([
+    'Barcode',
+    'วันที่ใช้\n(ว-ด-ป)',
+    'เครื่องที่ผลิต',
+    'สินค้า',
+    'ขนาด\n(IDxความหนาxความยาว)',
+    'ประเภทกระดาษ',
+    'วันที่ตัดกระดาษ\n(ว-ด-ป)',
+    'ม้วนที่',
+    'Slitter เครื่องที่',
+    'ล็อตจัมโบ้'
+  ]);
+  const headerRowIdx = aoa.length - 1; // 0-based
+
+  // Row 6+: ข้อมูล
+  const dataStartIdx = aoa.length;
+  sorted.forEach(s => {
+    const { product, size } = splitProductSize(s.product_name);
+    aoa.push([
+      s.barcode_raw || '',
+      fmtThaiShortDate(s.production_date),
+      s.machine_name || '',
+      product,
+      size,
+      s.paper_type || '',
+      fmtThaiShortDate(s.cut_date),
+      s.roll_no || '',
+      s.slitter || '',
+      s.jumbo_lot || ''
+    ]);
+  });
+  const dataEndIdx = aoa.length - 1;
+
+  // ===== คำนวณสถิติและ group ตาม Jumbo Lot (ใช้ในทั้ง 2 sheet) =====
+  const totalRolls = sorted.length;
+  const uniqueBarcodes = new Set(sorted.map(s => s.barcode_raw)).size;
+  const totalProducts = new Set(sorted.map(s => s.product_name)).size;
+  const totalTypes = new Set(sorted.map(s => s.paper_type)).size;
+  const totalLots = new Set(sorted.map(s => s.jumbo_lot)).size;
+  const totalInvoices = new Set(sorted.map(s => {
+    const norm = (s.jumbo_lot || '').replace(/-/g, '').toUpperCase();
+    return invoiceMap[norm]?.invoice_no;
+  }).filter(x => x)).size;
+  const dateSet = new Set(sorted.map(s => s.production_date));
+
+  const lotGroups = {};
+  sorted.forEach(s => {
+    const lot = s.jumbo_lot || '(ไม่ระบุ)';
+    if (!lotGroups[lot]) {
+      lotGroups[lot] = { paper_type: s.paper_type, cut_date: s.cut_date, rolls: 0, products: new Set(), barcodes: new Set() };
+    }
+    lotGroups[lot].rolls++;
+    if (s.product_name) lotGroups[lot].products.add(s.product_name);
+    if (s.barcode_raw) lotGroups[lot].barcodes.add(s.barcode_raw);
+  });
+
+  // ===== สร้าง Worksheet 1: ตารางหลัก (FM-SW-03) =====
+  const ws1 = XLSX.utils.aoa_to_sheet(aoa);
+
+  // Column widths sheet 1: A-J ตามภาพต้นแบบ — รวม ~140 char fits A4 landscape
+  ws1['!cols'] = [
+    { wch: 28 }, // A: Barcode
+    { wch: 11 }, // B: วันที่ใช้
+    { wch: 13 }, // C: เครื่องที่ผลิต
+    { wch: 12 }, // D: สินค้า
+    { wch: 20 }, // E: ขนาด
+    { wch: 13 }, // F: ประเภทกระดาษ
+    { wch: 11 }, // G: วันที่ตัด
+    { wch: 8 },  // H: ม้วนที่
+    { wch: 13 }, // I: Slitter
+    { wch: 16 }  // J: ล็อตจัมโบ้
+  ];
+
+  // Row heights
+  ws1['!rows'] = [];
+  ws1['!rows'][0] = { hpt: 28 };
+  ws1['!rows'][1] = { hpt: 22 };
+  ws1['!rows'][2] = { hpt: 22 };
+  ws1['!rows'][headerRowIdx] = { hpt: 36 };
+
+  // Merges sheet 1
+  ws1['!merges'] = [
+    { s: { r: 0, c: 3 }, e: { r: 0, c: 7 } },  // ชื่อบริษัท D1:H1
+    { s: { r: 2, c: 3 }, e: { r: 2, c: 7 } },  // title D3:H3
+    { s: { r: 0, c: 8 }, e: { r: 0, c: 9 } },  // FM-SW-03 I1:J1
+    { s: { r: 2, c: 8 }, e: { r: 2, c: 9 } }   // วันที่ประกาศใช้ I3:J3
+  ];
+
+  // ===== Styling helpers =====
+  const thinBorder = {
+    top: { style: 'thin', color: { rgb: '000000' } },
+    bottom: { style: 'thin', color: { rgb: '000000' } },
+    left: { style: 'thin', color: { rgb: '000000' } },
+    right: { style: 'thin', color: { rgb: '000000' } }
+  };
+  const headerFill = { fgColor: { rgb: 'D9EAD3' } }; // เขียวอ่อนตามต้นฉบับ
+  const headerFont = { name: 'TH SarabunPSK', sz: 14, bold: true };
+  const bodyFont = { name: 'TH SarabunPSK', sz: 13 };
+  const titleFont = { name: 'TH SarabunPSK', sz: 16, bold: true };
+  const docNoFont = { name: 'TH SarabunPSK', sz: 13, bold: true };
+  const summaryLabelFont = { name: 'TH SarabunPSK', sz: 14, bold: true };
+
+  function setStyle(ws, addr, style) {
+    if (!ws[addr]) ws[addr] = { t: 's', v: '' };
+    ws[addr].s = style;
+  }
+
+  // ===== Sheet 1 styling =====
+  // Header rows 1-3
+  for (let c = 0; c <= 9; c++) {
+    for (let r = 0; r <= 2; r++) {
+      const addr = XLSX.utils.encode_cell({ r, c });
+      const isTitle = (r === 2 && c === 3);
+      const isCompany = (r === 0 && c === 3);
+      const isDocNo = (c === 8 || c === 9) && r <= 2;
+      setStyle(ws1, addr, {
+        font: isTitle ? titleFont : (isDocNo ? docNoFont : (isCompany ? headerFont : bodyFont)),
+        alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+        fill: headerFill,
+        border: thinBorder
+      });
+    }
+  }
+  // Column header row
+  for (let c = 0; c <= 9; c++) {
+    const addr = XLSX.utils.encode_cell({ r: headerRowIdx, c });
+    setStyle(ws1, addr, {
+      font: headerFont,
+      alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+      fill: headerFill,
+      border: thinBorder
+    });
+  }
+  // Data rows
+  for (let r = dataStartIdx; r <= dataEndIdx; r++) {
+    for (let c = 0; c <= 9; c++) {
+      const addr = XLSX.utils.encode_cell({ r, c });
+      setStyle(ws1, addr, {
+        font: bodyFont,
+        alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+        border: thinBorder
+      });
+    }
+  }
+
+  // ===== Worksheet 2: สรุปและลายเซ็น =====
+  const aoa2 = [];
+
+  // Header สำหรับ sheet 2 (เลข doc + ชื่อฟอร์ม) — copy แบบย่อ
+  aoa2.push(['', '', '', 'ชื่อ : Asia Papertube Co.,Ltd / บริษัท เอเชียเปเปอร์ทิ้วจำกัด', '', '', '', 'FM-SW-03']);
+  aoa2.push(['', '', '', '', '', '', '', 'แก้ไขครั้งที่ : 01']);
+  aoa2.push(['', '', '', 'ใบบันทึกการใช้กระดาษประจำวัน — สรุป', '', '', '', 'วันที่ประกาศใช้ : 1 สิงหาคม 2566']);
+  aoa2.push([]);
+
+  // ระบุเงื่อนไขการค้นหา
+  const machineNameForSummary = params.machineId
+    ? document.getElementById('t-machine').options[document.getElementById('t-machine').selectedIndex].text
+    : '(ทุกเครื่อง)';
+  const dateRangeText = (params.from === params.to)
+    ? `วันที่ผลิต : ${params.from}`
+    : `ช่วงวันที่ผลิต : ${params.from} ถึง ${params.to}`;
+  aoa2.push(['เงื่อนไขการค้นหา :']);
+  aoa2.push([dateRangeText]);
+  aoa2.push([`เครื่อง : ${machineNameForSummary}`]);
+  aoa2.push([`สินค้า : ${params.product || '(ทุกสินค้า)'}`]);
+  aoa2.push([]);
+
+  // ===== ส่วนสรุปตัวเลข =====
+  aoa2.push(['สรุปตัวเลข :']);
+  aoa2.push(['จำนวนวัน', dateSet.size, '', 'จำนวนสินค้า', totalProducts, '', 'ประเภทกระดาษ', totalTypes]);
+  aoa2.push(['จำนวน Invoice', totalInvoices, '', 'จำนวน Jumbo Lot', totalLots, '', 'จำนวนม้วน', totalRolls + (uniqueBarcodes < totalRolls ? ` (${uniqueBarcodes} unique)` : '')]);
+  aoa2.push([]);
+
+  // ===== ตารางสรุปต่อ Jumbo Lot (8 คอลัมน์ — เพิ่ม "วันที่รับเข้า") =====
+  aoa2.push(['ตารางสรุปต่อ Jumbo Lot :']);
+  const lotTableHeader2Idx = aoa2.length;
+  aoa2.push(['ล็อตจัมโบ้', 'ประเภทกระดาษ', 'Supplier', 'Invoice No.', 'วันที่รับเข้า', 'วันที่ตัด', 'จำนวนม้วน', 'สินค้า']);
+
+  Object.keys(lotGroups).sort().forEach(lot => {
+    const g = lotGroups[lot];
+    const norm = (lot || '').replace(/-/g, '').toUpperCase();
+    const inv = invoiceMap[norm] || {};
+    aoa2.push([
+      lot,
+      g.paper_type || '',
+      inv.supplier || '',
+      inv.invoice_no || '',
+      fmtThaiShortDate(inv.receive_date),
+      fmtThaiShortDate(g.cut_date),
+      g.barcodes.size + (g.barcodes.size < g.rolls ? ` (${g.rolls} ใช้)` : ''),
+      [...g.products].join(', ')
+    ]);
+  });
+  const lotTableEnd2Idx = aoa2.length - 1;
+
+  // ===== ช่องลายเซ็น =====
+  aoa2.push([]);
+  aoa2.push([]);
+  aoa2.push(['ผู้บันทึก / ผู้ตรวจ :']);
+  aoa2.push([]);
+  aoa2.push([]);
+  aoa2.push([
+    'ลงชื่อ ............................................', '', '',
+    'ลงชื่อ ............................................', '', '',
+    'ลงชื่อ ............................................', ''
+  ]);
+  aoa2.push([
+    '(...........................................)', '', '',
+    '(...........................................)', '', '',
+    '(...........................................)', ''
+  ]);
+  aoa2.push([
+    'ผู้บันทึก / Recorded by', '', '',
+    'ผู้ตรวจสอบ / Checked by', '', '',
+    'ผู้อนุมัติ / Approved by', ''
+  ]);
+  aoa2.push([
+    'วันที่ ........./........./..........', '', '',
+    'วันที่ ........./........./..........', '', '',
+    'วันที่ ........./........./..........', ''
+  ]);
+
+  const ws2 = XLSX.utils.aoa_to_sheet(aoa2);
+
+  // Column widths sheet 2: 8 คอลัมน์ A-H สำหรับตาราง Jumbo Lot
+  ws2['!cols'] = [
+    { wch: 18 }, // A: ล็อตจัมโบ้
+    { wch: 14 }, // B: ประเภทกระดาษ
+    { wch: 12 }, // C: Supplier
+    { wch: 14 }, // D: Invoice No.
+    { wch: 12 }, // E: วันที่รับเข้า
+    { wch: 11 }, // F: วันที่ตัด
+    { wch: 14 }, // G: จำนวนม้วน
+    { wch: 28 }  // H: สินค้า
+  ];
+
+  ws2['!rows'] = [];
+  ws2['!rows'][0] = { hpt: 26 };
+  ws2['!rows'][1] = { hpt: 20 };
+  ws2['!rows'][2] = { hpt: 20 };
+
+  ws2['!merges'] = [
+    { s: { r: 0, c: 3 }, e: { r: 0, c: 6 } },  // ชื่อบริษัท D1:G1
+    { s: { r: 2, c: 3 }, e: { r: 2, c: 6 } }   // title D3:G3
+  ];
+
+  // Sheet 2 styling
+  // Header rows 1-3
+  for (let c = 0; c <= 7; c++) {
+    for (let r = 0; r <= 2; r++) {
+      const addr = XLSX.utils.encode_cell({ r, c });
+      const isTitle = (r === 2 && c === 3);
+      const isCompany = (r === 0 && c === 3);
+      const isDocNo = (c === 7) && r <= 2;
+      setStyle(ws2, addr, {
+        font: isTitle ? titleFont : (isDocNo ? docNoFont : (isCompany ? headerFont : bodyFont)),
+        alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+        fill: headerFill,
+        border: thinBorder
+      });
+    }
+  }
+  // "เงื่อนไขการค้นหา :" และข้อความใต้ — bold label
+  for (let r = 4; r <= 7; r++) {
+    const addr = XLSX.utils.encode_cell({ r: r, c: 0 });
+    setStyle(ws2, addr, {
+      font: r === 4 ? summaryLabelFont : bodyFont,
+      alignment: { horizontal: 'left', vertical: 'center' }
+    });
+  }
+  // "สรุปตัวเลข :" label
+  setStyle(ws2, XLSX.utils.encode_cell({ r: 9, c: 0 }), {
+    font: summaryLabelFont,
+    alignment: { horizontal: 'left', vertical: 'center' }
+  });
+  // สถิติ 2 แถว — ใส่ขอบและจัด center สำหรับตัวเลข
+  for (let r = 10; r <= 11; r++) {
+    for (let c = 0; c <= 7; c++) {
+      const addr = XLSX.utils.encode_cell({ r, c });
+      const isLabel = (c === 0 || c === 3 || c === 6);
+      setStyle(ws2, addr, {
+        font: isLabel ? headerFont : bodyFont,
+        alignment: { horizontal: isLabel ? 'left' : 'center', vertical: 'center' },
+        fill: isLabel ? headerFill : undefined,
+        border: thinBorder
+      });
+    }
+  }
+  // "ตารางสรุปต่อ Jumbo Lot :" label
+  setStyle(ws2, XLSX.utils.encode_cell({ r: 13, c: 0 }), {
+    font: summaryLabelFont,
+    alignment: { horizontal: 'left', vertical: 'center' }
+  });
+  // ตาราง Jumbo Lot
+  for (let r = lotTableHeader2Idx; r <= lotTableEnd2Idx; r++) {
+    for (let c = 0; c <= 7; c++) {
+      const addr = XLSX.utils.encode_cell({ r, c });
+      const isHeader = (r === lotTableHeader2Idx);
+      setStyle(ws2, addr, {
+        font: isHeader ? headerFont : bodyFont,
+        alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+        fill: isHeader ? headerFill : undefined,
+        border: thinBorder
+      });
+    }
+  }
+  // "ผู้บันทึก / ผู้ตรวจ :" label
+  const sigLabelRow = lotTableEnd2Idx + 3;
+  setStyle(ws2, XLSX.utils.encode_cell({ r: sigLabelRow, c: 0 }), {
+    font: summaryLabelFont,
+    alignment: { horizontal: 'left', vertical: 'center' }
+  });
+  // ลายเซ็น 4 แถวสุดท้าย
+  for (let r = sigLabelRow + 3; r <= sigLabelRow + 6; r++) {
+    for (let c = 0; c <= 7; c++) {
+      const addr = XLSX.utils.encode_cell({ r, c });
+      if (ws2[addr] && ws2[addr].v) {
+        setStyle(ws2, addr, {
+          font: bodyFont,
+          alignment: { horizontal: 'left', vertical: 'center' }
+        });
+      }
+    }
+  }
+
+  // ===== Build workbook =====
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws1, 'บันทึกการใช้กระดาษ');
+  XLSX.utils.book_append_sheet(wb, ws2, 'สรุปและลายเซ็น');
+
+  // ===== Filename =====
+  const machineName = params.machineId
+    ? document.getElementById('t-machine').options[document.getElementById('t-machine').selectedIndex].text.replace(/\s.*$/, '')
+    : 'all';
+  const dateStr = (params.from === params.to) ? params.from : (params.from + '_to_' + params.to);
+  const fname = `FM-SW-03_${dateStr}_${machineName}${params.product ? '_' + params.product : ''}.xlsx`;
+
+  // Write to binary, then post-process with JSZip to inject pageSetup XML สำหรับทั้ง 2 sheet
+  const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  if (typeof JSZip !== 'undefined') {
+    JSZip.loadAsync(wbout).then(zip => {
+      const sheets = ['xl/worksheets/sheet1.xml', 'xl/worksheets/sheet2.xml'];
+      const promises = sheets.map(path => {
+        if (!zip.file(path)) return Promise.resolve();
+        return zip.file(path).async('string').then(xml => {
+          const pageBlock = '<pageMargins left="0.3" right="0.3" top="0.4" bottom="0.4" header="0.2" footer="0.2"/>' +
+                            '<pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="0"/>';
+          let newXml = xml.replace(/<pageMargins[^/]*\/>/g, '');
+          newXml = newXml.replace('</worksheet>', pageBlock + '</worksheet>');
+          zip.file(path, newXml);
+        });
+      });
+      return Promise.all(promises).then(() =>
+        zip.generateAsync({ type: 'blob', compression: 'DEFLATE' })
+      );
+    }).then(blob => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = fname;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }).catch(err => {
+      console.warn('JSZip post-process failed, fallback to direct write:', err);
+      XLSX.writeFile(wb, fname);
+    });
+  } else {
+    XLSX.writeFile(wb, fname);
+  }
+}
+
 function renderTraceResult(container, data, params, invoiceMap) {
   invoiceMap = invoiceMap || {};
   if (!data || data.length === 0) {
@@ -2922,6 +3351,7 @@ function renderTraceResult(container, data, params, invoiceMap) {
   }).filter(x => x)).size;
 
   let html = `<div class="panel-actions">
+    <button class="export-btn" id="btn-export-trace-xlsx">📄 Export ฟอร์ม FM-SW-03 (Excel)</button>
     <button class="export-btn" id="btn-export-trace">📥 Export CSV (${totalRolls} rows)</button>
   </div>
   <div class="stats">
@@ -3047,6 +3477,11 @@ function renderTraceResult(container, data, params, invoiceMap) {
     const dateStr = (p.from === p.to) ? p.from : (p.from + '_to_' + p.to);
     const fname = `trace_${dateStr}_${machineName}${p.product ? '_' + p.product : ''}_${timestamp()}.csv`;
     downloadCSV(csv, fname);
+  });
+
+  // Export XLSX form button (FM-SW-03)
+  document.getElementById('btn-export-trace-xlsx').addEventListener('click', () => {
+    exportTraceFormXLSX(window._traceData, window._traceParams, invoiceMap);
   });
 }
 
