@@ -2916,16 +2916,28 @@ function exportTraceFormXLSX(data, params, invoiceMap) {
     if (!m) return iso;
     return `${m[3]}-${m[2]}-${m[1].slice(2)}`;
   }
-  // แยก "TVP 273xT15.75" → product="TVP", size="273xT15.75"
-  // เฉพาะตอนที่ส่วนหลัง space ดูเหมือนขนาดจริง (มี x หรือ T ตัวเลข) เพื่อไม่ให้ "SKIC 4400" ถูกแยกผิด
+  // แยก "AT-234xT7.5" → product="AT", size="234xT7.5"
+  // ใช้ dash แรกเป็นตัวคั่นชื่อลูกค้ากับขนาด เฉพาะตอนที่ส่วนหลัง dash ดูเหมือนขนาดจริง
+  // (มี x/X หรือ T+ตัวเลข) เพื่อไม่ให้ "SKIC-4400" หรือ "77-4-A7914" ถูกแยกผิด
   function splitProductSize(name) {
     if (!name) return { product: '', size: '' };
-    const m = String(name).match(/^(\S+)\s+(.+)$/);
-    if (m) {
-      const second = m[2];
-      // ขนาดจริงต้องมี 'x' หรือ 'X' (เช่น "273xT15.75") หรือ T+ตัวเลข (เช่น "T15.75")
+    const s = String(name);
+    // หา dash แรก
+    const dashIdx = s.indexOf('-');
+    if (dashIdx > 0) {
+      const before = s.slice(0, dashIdx);
+      const after = s.slice(dashIdx + 1);
+      // ขนาดจริงต้องมี 'x' หรือ 'X' (เช่น "234xT7.5") หรือ T+ตัวเลข (เช่น "T15.75")
+      if (/[xX]/.test(after) || /^T\d/.test(after)) {
+        return { product: before, size: after };
+      }
+    }
+    // fallback: ลอง space (เผื่อชื่อเก่าที่ใช้ space)
+    const spaceMatch = s.match(/^(\S+)\s+(.+)$/);
+    if (spaceMatch) {
+      const second = spaceMatch[2];
       if (/[xX]/.test(second) || /^T\d/.test(second)) {
-        return { product: m[1], size: second };
+        return { product: spaceMatch[1], size: second };
       }
     }
     return { product: name, size: '' };
