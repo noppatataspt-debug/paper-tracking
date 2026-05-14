@@ -851,6 +851,58 @@ body {
 .chip.hidden { display: none; }
 .chip.cascade-hidden { display: none; }
 
+/* PO group (wraps invoices) */
+.po-group {
+  background: #fef3c7;
+  border: 1.5px solid #f59e0b;
+  border-radius: 10px;
+  margin-bottom: 16px;
+  padding: 0;
+  overflow: hidden;
+}
+.po-group-empty {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+.po-group-header {
+  padding: 12px 16px;
+  display: flex; align-items: center; gap: 12px;
+  cursor: pointer;
+  user-select: none;
+  border-bottom: 1px solid #f59e0b;
+  transition: background 0.15s;
+  flex-wrap: wrap;
+}
+.po-group-empty .po-group-header { border-bottom-color: #d1d5db; }
+.po-group-header:hover { background: #fde68a; }
+.po-group-empty .po-group-header:hover { background: #e5e7eb; }
+.po-group-header .toggle-icon {
+  font-size: 14px; color: #92400e; transition: transform 0.2s;
+}
+.po-group.collapsed .po-group-header .toggle-icon { transform: rotate(-90deg); }
+.po-group.collapsed .po-group-children { display: none; }
+.po-group-no {
+  font-family: var(--mono); font-weight: 700; font-size: 15px; color: #92400e;
+}
+.po-group-empty .po-group-no { color: #6b7280; }
+.po-group-tag {
+  font-size: 11px; padding: 2px 9px; border-radius: 999px;
+  background: white; color: #92400e; font-weight: 600;
+}
+.po-group-empty .po-group-tag { color: #6b7280; }
+.po-group-stats {
+  margin-left: auto;
+  display: flex; gap: 14px; font-size: 13px; color: var(--text-dim);
+  font-family: var(--mono);
+}
+.po-group-children {
+  padding: 12px 16px;
+  background: #fffbeb;
+}
+.po-group-empty .po-group-children { background: #f9fafb; }
+.po-group-children .invoice-card { margin-bottom: 8px; }
+.po-group-children .invoice-card:last-child { margin-bottom: 0; }
+
 /* Invoice card */
 .invoice-card {
   background: white; border: 1px solid var(--border); border-radius: 10px;
@@ -1638,9 +1690,19 @@ body {
           <label>เดือน:</label>
           <select id="inv-month" class="filter-select"></select>
         </div>
+        <div class="filter-group" style="flex:1; min-width:240px;">
+          <label>🔍 ค้นหา PO/Invoice:</label>
+          <input type="text" id="inv-search" class="filter-select" placeholder="เช่น Po-690346, 535201837" style="font-family:var(--mono); font-size:13px;">
+        </div>
         <div class="filter-group" style="margin-left:auto; display:flex; gap:8px;">
           <button class="btn" id="inv-export-csv">📥 Export CSV</button>
         </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin:8px 0 4px 4px;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-dim);cursor:pointer;">
+          <input type="checkbox" id="inv-show-no-po" style="cursor:pointer;">
+          <span>แสดงรายการเก่าที่ไม่มี PO</span>
+        </label>
       </div>
       
       <div id="invoice-summary" style="margin-bottom:14px;"></div>
@@ -3830,7 +3892,7 @@ async function loadInvoiceTab() {
     try {
       const data = await fetchAllRows(() => supabase
         .from('paper_invoices')
-        .select('id, paper_lot, supplier, invoice_no, paper_type, width_mm, weight_kg, price_per_kg, price_per_roll, invoice_date, receive_date')
+        .select('id, paper_lot, supplier, invoice_no, po_no, paper_type, width_mm, weight_kg, price_per_kg, price_per_roll, invoice_date, receive_date')
         .order('invoice_date', { ascending: false }));
       if (!isRequestStillCurrent('invoice', myToken)) return;
       _invoiceCache = data || [];
@@ -3861,136 +3923,213 @@ async function loadInvoiceTab() {
 }
 
 function renderInvoiceList() {
+  const myToken = newRequestToken('invoice');
   const supplier = $('#inv-supplier').value;
   const month = $('#inv-month').value;
+  const searchTerm = ($('#inv-search')?.value || '').trim().toLowerCase();
+  const hideNoPo = !$('#inv-show-no-po')?.checked;
   const listDiv = $('#invoice-list');
   const summDiv = $('#invoice-summary');
-  
+
   if (!supplier || !month) {
     summDiv.innerHTML = '';
     listDiv.innerHTML = '<div class="loading-state">กรุณาเลือก Supplier และเดือน</div>';
     return;
   }
-  
-  // filter rows
-  const rows = _invoiceCache.filter(r => 
-    r.supplier === supplier && 
+
+  // filter rows by supplier + month
+  let rows = _invoiceCache.filter(r =>
+    r.supplier === supplier &&
     r.invoice_date && r.invoice_date.startsWith(month)
   );
-  
+
+  // Apply search filter — match PO หรือ Invoice
+  if (searchTerm) {
+    rows = rows.filter(r => {
+      const inv = (r.invoice_no || '').toLowerCase();
+      const po = (r.po_no || '').toLowerCase();
+      return inv.includes(searchTerm) || po.includes(searchTerm);
+    });
+  }
+
+  // Hide no-PO toggle
+  const hiddenCount = hideNoPo ? rows.filter(r => !r.po_no).length : 0;
+  if (hideNoPo) {
+    rows = rows.filter(r => r.po_no);
+  }
+
   if (rows.length === 0) {
     summDiv.innerHTML = '';
-    listDiv.innerHTML = '<div class="loading-state">ไม่พบ invoice ในเงื่อนไขที่เลือก</div>';
+    const note = hiddenCount > 0
+      ? `<br><small style="color:var(--text-dim);">(ซ่อนอยู่ ${hiddenCount.toLocaleString()} รายการที่ไม่มี PO)</small>`
+      : '';
+    listDiv.innerHTML = `<div class="loading-state">ไม่พบ invoice ในเงื่อนไขที่เลือก${note}</div>`;
     return;
   }
-  
-  // group by invoice_no
-  const groups = new Map();
+
+  // === Group: PO → Invoice → rolls ===
+  const poMap = new Map();
   for (const r of rows) {
-    const key = r.invoice_no || '(ไม่มีเลขที่)';
-    if (!groups.has(key)) {
-      groups.set(key, { invoice_no: key, date: r.invoice_date, rolls: [] });
-    }
-    groups.get(key).rolls.push(r);
+    const po = r.po_no || '__NO_PO__';
+    const inv = r.invoice_no || '(ไม่มีเลขที่)';
+    if (!poMap.has(po)) poMap.set(po, new Map());
+    const invMap = poMap.get(po);
+    if (!invMap.has(inv)) invMap.set(inv, { invoice_no: inv, date: r.invoice_date, rolls: [] });
+    invMap.get(inv).rolls.push(r);
   }
-  
-  // sort groups by date desc
-  const sortedGroups = [...groups.values()].sort((a, b) => 
-    (b.date || '').localeCompare(a.date || ''));
-  
+
+  // sort PO entries: those with real PO first (by latest date desc), NO_PO last
+  const sortedPos = [...poMap.entries()].sort(([a, aMap], [b, bMap]) => {
+    if (a === '__NO_PO__') return 1;
+    if (b === '__NO_PO__') return -1;
+    // sort by max date of invoices in each PO desc
+    const aMax = Math.max(...[...aMap.values()].map(g => new Date(g.date || 0).getTime()));
+    const bMax = Math.max(...[...bMap.values()].map(g => new Date(g.date || 0).getTime()));
+    return bMax - aMax;
+  });
+
   // grand totals
-  let grandRolls = 0, grandKg = 0, grandValue = 0;
-  for (const r of rows) {
-    grandRolls++;
-    grandKg += Number(r.weight_kg) || 0;
-    grandValue += Number(r.price_per_roll) || 0;
+  let grandRolls = 0, grandKg = 0, grandValue = 0, invCount = 0;
+  for (const [_po, invMap] of poMap.entries()) {
+    invCount += invMap.size;
+    for (const [_inv, g] of invMap.entries()) {
+      for (const r of g.rolls) {
+        grandRolls++;
+        grandKg += Number(r.weight_kg) || 0;
+        grandValue += Number(r.price_per_roll) || 0;
+      }
+    }
   }
-  
+
   // render summary
   summDiv.innerHTML = `
     <div class="summary-pill">
-      <div>📋 <b>${groups.size}</b> ใบ Invoice</div>
+      <div>📋 <b>${poMap.size}</b> PO</div>
+      <div>📄 <b>${invCount}</b> ใบ Invoice</div>
       <div>📦 <b>${fmtNum(grandRolls)}</b> ม้วน</div>
       <div>⚖️ <b>${fmtKgFull(grandKg)}</b> kg</div>
       <div>💰 <b>${fmtMoneyExact(grandValue)}</b></div>
     </div>
   `;
-  
-  // render invoice cards
+
+  // === Render ===
   let html = `<div style="margin-bottom:10px; display:flex; gap:8px;">
     <button class="btn" id="inv-expand-all" style="font-size:13px;">▽ ขยายทั้งหมด</button>
     <button class="btn" id="inv-collapse-all" style="font-size:13px;">▷ ปิดทั้งหมด</button>
   </div>`;
-  for (const g of sortedGroups) {
-    let invRolls = 0, invKg = 0, invValue = 0;
-    for (const r of g.rolls) {
-      invRolls++;
-      invKg += Number(r.weight_kg) || 0;
-      invValue += Number(r.price_per_roll) || 0;
+
+  for (const [poKey, invMap] of sortedPos) {
+    const isNoPo = poKey === '__NO_PO__';
+    const poDisplay = isNoPo ? '(ไม่มี PO)' : poKey;
+
+    // PO subtotal
+    let poRolls = 0, poKg = 0, poValue = 0;
+    for (const [_inv, g] of invMap.entries()) {
+      for (const r of g.rolls) {
+        poRolls++;
+        poKg += Number(r.weight_kg) || 0;
+        poValue += Number(r.price_per_roll) || 0;
+      }
     }
-    
-    const dateThai = g.date ? formatDateTH(g.date) : '-';
-    
-    html += `<div class="invoice-card" data-inv="${escapeHtml(g.invoice_no)}">
-      <div class="invoice-header">
-        <span class="toggle-icon">▶</span>
-        <div class="invoice-no">📄 ${escapeHtml(g.invoice_no)}</div>
-        <div class="invoice-date">📅 ${dateThai}</div>
-        <div class="invoice-money">💰 <b>${fmtMoneyExact(invValue)}</b></div>
-        <div class="invoice-totals">
-          <div class="invoice-total-item">📦 <b>${fmtNum(invRolls)}</b> ม้วน</div>
-          <div class="invoice-total-item">⚖️ <b>${fmtKgFull(invKg)}</b> kg</div>
+
+    // sort invoices in PO by date desc
+    const sortedInvs = [...invMap.values()].sort((a, b) =>
+      (b.date || '').localeCompare(a.date || ''));
+
+    html += `
+      <div class="po-group${isNoPo ? ' po-group-empty' : ''}">
+        <div class="po-group-header">
+          <span class="toggle-icon">▼</span>
+          <div class="po-group-no">📋 ${escapeHtml(poDisplay)}</div>
+          <div class="po-group-tag">${invMap.size} invoice</div>
+          <div class="po-group-stats">
+            <span>📦 <b>${fmtNum(poRolls)}</b> ม้วน</span>
+            <span>⚖️ <b>${fmtKgFull(poKg)}</b> kg</span>
+            <span style="color:#059669;">💰 <b>${fmtMoneyExact(poValue)}</b></span>
+          </div>
         </div>
-      </div>
-      <div class="invoice-rolls-wrap">
-      <table class="invoice-rolls-table">
-        <thead><tr>
-          <th>Lot</th>
-          <th>ประเภท</th>
-          <th class="right">หน้ากว้าง</th>
-          <th class="right">น้ำหนัก (kg)</th>
-          <th class="right">ราคา/kg</th>
-          <th class="right">รวม (฿)</th>
-        </tr></thead>
-        <tbody>`;
-    
-    // sort rolls by paper_type, width
-    const sortedRolls = [...g.rolls].sort((a, b) => {
-      const t = (a.paper_type || '').localeCompare(b.paper_type || '');
-      if (t !== 0) return t;
-      return (Number(a.width_mm) || 0) - (Number(b.width_mm) || 0);
-    });
-    
-    for (const r of sortedRolls) {
-      html += `<tr>
-        <td>${escapeHtml(r.paper_lot || '-')}</td>
-        <td>${escapeHtml(r.paper_type || '-')}</td>
-        <td class="right">${r.width_mm ? fmtNum(r.width_mm) : '-'}</td>
-        <td class="right">${fmtKgFull(r.weight_kg)}</td>
-        <td class="right">${r.price_per_kg ? fmtMoneyExact(r.price_per_kg) : '-'}</td>
-        <td class="right">${r.price_per_roll ? fmtMoneyExact(r.price_per_roll) : '-'}</td>
-      </tr>`;
+        <div class="po-group-children">
+    `;
+
+    for (const g of sortedInvs) {
+      let invRolls = 0, invKg = 0, invValue = 0;
+      for (const r of g.rolls) {
+        invRolls++;
+        invKg += Number(r.weight_kg) || 0;
+        invValue += Number(r.price_per_roll) || 0;
+      }
+
+      const dateThai = g.date ? formatDateTH(g.date) : '-';
+
+      html += `<div class="invoice-card" data-inv="${escapeHtml(g.invoice_no)}">
+        <div class="invoice-header">
+          <span class="toggle-icon">▶</span>
+          <div class="invoice-no">📄 ${escapeHtml(g.invoice_no)}</div>
+          <div class="invoice-date">📅 ${dateThai}</div>
+          <div class="invoice-money">💰 <b>${fmtMoneyExact(invValue)}</b></div>
+          <div class="invoice-totals">
+            <div class="invoice-total-item">📦 <b>${fmtNum(invRolls)}</b> ม้วน</div>
+            <div class="invoice-total-item">⚖️ <b>${fmtKgFull(invKg)}</b> kg</div>
+          </div>
+        </div>
+        <div class="invoice-rolls-wrap">
+        <table class="invoice-rolls-table">
+          <thead><tr>
+            <th>Lot</th>
+            <th>ประเภท</th>
+            <th class="right">หน้ากว้าง</th>
+            <th class="right">น้ำหนัก (kg)</th>
+            <th class="right">ราคา/kg</th>
+            <th class="right">รวม (฿)</th>
+          </tr></thead>
+          <tbody>`;
+
+      const sortedRolls = [...g.rolls].sort((a, b) => {
+        const t = (a.paper_type || '').localeCompare(b.paper_type || '');
+        if (t !== 0) return t;
+        return (Number(a.width_mm) || 0) - (Number(b.width_mm) || 0);
+      });
+
+      for (const r of sortedRolls) {
+        html += `<tr>
+          <td>${escapeHtml(r.paper_lot || '-')}</td>
+          <td>${escapeHtml(r.paper_type || '-')}</td>
+          <td class="right">${r.width_mm ? fmtNum(r.width_mm) : '-'}</td>
+          <td class="right">${fmtKgFull(r.weight_kg)}</td>
+          <td class="right">${r.price_per_kg ? fmtMoneyExact(r.price_per_kg) : '-'}</td>
+          <td class="right">${r.price_per_roll ? fmtMoneyExact(r.price_per_roll) : '-'}</td>
+        </tr>`;
+      }
+
+      html += `</tbody></table></div></div>`;
     }
-    
-    html += `</tbody></table></div></div>`;
+
+    html += `</div></div>`;  // close po-group-children and po-group
   }
-  
+
   if (!isRequestStillCurrent('invoice', myToken)) return;
   listDiv.innerHTML = html;
-  
-  // Wire toggle (each card)
+
+  // Wire toggles
   listDiv.querySelectorAll('.invoice-header').forEach(h => {
     h.addEventListener('click', () => {
       h.parentElement.classList.toggle('expanded');
     });
   });
-  
+  listDiv.querySelectorAll('.po-group-header').forEach(h => {
+    h.addEventListener('click', () => {
+      h.parentElement.classList.toggle('collapsed');
+    });
+  });
+
   // Wire expand/collapse all
   const exAll = $('#inv-expand-all');
   const coAll = $('#inv-collapse-all');
-  if (exAll) exAll.addEventListener('click', () => 
-    listDiv.querySelectorAll('.invoice-card').forEach(c => c.classList.add('expanded')));
-  if (coAll) coAll.addEventListener('click', () => 
+  if (exAll) exAll.addEventListener('click', () => {
+    listDiv.querySelectorAll('.invoice-card').forEach(c => c.classList.add('expanded'));
+    listDiv.querySelectorAll('.po-group').forEach(p => p.classList.remove('collapsed'));
+  });
+  if (coAll) coAll.addEventListener('click', () =>
     listDiv.querySelectorAll('.invoice-card').forEach(c => c.classList.remove('expanded')));
 }
 
@@ -5335,6 +5474,13 @@ $('#print-modal').addEventListener('click', e => {
 // Invoice tab
 $('#inv-supplier').addEventListener('change', renderInvoiceList);
 $('#inv-month').addEventListener('change', renderInvoiceList);
+// Debounced search
+let _invSearchTimer = null;
+$('#inv-search').addEventListener('input', () => {
+  clearTimeout(_invSearchTimer);
+  _invSearchTimer = setTimeout(renderInvoiceList, 250);
+});
+$('#inv-show-no-po').addEventListener('change', renderInvoiceList);
 $('#inv-export-csv').addEventListener('click', exportInvoiceCSV);
 
 // Filter tab
