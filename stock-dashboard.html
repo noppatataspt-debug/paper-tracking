@@ -890,6 +890,13 @@ body {
   background: white; color: #92400e; font-weight: 600;
 }
 .po-group-empty .po-group-tag { color: #6b7280; }
+.po-group-price {
+  font-family: var(--mono); font-size: 13px;
+  background: #d1fae5; padding: 4px 12px; border-radius: 6px;
+  border: 1px solid #10b981;
+}
+.po-group-price b { color: #065f46; font-size: 16px; }
+.po-group-empty .po-group-price { display: none; }
 .po-group-stats {
   margin-left: auto;
   display: flex; gap: 14px; font-size: 13px; color: var(--text-dim);
@@ -4145,10 +4152,10 @@ function renderInvoiceList() {
           <span class="toggle-icon">▼</span>
           <div class="po-group-no">📋 ${escapeHtml(poDisplay)}</div>
           <div class="po-group-tag">${invMap.size} invoice</div>
+          ${poValue > 0 ? `<div class="po-group-price">💰 <b>${fmtMoneyExact(poValue)}</b></div>` : ''}
           <div class="po-group-stats">
             <span>📦 <b>${fmtNum(poRolls)}</b> ม้วน</span>
             <span>⚖️ <b>${fmtKgFull(poKg)}</b> kg</span>
-            <span style="color:#059669;">💰 <b>${fmtMoneyExact(poValue)}</b></span>
           </div>
         </div>
         <div class="po-group-children">
