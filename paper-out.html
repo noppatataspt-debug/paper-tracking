@@ -342,6 +342,13 @@ body {
   opacity: 0.85;
   font-weight: 500;
 }
+.group-day-header .day-inline-stats {
+  font-size: 13px;
+  opacity: 0.85;
+  font-weight: 500;
+  margin-left: 8px;
+  font-family: var(--mono, monospace);
+}
 .group-day-header .toggle-icon {
   display: inline-block;
   width: 20px; text-align: center;
@@ -376,6 +383,13 @@ body {
   font-size: 12px;
   color: var(--text-dim);
   font-weight: 500;
+}
+.group-machine-header .m-inline-stats {
+  font-size: 12px;
+  color: var(--text-dim);
+  font-weight: 500;
+  margin-left: 6px;
+  font-family: var(--mono, monospace);
 }
 .group-machine-header .toggle-icon {
   display: inline-block;
@@ -1731,8 +1745,7 @@ function renderList() {
     return `
       <div class="group-day" data-day="${escapeHtml(date)}">
         <div class="group-day-header" data-toggle="day">
-          <span><span class="toggle-icon">▼</span>📅 ${fmtDateLong(date)}</span>
-          <span class="day-stats">${totalRolls} ม้วน · ${totalKg} kg</span>
+          <span><span class="toggle-icon">▼</span>📅 ${fmtDateLong(date)} <span class="day-inline-stats">· ${totalRolls.toLocaleString()} ม้วน · ${totalKg.toLocaleString()} kg</span></span>
         </div>
         ${sortedMachines.map(m => {
           // เรียง records ภายในเครื่องตาม created_at (ใหม่ → เก่า) เพื่อความ stable
@@ -1748,8 +1761,7 @@ function renderList() {
           return `
             <div class="group-machine" data-machine="${escapeHtml(date)}::${escapeHtml(m)}">
               <div class="group-machine-header" data-toggle="machine">
-                <span><span class="toggle-icon">▼</span>${mLabel}</span>
-                <span class="m-stats">${mRolls} ม้วน · ${mKg} kg</span>
+                <span><span class="toggle-icon">▼</span>${mLabel} <span class="m-inline-stats">· ${mRolls.toLocaleString()} ม้วน · ${mKg.toLocaleString()} kg</span></span>
               </div>
               ${rows.map(o => `
                 <div class="outflow-row ${o.voided ? 'voided' : ''} ${o.outflow_reason === 'pre_stock' ? 'prestock' : ''}">
