@@ -1871,6 +1871,39 @@ body {
   </div>
 </div>
 
+<!-- Alert PO modal (บันทึกการสั่งซื้อ) -->
+<div id="alert-po-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:10000; align-items:center; justify-content:center; padding:16px;">
+  <div style="background:white; border-radius:14px; max-width:480px; width:100%; box-shadow:0 10px 40px rgba(0,0,0,0.3); padding:24px;">
+    <div style="font-size:18px; font-weight:700; margin-bottom:6px;" id="alert-po-title">🛒 บันทึกการสั่งซื้อ</div>
+    <div style="font-size:13px; color:var(--text-dim); margin-bottom:14px;" id="alert-po-subtitle">—</div>
+
+    <div style="margin-bottom:12px;">
+      <label style="display:block; font-size:13px; font-weight:600; margin-bottom:4px;">PO Number</label>
+      <input type="text" id="alert-po-number" placeholder="เช่น PO-2026-0123" style="width:100%; padding:9px 12px; border:1.5px solid var(--border); border-radius:7px; font-size:14px; font-family:var(--mono);">
+    </div>
+
+    <div style="margin-bottom:12px;">
+      <label style="display:block; font-size:13px; font-weight:600; margin-bottom:4px;">จำนวนที่สั่ง (ตัน)</label>
+      <input type="number" id="alert-po-tons" step="0.001" min="0" placeholder="เช่น 25.5" style="width:100%; padding:9px 12px; border:1.5px solid var(--border); border-radius:7px; font-size:14px;">
+    </div>
+
+    <div style="margin-bottom:14px;">
+      <label style="display:block; font-size:13px; font-weight:600; margin-bottom:4px;">Plan วันที่ส่งมอบ</label>
+      <input type="date" id="alert-po-plan" style="width:100%; padding:9px 12px; border:1.5px solid var(--border); border-radius:7px; font-size:14px;">
+    </div>
+
+    <div id="alert-po-error" style="display:none; padding:8px 12px; background:#fee; border:1px solid #fcc; color:#c00; border-radius:6px; font-size:13px; margin-bottom:10px;"></div>
+
+    <div style="display:flex; gap:8px; justify-content:space-between; margin-top:8px;">
+      <button id="alert-po-delete" class="btn" style="background:#fee; color:#c00; border-color:#fcc; display:none;">🗑️ ลบ</button>
+      <div style="flex:1;"></div>
+      <button id="alert-po-cancel" class="btn">ยกเลิก</button>
+      <button id="alert-po-save" class="btn" style="background:var(--accent); color:white; border-color:var(--accent); font-weight:600;">💾 บันทึก</button>
+    </div>
+  </div>
+</div>
+
+<!-- Alert detail modal -->
 <div id="alert-detail-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:9999; align-items:center; justify-content:center; padding:16px;">
   <div style="background:white; border-radius:14px; max-width:780px; width:100%; max-height:90vh; overflow-y:auto; box-shadow:0 10px 40px rgba(0,0,0,0.3);">
     <div style="display:flex; justify-content:space-between; align-items:flex-start; padding:18px 22px; border-bottom:1px solid var(--border); position:sticky; top:0; background:white; z-index:1;">
@@ -1909,6 +1942,45 @@ body {
 .alert-sev-btn { font-weight:600; }
 .alert-sev-btn.active { background:var(--accent); color:white; border-color:var(--accent); }
 .alert-section-card { background:white; border:1px solid var(--border); border-radius:12px; margin-bottom:14px; overflow:hidden; }
+
+/* Alert row — ordered (green) */
+.alert-table tr.alert-row-ordered td {
+  background: #ecfdf5 !important;
+}
+.alert-table tr.alert-row-ordered:hover td {
+  background: #d1fae5 !important;
+}
+
+.ordered-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 10px;
+  background: #d1fae5;
+  border: 1px solid #10b981;
+  color: #065f46;
+  border-radius: 999px;
+  font-size: 11px; font-weight: 600;
+  font-family: var(--mono);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.ordered-badge:hover { background: #a7f3d0; }
+
+.btn-mark-ordered {
+  padding: 4px 12px;
+  background: white;
+  border: 1.5px solid #94a3b8;
+  color: #475569;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-mark-ordered:hover {
+  background: #2563eb;
+  color: white;
+  border-color: #2563eb;
+}
 .alert-section-header { padding:13px 18px; font-size:15px; font-weight:700; display:flex; align-items:center; gap:10px; }
 .alert-section-header .right-text { margin-left:auto; font-size:13px; font-weight:600; opacity:0.85; }
 .alert-section-header.sev-stockout { background:#1f2937; color:#f1f5f9; }
@@ -5545,6 +5617,7 @@ const alertsState = {
   data: null,
   filterSeverity: 'all',
   filterSupplier: 'all',
+  purchaseOrders: [],   // {id, paper_type, supplier, po_number, ordered_tons, plan_arrival_date, ...}
 };
 const ALERTS_CACHE_MS = 5 * 60 * 1000;
 
@@ -5570,15 +5643,25 @@ async function fetchAndRenderAlerts() {
   }
 
   try {
-    const { data, error } = await supabase.rpc('qa_check_reorder_alerts', {
-      p_token: currentUser.session_token,
-      p_frequency_filter: null
-    });
-    if (error) throw error;
+    const [alertsRes, posRes] = await Promise.all([
+      supabase.rpc('qa_check_reorder_alerts', {
+        p_token: currentUser.session_token,
+        p_frequency_filter: null
+      }),
+      supabase.rpc('list_alert_pos')
+    ]);
+    if (alertsRes.error) throw alertsRes.error;
+    const data = alertsRes.data;
     if (!data || !data.success) throw new Error(data?.error || 'RPC ส่ง response ผิดรูปแบบ');
 
     alertsState.data = data;
+    alertsState.purchaseOrders = posRes.error ? [] : (posRes.data || []);
     alertsState.loadedAt = Date.now();
+
+    // Auto-cleanup: ถ้า PO ที่บันทึกแล้ว ไม่มีใน alerts list อีก (stock พ้น threshold)
+    // → mark fulfilled อัตโนมัติ
+    await autoFulfillAlertPos(data.alerts || []);
+
     populateSupplierFilter();
     renderAlerts();
   } catch (e) {
@@ -5662,6 +5745,26 @@ function renderAlerts() {
   $$('.alert-detail-btn').forEach(btn => {
     btn.addEventListener('click', () => openAlertDetail(parseInt(btn.dataset.idx, 10)));
   });
+
+  // Mark-ordered button
+  $$('.btn-mark-ordered').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const idx = parseInt(btn.dataset.alertIdx, 10);
+      openAlertPoModal(idx);
+    });
+  });
+
+  // Ordered badge — click to edit/delete existing PO
+  $$('.ordered-badge').forEach(badge => {
+    badge.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const tr = badge.closest('tr');
+      if (!tr) return;
+      const idx = parseInt(tr.dataset.alertIdx, 10);
+      openAlertPoModal(idx);
+    });
+  });
 }
 
 function renderAlertSection(severity, rows) {
@@ -5672,6 +5775,7 @@ function renderAlertSection(severity, rows) {
     warning:  { icon: '🟡', title: 'Warning',  right: 'ใกล้ถึง threshold' },
   };
   const lbl = labels[severity];
+  const canOrder = isManager();   // manager + manager2 (role=manager) only
 
   const allAlerts = alertsState.data.alerts;
   const trBody = rows.map(a => {
@@ -5684,13 +5788,25 @@ function renderAlertSection(severity, rows) {
     const useTons = (a.avg_daily_usage_tons ?? 0).toFixed(3);
     const days = a.days_remaining === null || a.days_remaining === undefined ? '—' : `${a.days_remaining} วัน`;
 
+    // Match alert with existing PO
+    const po = findAlertPo(a);
+    const rowClass = po ? 'alert-row-ordered' : '';
+    const orderBadge = po
+      ? `<span class="ordered-badge" title="${escapeHtml('คลิกเพื่อแก้ไข/ลบ')}">
+           📦 ${escapeHtml(po.po_number)} · ${Number(po.ordered_tons).toFixed(1)}t · ส่ง ${formatDateTH(po.plan_arrival_date)}
+         </span>`
+      : (canOrder
+        ? `<button class="btn-mark-ordered" data-alert-idx="${idx}" title="บันทึกการสั่งซื้อ">🛒 บันทึกการสั่งซื้อ</button>`
+        : '');
+
     return `
-      <tr>
+      <tr class="${rowClass}" data-alert-idx="${idx}">
         <td class="paper-name">${escapeHtml(a.paper_type || '—')}</td>
         <td>${supplierLabel}</td>
         <td class="right">${stockTons} t</td>
         <td class="right">${useTons} t</td>
         <td class="right"><span class="alert-days sev-${severity}">${days}</span></td>
+        <td>${orderBadge}</td>
         <td class="right"><button class="alert-detail-btn" data-idx="${idx}">รายละเอียด</button></td>
       </tr>
     `;
@@ -5711,6 +5827,7 @@ function renderAlertSection(severity, rows) {
             <th class="right">Stock</th>
             <th class="right">ใช้/วัน</th>
             <th class="right">จะใช้หมดใน</th>
+            <th>การสั่งซื้อ</th>
             <th class="right"></th>
           </tr>
         </thead>
@@ -5718,6 +5835,186 @@ function renderAlertSection(severity, rows) {
       </table>
     </div>
   `;
+}
+
+// === Alert PO helpers ===
+function findAlertPo(alert) {
+  const pt = alert.paper_type;
+  const sup = alert.supplier || null;
+  // exact match: paper_type + supplier (or both null)
+  return alertsState.purchaseOrders.find(po =>
+    po.paper_type === pt &&
+    (po.supplier || null) === sup
+  ) || null;
+}
+
+async function autoFulfillAlertPos(currentAlerts) {
+  // ถ้า PO ที่บันทึกแล้ว ไม่มี matching alert อีก (= stock พ้น threshold) → mark fulfilled
+  if (!currentUser?.session_token || !alertsState.purchaseOrders.length) return;
+
+  const stillAlerted = new Set(
+    currentAlerts.map(a => `${a.paper_type}|${a.supplier || ''}`)
+  );
+
+  const toFulfill = alertsState.purchaseOrders.filter(po => {
+    const key = `${po.paper_type}|${po.supplier || ''}`;
+    return !stillAlerted.has(key);
+  });
+
+  if (!toFulfill.length) return;
+
+  // Delete (auto-cleared)
+  for (const po of toFulfill) {
+    try {
+      await supabase.rpc('admin_delete_alert_po', {
+        p_session_token: currentUser.session_token,
+        p_id: po.id
+      });
+    } catch (e) {
+      console.warn('Auto-cleanup PO failed:', e);
+    }
+  }
+
+  // Remove from local state
+  const fulfilledIds = new Set(toFulfill.map(p => p.id));
+  alertsState.purchaseOrders = alertsState.purchaseOrders.filter(p => !fulfilledIds.has(p.id));
+}
+
+// === Alert PO Modal ===
+let _alertPoEditing = null;   // { alert, existingPo }
+
+function openAlertPoModal(alertIdx) {
+  if (!isManager()) return;
+  const alert = alertsState.data?.alerts?.[alertIdx];
+  if (!alert) return;
+  const existingPo = findAlertPo(alert);
+
+  _alertPoEditing = { alert, existingPo };
+
+  $('#alert-po-title').textContent = existingPo ? '✏️ แก้ไขรายการสั่งซื้อ' : '🛒 บันทึกการสั่งซื้อ';
+  $('#alert-po-subtitle').innerHTML = `${escapeHtml(alert.paper_type)} <span style="color:var(--text-dim);">·</span> ${escapeHtml(alert.supplier || 'หลาย suppliers')}`;
+
+  if (existingPo) {
+    $('#alert-po-number').value = existingPo.po_number;
+    $('#alert-po-tons').value = existingPo.ordered_tons;
+    $('#alert-po-plan').value = existingPo.plan_arrival_date;
+    $('#alert-po-delete').style.display = 'inline-block';
+  } else {
+    $('#alert-po-number').value = '';
+    $('#alert-po-tons').value = '';
+    // Default plan date = today + 14 days (rough estimate of lead time)
+    const def = new Date(Date.now() + 14 * 86400 * 1000);
+    $('#alert-po-plan').value = def.toISOString().slice(0, 10);
+    $('#alert-po-delete').style.display = 'none';
+  }
+
+  $('#alert-po-error').style.display = 'none';
+  $('#alert-po-modal').style.display = 'flex';
+  setTimeout(() => $('#alert-po-number').focus(), 50);
+}
+
+function closeAlertPoModal() {
+  $('#alert-po-modal').style.display = 'none';
+  _alertPoEditing = null;
+}
+
+async function saveAlertPo() {
+  if (!_alertPoEditing) return;
+  const { alert, existingPo } = _alertPoEditing;
+  const errorDiv = $('#alert-po-error');
+  const saveBtn = $('#alert-po-save');
+
+  const poNumber = $('#alert-po-number').value.trim();
+  const tons = parseFloat($('#alert-po-tons').value);
+  const planDate = $('#alert-po-plan').value;
+
+  errorDiv.style.display = 'none';
+
+  if (!poNumber) {
+    errorDiv.textContent = 'กรุณากรอก PO Number';
+    errorDiv.style.display = 'block';
+    return;
+  }
+  if (!tons || tons <= 0) {
+    errorDiv.textContent = 'จำนวนต้องมากกว่า 0';
+    errorDiv.style.display = 'block';
+    return;
+  }
+  if (!planDate) {
+    errorDiv.textContent = 'กรุณาเลือกวันที่ส่งมอบ';
+    errorDiv.style.display = 'block';
+    return;
+  }
+
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'กำลังบันทึก...';
+
+  try {
+    if (existingPo) {
+      const { data, error } = await supabase.rpc('admin_update_alert_po', {
+        p_session_token: currentUser.session_token,
+        p_id: existingPo.id,
+        p_po_number: poNumber,
+        p_ordered_tons: tons,
+        p_plan_arrival_date: planDate
+      });
+      if (error) throw error;
+      if (!data?.[0]?.success) throw new Error(data?.[0]?.message || 'Update failed');
+      // Update local state
+      Object.assign(existingPo, { po_number: poNumber, ordered_tons: tons, plan_arrival_date: planDate });
+    } else {
+      const { data, error } = await supabase.rpc('admin_create_alert_po', {
+        p_session_token: currentUser.session_token,
+        p_paper_type: alert.paper_type,
+        p_supplier: alert.supplier || null,
+        p_po_number: poNumber,
+        p_ordered_tons: tons,
+        p_plan_arrival_date: planDate
+      });
+      if (error) throw error;
+      if (!data?.[0]?.success) throw new Error(data?.[0]?.message || 'Create failed');
+      // Add to local state
+      alertsState.purchaseOrders.push({
+        id: data[0].po_id,
+        paper_type: alert.paper_type,
+        supplier: alert.supplier || null,
+        po_number: poNumber,
+        ordered_tons: tons,
+        plan_arrival_date: planDate,
+        created_by: currentUser.username,
+        created_at: new Date().toISOString()
+      });
+    }
+    closeAlertPoModal();
+    renderAlerts();
+  } catch (e) {
+    errorDiv.textContent = '❌ ' + (e.message || e);
+    errorDiv.style.display = 'block';
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = '💾 บันทึก';
+  }
+}
+
+async function deleteAlertPo() {
+  if (!_alertPoEditing?.existingPo) return;
+  if (!confirm('ลบรายการสั่งซื้อนี้?')) return;
+
+  const po = _alertPoEditing.existingPo;
+  try {
+    const { data, error } = await supabase.rpc('admin_delete_alert_po', {
+      p_session_token: currentUser.session_token,
+      p_id: po.id
+    });
+    if (error) throw error;
+    if (!data?.[0]?.success) throw new Error(data?.[0]?.message || 'Delete failed');
+    alertsState.purchaseOrders = alertsState.purchaseOrders.filter(p => p.id !== po.id);
+    closeAlertPoModal();
+    renderAlerts();
+  } catch (e) {
+    $('#alert-po-error').textContent = '❌ ' + (e.message || e);
+    $('#alert-po-error').style.display = 'block';
+  }
 }
 
 // Track Chart.js instances per modal open so we can destroy them on close
@@ -6188,6 +6485,14 @@ $('#alert-detail-modal').addEventListener('click', e => {
   if (e.target.id === 'alert-detail-modal') closeAlertDetail();
 });
 
+// Alert PO modal
+$('#alert-po-cancel').addEventListener('click', closeAlertPoModal);
+$('#alert-po-save').addEventListener('click', saveAlertPo);
+$('#alert-po-delete').addEventListener('click', deleteAlertPo);
+$('#alert-po-modal').addEventListener('click', e => {
+  if (e.target.id === 'alert-po-modal') closeAlertPoModal();
+});
+
 $('#stock-modal-close').addEventListener('click', closeStockDetailModal);
 $('#stock-modal-csv').addEventListener('click', exportStockDetailCSV);
 $('#stock-modal-print').addEventListener('click', printStockDetail);
@@ -6197,6 +6502,7 @@ $('#stock-detail-modal').addEventListener('click', e => {
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     if ($('#stock-detail-modal').style.display === 'flex') closeStockDetailModal();
+    else if ($('#alert-po-modal').style.display === 'flex') closeAlertPoModal();
     else if ($('#alert-detail-modal').style.display === 'flex') closeAlertDetail();
   }
 });
