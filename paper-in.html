@@ -1203,10 +1203,10 @@ tr:hover td { background: var(--panel-2); }
         <span class="supp-badge supp-ok">MPK ✓</span>
         <span class="supp-badge supp-ok">United ✓</span>
         <span class="supp-badge supp-ok">Muda ✓</span>
+        <span class="supp-badge supp-ok">NTPM ✓</span>
         <span class="supp-badge supp-pending">AP</span>
         <span class="supp-badge supp-pending">TPC</span>
         <span class="supp-badge supp-pending">Ching Mei</span>
-        <span class="supp-badge supp-pending">NTPM</span>
         <span class="supp-badge supp-pending">SNP</span>
       </div>
 
@@ -1974,6 +1974,121 @@ function parseNTPM_PDF_text(text) {
   };
 }
 
+// ============================================================
+// NTPM COA (Certificate of Analysis) PDF Parser
+// ============================================================
+// Format (file: COA-SON003240 CBS-450G1010 (SL).pdf):
+//   Stock Out No : STN003240
+//   Invoice No : EAC000131
+//   Date : 16/05/2026
+//   Item Code : JR-CBS-450G1010
+//   Size : 1010MM
+//   B) SPECIFICATION & CONTROL
+//     <No> <Serial>                                          (รายม้วน, อาจแถวเดียวหรือหลายแถว)
+//     <GSM_min – GSM_max> <Thick_min – Thick_max> <Moist_min – Moist_max> <Plybond_min - Plybond_max>
+//
+// หมายเหตุ: 1 invoice อาจมีหลาย group (range คนละค่า) — เฉลี่ยทั้ง invoice
+// คืน schema เดียวกับ Muda invoice_coa เพื่อใช้ render/save logic ร่วมกัน
+// ============================================================
+function parseNTPM_COA_PDF_text(text) {
+  if (!text || text.length < 100) throw new Error('PDF ว่าง หรือ extract text ไม่สำเร็จ');
+
+  if (!/CERTIFICATE\s+OF\s+ANALYSIS/i.test(text)) {
+    throw new Error('ไฟล์นี้ไม่ใช่ NTPM COA (ไม่พบ "Certificate of Analysis")');
+  }
+  if (!/NIBONG\s+TEBAL|NTPM|JR-[A-Z]+-\d+G\d+/i.test(text)) {
+    throw new Error('ไฟล์นี้ไม่ใช่ NTPM COA (ไม่พบ marker NTPM)');
+  }
+
+  // === Metadata ===
+  const mInv = text.match(/Invoice\s*No\.?\s*:?\s*([A-Z0-9-]+)/i);
+  if (!mInv) throw new Error('หา Invoice No. ไม่เจอใน COA');
+  const invoice_no = mInv[1].trim();
+
+  // Date — NTPM ใช้ format DD/MM/YYYY → แปลงเป็น YYYY-MM-DD
+  const mDate = text.match(/Date\s*:?\s*(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  let delivery_date = null;
+  if (mDate) {
+    const dd = mDate[1].padStart(2, '0');
+    const mm = mDate[2].padStart(2, '0');
+    delivery_date = `${mDate[3]}-${mm}-${dd}`;
+  }
+
+  // Substance spec (gsm) — จาก Item Code: JR-<TYPE>-<GSM>G<WIDTH>
+  let substance_spec_gsm = null;
+  let item_code = null;
+  const mItem = text.match(/JR-([A-Z]+)-(\d+)G(\d+)/i);
+  if (mItem) {
+    item_code = mItem[0].toUpperCase();
+    substance_spec_gsm = parseInt(mItem[2], 10);
+  }
+
+  // === Extract ranges (อาจมีหลาย group) ===
+  // Pattern: "<min> – <max>" หรือ "<min> - <max>" (en-dash, em-dash, hyphen)
+  // NTPM ใช้ en-dash (\u2013) แต่ Ply Bond บางที่เป็น hyphen
+  // หา line ที่เป็น 4 ranges ติดกัน: GSM Thickness Moisture PlyBond
+  const dash = '[\\s]*[\\u2013\\u2014\\-][\\s]*';   // any dash with optional spaces
+  const num = '(\\d+(?:\\.\\d+)?)';
+  const rangeRe = new RegExp(
+    `${num}${dash}${num}\\s+${num}${dash}${num}\\s+${num}${dash}${num}\\s+${num}${dash}${num}`,
+    'g'
+  );
+
+  const groups = [];
+  let m;
+  while ((m = rangeRe.exec(text)) !== null) {
+    groups.push({
+      substance:  [parseFloat(m[1]), parseFloat(m[2])],  // GSM
+      thickness:  [parseFloat(m[3]), parseFloat(m[4])],  // μm (จะแปลงเป็น mm ตอน return)
+      moisture:   [parseFloat(m[5]), parseFloat(m[6])],  // %
+      bonding:    [parseFloat(m[7]), parseFloat(m[8])],  // J/m² (Ply Bond)
+    });
+  }
+
+  if (groups.length === 0) {
+    throw new Error('หา ranges (GSM/Thickness/Moisture/PlyBond) ไม่เจอใน COA');
+  }
+
+  // === Average across groups (1 ค่าต่อ invoice เหมือน Muda) ===
+  const round2 = (v) => Math.round(v * 100) / 100;
+  const avgRange = (key) => {
+    const mins = groups.map(g => g[key][0]).filter(v => Number.isFinite(v));
+    const maxs = groups.map(g => g[key][1]).filter(v => Number.isFinite(v));
+    if (!mins.length || !maxs.length) return null;
+    const minAvg = mins.reduce((a, b) => a + b, 0) / mins.length;
+    const maxAvg = maxs.reduce((a, b) => a + b, 0) / maxs.length;
+    return [round2(minAvg), round2(maxAvg)];
+  };
+
+  const substance = avgRange('substance');
+  const thicknessUm = avgRange('thickness');
+  const moisture = avgRange('moisture');
+  const bonding = avgRange('bonding');
+
+  // Convert thickness: μm → mm (ให้ตรงกับ Muda — เพราะ save logic คูณ ×1000 เพื่อแปลงกลับเป็น μm)
+  const thickness = thicknessUm
+    ? [round2(thicknessUm[0] / 1000 * 1000) / 1000, round2(thicknessUm[1] / 1000 * 1000) / 1000]
+    : null;
+
+  // Return schema ตรงกับ Muda invoice_coa (test_results: {substance, thickness, moisture, bursting, bonding, cobb})
+  return {
+    supplier: 'NTPM_COA',
+    invoice_no,
+    delivery_date,
+    picking_list: item_code,           // ใช้ ITEM CODE เป็น picking_list
+    substance_spec_gsm,
+    test_results: {
+      substance,                       // gsm  (avg of group ranges)
+      thickness,                       // mm   (converted from μm)
+      moisture,                        // %
+      bursting: null,                  // NTPM COA ไม่มี
+      bonding,                         // J/m² (Ply Bond)
+      cobb: null,                      // NTPM COA ไม่มี
+    },
+    groups_count: groups.length,       // เก็บไว้ใน raw_data
+  };
+}
+
 function parseSCG_TXT(text) {
   const lines = text.split(/\r?\n/).filter(l => l.trim().length >= 100);
   if (!lines.length) throw new Error('ไม่พบข้อมูลใน SCG TXT');
@@ -2689,6 +2804,11 @@ async function handleFiles(fileList) {
   const mudaXlsByInv = {};  // normalized invoice_no → parsed result
   const mudaPdfByInv = {};  // normalized invoice_no → coa parsed
   
+  // Group NTPM Loading Note (PDF) with matching COA (PDF)
+  // ใช้ invoice_no ตรงๆ (เช่น "EAC000131") ไม่ผ่าน normalize เพราะมีตัวอักษร
+  const ntpmLnByInv = {};   // invoice_no → loading note parsed (full result)
+  const ntpmCoaByInv = {};  // invoice_no → coa parsed (full result)
+  
   for (const file of files) {
     try {
       const supplier = detectSupplier(file.name, '');
@@ -2746,7 +2866,27 @@ async function handleFiles(fileList) {
         continue;
       }
       
-      // ไม่ใช่ SCG/Muda → เพิ่มเข้า list ปกติ
+      // NTPM Loading Note (PDF) — เก็บไว้ merge กับ COA (ถ้ามี)
+      if (supplier === 'NTPM_PDF') {
+        result.filename = file.name;
+        const invKey = String(result.data.invoice_no || '').trim().toUpperCase();
+        if (invKey) ntpmLnByInv[invKey] = result;
+        else {
+          // กรณีไม่มี invoice_no ก็ push ตามปกติ
+          state.parsedInvoices.push(result);
+          addInvoiceCard(result);
+        }
+        continue;
+      }
+      
+      // NTPM COA (PDF) — เก็บไว้ merge กับ Loading Note
+      if (supplier === 'NTPM_COA_PDF') {
+        const invKey = String(result.coa_parsed.invoice_no || '').trim().toUpperCase();
+        if (invKey) ntpmCoaByInv[invKey] = result;
+        continue;
+      }
+      
+      // ไม่ใช่ SCG/Muda/NTPM → เพิ่มเข้า list ปกติ
       result.filename = file.name;
       state.parsedInvoices.push(result);
       addInvoiceCard(result);
@@ -2817,6 +2957,37 @@ async function handleFiles(fileList) {
         filename: pdf.filename,
         supplier: 'Muda COA',
         warning: `COA Invoice ${pdf.coa_parsed.invoice_no} ไม่พบไฟล์ Packing (.xls) คู่กัน — กรุณา upload ไฟล์ .xls ด้วย`,
+        status: 'warn',
+      });
+    }
+  }
+  
+  // Merge NTPM Loading Note + COA
+  for (const invKey of Object.keys(ntpmLnByInv)) {
+    const ln = ntpmLnByInv[invKey];
+    const coa = ntpmCoaByInv[invKey];
+    if (coa) {
+      // แนบ COA ที่ระดับ invoice (ทุกม้วนใช้ค่าเดียวกัน — ตามที่ตกลง)
+      ln.invoice_coa = coa.coa_parsed;
+      ln.hasCoa = true;
+      ln.coa_source = 'pdf_local';     // mark ว่า parse local ไม่ใช่ AI — ไม่ต้องโชว์ "ตรวจสอบก่อน save"
+    }
+    state.parsedInvoices.push(ln);
+    addInvoiceCard(ln);
+    if (coa) {
+      playSuccessSound();
+      showToast(`✅ NTPM Invoice ${ln.data.invoice_no}: matched กับ COA แล้ว`, 'success');
+    }
+  }
+  
+  // NTPM COA อย่างเดียว (ไม่มี Loading Note matching) → เตือน
+  for (const invKey of Object.keys(ntpmCoaByInv)) {
+    if (!ntpmLnByInv[invKey]) {
+      const coa = ntpmCoaByInv[invKey];
+      addInvoiceCard({
+        filename: coa.filename,
+        supplier: 'NTPM COA',
+        warning: `COA Invoice ${coa.coa_parsed.invoice_no} ไม่พบ Loading Note (PDF) คู่กัน — กรุณา upload Loading Note ด้วย`,
         status: 'warn',
       });
     }
@@ -2899,11 +3070,15 @@ async function parseFile(file, supplier) {
   }
 
   if (supplier === 'NTPM_COA_PDF') {
-    // NTPM COA PDF — สำหรับ QA, ไม่ใช้บันทึก paper-in
-    return { 
-      supplier: 'NTPM',
-      status: 'skip',
-      skipReason: 'ไฟล์นี้เป็น COA (เอกสารคุณภาพ) — กรุณาใช้หน้า QA แทน หน้านี้รับเฉพาะ Loading Note',
+    // NTPM COA PDF — parse local ด้วย regex (ไม่ต้องใช้ Claude API)
+    const text = await extractPdfText(file);
+    const coa_parsed = parseNTPM_COA_PDF_text(text);
+    return {
+      supplier: 'NTPM_COA',
+      filename: file.name,
+      coa_parsed,                       // schema เดียวกับ Muda invoice_coa
+      coa_source: 'pdf_local',          // mark ว่ามาจาก local parsing (ไม่ใช่ AI)
+      status: 'ok',
     };
   }
 
@@ -2992,7 +3167,7 @@ function addInvoiceCard(result) {
     coaBadge = ' <span class="coa-ok-badge">📋 COA</span>';
   }
   
-  // COA values display (เฉพาะถ้ามี invoice_coa จาก AI)
+  // COA values display (เฉพาะถ้ามี invoice_coa จาก AI/local)
   let coaValuesHtml = '';
   if (result.invoice_coa) {
     const coa = result.invoice_coa;
@@ -3002,9 +3177,13 @@ function addInvoiceCard(result) {
       if (range[0] === range[1]) return `${range[0]} ${unit}`;
       return `${range[0]} ~ ${range[1]} ${unit}`;
     };
+    // Title ต่างกันตาม source: AI ต้องตรวจสอบ, local อ่านแม่นจาก regex
+    const coaTitle = result.coa_source === 'pdf_ai'
+      ? '📋 COA (อ่านจาก PDF — AI) — <span style="color:var(--warning); font-weight:700;">⚠️ กรุณาตรวจสอบ</span>'
+      : '📋 COA (อ่านจาก PDF)';
     coaValuesHtml = `
       <div class="coa-values-block">
-        <div class="coa-values-title">📋 COA (อ่านจาก PDF) — <span style="color:var(--warning); font-weight:700;">⚠️ กรุณาตรวจสอบ</span></div>
+        <div class="coa-values-title">${coaTitle}</div>
         <div class="coa-values-grid">
           <div><span class="lbl">Picking List:</span> <span class="val">${escapeHtml(coa.picking_list || '—')}</span></div>
           <div><span class="lbl">Delivery Date:</span> <span class="val">${escapeHtml(coa.delivery_date || '—')}</span></div>
@@ -3201,6 +3380,8 @@ async function saveInvoice(idx, receiveDate, sourceFile) {
         
         d.rolls.forEach(r => {
           if (!invoiceIdByLot[r.paper_lot_normalized]) return;
+          // Differentiate AI (Muda) vs local regex (NTPM) for traceability
+          const isLocal = result.coa_source === 'pdf_local';
           qaRecords.push({
             scope: 'roll',
             paper_invoice_id: invoiceIdByLot[r.paper_lot_normalized],
@@ -3209,7 +3390,7 @@ async function saveInvoice(idx, receiveDate, sourceFile) {
             paper_type: r.paper_type,
             production_date: coa.delivery_date || null,
             width_cm: r.width_mm ? r.width_mm / 10 : null,
-            source: 'paper_in_pdf_ai',
+            source: isLocal ? 'paper_in_pdf_local' : 'paper_in_pdf_ai',
             basis_weight: basisWeight,
             caliper: caliper,
             moisture: moisture,
@@ -3218,12 +3399,13 @@ async function saveInvoice(idx, receiveDate, sourceFile) {
             cobb_top: cobbVal,
             cobb_bottom: cobbVal,
             raw_data: {
-              coa_origin: 'pdf_claude_api',
+              coa_origin: isLocal ? 'pdf_regex_local' : 'pdf_claude_api',
               picking_list: coa.picking_list,
               substance_spec: coa.substance_spec_gsm,
               ranges: tr,
               units_input: { burst: 'kg/cm²', thickness: 'mm' },
-              ai_usage: result.coa_usage,
+              ai_usage: isLocal ? null : result.coa_usage,
+              groups_count: coa.groups_count || null,   // NTPM: จำนวน group ที่เฉลี่ย
             },
           });
         });
