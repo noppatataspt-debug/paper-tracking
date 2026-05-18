@@ -2417,8 +2417,10 @@ function detectSupplier(filename, content) {
   // Muda COA — XLSX (legacy, ถ้ามีในอนาคต)
   if (nNorm.includes('asia_tube') && nNorm.includes('coa')) return 'Muda_COA';
 
-  // NTPM Loading Note PDF — ชื่อไฟล์มักเป็น LOADING_NOTE.pdf (generic ERP filename)
-  if (n.endsWith('.pdf') && (n.includes('loading_note') || n.includes('loading-note'))) {
+  // NTPM Loading Note PDF — ชื่อไฟล์มักเป็น LOADING NOTE.pdf / LOADING_NOTE.pdf / loading-note.pdf
+  // normalize space/underscore/hyphen ให้เป็น space เดียว แล้วเทียบ
+  const nLN = n.replace(/[\s_\-]+/g, ' ');
+  if (n.endsWith('.pdf') && nLN.includes('loading note')) {
     return 'NTPM_PDF';
   }
   // Explicit NTPM filename
@@ -2702,6 +2704,16 @@ async function handleFiles(fileList) {
         continue;
       }
       
+      // ถ้า parser บอกว่า skip → โชว์ warning (เหลือง) ไม่ใช่ error (แดง)
+      if (result.status === 'skip') {
+        addInvoiceCard({
+          filename: file.name,
+          supplier: result.supplier || 'Unknown',
+          warning: result.skipReason || 'ข้ามไฟล์นี้',
+        });
+        continue;
+      }
+      
       // ถ้าเป็น SCG COA → เก็บไว้ merge ทีหลัง
       if (supplier === 'SCG_COA') {
         // Match โดย invoice_no (จากชื่อไฟล์) — ตัด 0 นำหน้าเหมือน parser
@@ -2888,7 +2900,11 @@ async function parseFile(file, supplier) {
 
   if (supplier === 'NTPM_COA_PDF') {
     // NTPM COA PDF — สำหรับ QA, ไม่ใช้บันทึก paper-in
-    return null;
+    return { 
+      supplier: 'NTPM',
+      status: 'skip',
+      skipReason: 'ไฟล์นี้เป็น COA (เอกสารคุณภาพ) — กรุณาใช้หน้า QA แทน หน้านี้รับเฉพาะ Loading Note',
+    };
   }
 
   if (supplier === 'Muda_COA_PDF') {
