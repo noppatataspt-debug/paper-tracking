@@ -1132,6 +1132,12 @@ tr:hover td { background: var(--panel-2); }
 .group-inv-children tr:hover td { background: white; }
 
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+  if (window.pdfjsLib) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+</script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 </head>
@@ -1837,6 +1843,137 @@ function parseNum(v) {
 // [51:60]  po_no            (Po-690295)
 // (ที่เหลือเป็น metadata เพิ่มเติม)
 // ============================================================
+// ============================================================
+// PDF Text Extractor (using PDF.js)
+// ============================================================
+async function extractPdfText(file) {
+  if (!window.pdfjsLib) throw new Error('PDF.js ยังไม่ได้โหลด');
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
+
+  let allText = '';
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const page = await pdf.getPage(p);
+    const tc = await page.getTextContent();
+    // Group by line (similar y-coordinate)
+    const lines = {};
+    for (const item of tc.items) {
+      if (!item.str || !item.transform) continue;
+      const y = Math.round(item.transform[5]);
+      if (!lines[y]) lines[y] = [];
+      lines[y].push({ x: item.transform[4], str: item.str });
+    }
+    // Sort lines y desc (top to bottom), and items by x asc
+    const ys = Object.keys(lines).map(Number).sort((a, b) => b - a);
+    for (const y of ys) {
+      const sorted = lines[y].sort((a, b) => a.x - b.x);
+      allText += sorted.map(t => t.str).join(' ') + '\n';
+    }
+    allText += '\n';  // page break
+  }
+  return allText;
+}
+
+// ============================================================
+// NTPM Loading Note PDF Parser
+// ============================================================
+// Format:
+//   SO Num. : SON003240
+//   Invoice Num. : EAC000131
+//   PO Num. : PO-690231
+//   Inv. Date : 2026-05-15
+//   ITEM CODE: ( CBS ) JR-CBS-450G1010
+//   Description : J/ROLL CORE BOARD TYPE S 450GSM 1010MM
+//   <SERIAL_NO> <ZONE> <KG> KG
+// ============================================================
+function parseNTPM_PDF_text(text) {
+  if (!text || text.length < 100) throw new Error('PDF ว่าง หรือ extract text ไม่สำเร็จ');
+
+  // Validate it's NTPM
+  if (!/NIBONG\s+TEBAL|NTPM/i.test(text)) {
+    throw new Error('ไฟล์นี้ไม่ใช่ NTPM Loading Note');
+  }
+
+  // === Extract metadata ===
+  const mInv = text.match(/Invoice\s*Num\.?\s*:?\s*([A-Z0-9-]+)/i);
+  const mPo = text.match(/PO\s*Num\.?\s*:?\s*([A-Z0-9-]+)/i);
+  const mDate = text.match(/Inv\.?\s*Date\s*:?\s*(\d{4}-\d{2}-\d{2})/i);
+
+  if (!mInv) throw new Error('หา Invoice Num. ไม่เจอ');
+
+  const invoice_no = mInv[1].trim();
+  const po_no = mPo ? mPo[1].trim() : null;
+  const invoice_date = mDate ? mDate[1].trim() : null;
+
+  // === Extract paper_type + width from ITEM CODE / Description ===
+  // ITEM CODE: ( CBS ) JR-CBS-450G1010
+  // หรือจาก Description: J/ROLL CORE BOARD TYPE S 450GSM 1010MM
+  let paper_type = null, width_mm = null;
+
+  // จาก ITEM CODE → JR-<TYPE>-<GSM>G<WIDTH>
+  const mItem = text.match(/JR-([A-Z]+)-(\d+)G(\d+)/i);
+  if (mItem) {
+    paper_type = `${mItem[1].toUpperCase()}-${mItem[2]}`;
+    width_mm = parseInt(mItem[3], 10);
+  }
+
+  // Fallback จาก Description: "<GSM>GSM <WIDTH>MM"
+  if (!paper_type || !width_mm) {
+    const mDesc = text.match(/(\d+)\s*GSM\s+(\d+)\s*MM/i);
+    if (mDesc) {
+      if (!width_mm) width_mm = parseInt(mDesc[2], 10);
+    }
+  }
+
+  if (!paper_type) throw new Error('แกะ paper_type ไม่ออก จาก ITEM CODE');
+  if (!width_mm) throw new Error('แกะ width_mm ไม่ออก จาก ITEM CODE หรือ Description');
+
+  // === Extract rolls (SERIAL NUMBER + KG) ===
+  // Pattern: "<n>. <serial> <zone> <weight>.<dec> KG"
+  // เช่น "1. U2503/00528 FG-DG 682.00 KG"
+  const rolls = [];
+  const seenLots = new Set();
+
+  // Try multiple patterns to be robust
+  const rollPatterns = [
+    // pattern 1: "<num>. <serial> <zone> <kg> KG"
+    /(\d+)\.\s+([A-Z]\d{4}\/\d{4,5})\s+\S+\s+([\d,]+(?:\.\d+)?)\s*KG/gi,
+    // pattern 2: ไม่มี zone column
+    /(\d+)\.\s+([A-Z]\d{4}\/\d{4,5})\s+([\d,]+(?:\.\d+)?)\s*KG/gi,
+  ];
+
+  for (const pattern of rollPatterns) {
+    const matches = [...text.matchAll(pattern)];
+    for (const m of matches) {
+      const lot = m[2].trim();
+      const weight = parseFloat(m[3].replace(/,/g, ''));
+      if (!weight || weight <= 0) continue;
+      if (seenLots.has(lot)) continue;
+      seenLots.add(lot);
+      rolls.push({
+        paper_lot: lot,
+        paper_lot_normalized: normalizeLot(lot),
+        paper_type,
+        width_mm,
+        weight_kg: weight,
+      });
+    }
+    if (rolls.length > 0) break;  // ใช้ pattern แรกที่เจอ
+  }
+
+  if (rolls.length === 0) {
+    throw new Error('หาม้วน (serial number + KG) ไม่เจอ');
+  }
+
+  return {
+    supplier: 'NTPM',
+    invoice_no,
+    invoice_date,
+    po_no,
+    rolls,
+  };
+}
+
 function parseSCG_TXT(text) {
   const lines = text.split(/\r?\n/).filter(l => l.trim().length >= 100);
   if (!lines.length) throw new Error('ไม่พบข้อมูลใน SCG TXT');
@@ -2279,7 +2416,16 @@ function detectSupplier(filename, content) {
   
   // Muda COA — XLSX (legacy, ถ้ามีในอนาคต)
   if (nNorm.includes('asia_tube') && nNorm.includes('coa')) return 'Muda_COA';
-  
+
+  // NTPM Loading Note PDF — ชื่อไฟล์มักเป็น LOADING_NOTE.pdf (generic ERP filename)
+  if (n.endsWith('.pdf') && (n.includes('loading_note') || n.includes('loading-note'))) {
+    return 'NTPM_PDF';
+  }
+  // Explicit NTPM filename
+  if (n.includes('ntpm') && n.endsWith('.pdf')) return 'NTPM_PDF';
+  // NTPM COA — เก็บไว้แต่ไม่ใช้ตอนนี้
+  if (n.startsWith('coa-son') && n.endsWith('.pdf')) return 'NTPM_COA_PDF';
+
   return null;
 }
 
@@ -2733,7 +2879,18 @@ async function parseFile(file, supplier) {
     const data = parseMuda_XLS(rows, file.name);  // pass filename for paper_type detection
     return { supplier: 'Muda', data, status: 'ok' };
   }
-  
+
+  if (supplier === 'NTPM_PDF') {
+    const text = await extractPdfText(file);
+    const data = parseNTPM_PDF_text(text);
+    return { supplier: 'NTPM', data, status: 'ok' };
+  }
+
+  if (supplier === 'NTPM_COA_PDF') {
+    // NTPM COA PDF — สำหรับ QA, ไม่ใช้บันทึก paper-in
+    return null;
+  }
+
   if (supplier === 'Muda_COA_PDF') {
     // Call Vercel Edge Function → Claude API → parsed COA values
     const base64 = await readAsBase64(file);
