@@ -5792,7 +5792,7 @@ function renderAlertSection(severity, rows) {
       ? `${escapeHtml(a.supplier)} <span class="alert-cat-pill">${escapeHtml(a.paper_category || '—')}</span>`
       : `<span style="color:var(--accent); font-weight:600;">${escapeHtml(supplier)}</span> <span class="alert-cat-pill">${escapeHtml(a.paper_category || '—')}</span>`;
     const stockTons = (a.current_stock_tons ?? 0).toFixed(2);
-    const useTons = (a.avg_daily_usage_tons ?? 0).toFixed(3);
+    const useTons = (a.avg_daily_tons ?? a.avg_daily_usage_tons ?? 0).toFixed(3);
     const days = a.days_remaining === null || a.days_remaining === undefined ? '—' : `${a.days_remaining} วัน`;
 
     // Match alert with existing PO
@@ -6045,8 +6045,10 @@ async function openAlertDetail(idx) {
   const body = $('#alert-modal-body');
 
   const stockTons = (a.current_stock_tons ?? 0).toFixed(2);
-  const useTons = (a.avg_daily_usage_tons ?? 0).toFixed(3);
-  const recommendedTons = ((a.avg_daily_usage_tons ?? 0) * (a.lead_time_days + a.safety_buffer_days * 2)).toFixed(2);
+  const avgDailyTons = a.avg_daily_tons ?? a.avg_daily_usage_tons ?? 0;
+  const useTons = avgDailyTons.toFixed(3);
+  const recommendedTons = (avgDailyTons * (a.lead_time_days + a.safety_buffer_days * 2)).toFixed(2);
+  const usingFallback = a.using_fallback_avg === true;
 
   body.innerHTML = `
     <div style="margin-bottom:18px;">
@@ -6071,7 +6073,9 @@ async function openAlertDetail(idx) {
           <div style="font-size:18px; font-weight:700; font-family:var(--mono);">${stockTons} ตัน</div>
         </div>
         <div style="background:var(--panel-2); padding:12px; border-radius:8px;">
-          <div style="font-size:12px; color:var(--text-dim); margin-bottom:4px;">ใช้เฉลี่ย/วัน</div>
+          <div style="font-size:12px; color:var(--text-dim); margin-bottom:4px;">
+            ใช้เฉลี่ย/วัน${usingFallback ? ' <span style="color:#b45309; font-weight:600;">(ประมาณ 180 วัน)</span>' : ''}
+          </div>
           <div style="font-size:18px; font-weight:700; font-family:var(--mono);">${useTons} ตัน</div>
         </div>
         <div style="background:var(--panel-2); padding:12px; border-radius:8px;">
@@ -6084,7 +6088,9 @@ async function openAlertDetail(idx) {
         </div>
       </div>
       <div style="font-size:12px; color:var(--text-dim); margin-top:8px;">
-        คำนวณจากค่าใช้เฉลี่ยใน ${a.lookback_days} วันย้อนหลัง · แจ้งเมื่อ stock ≤ ${a.threshold_days} วัน
+        ${usingFallback
+          ? `⚠️ ไม่มีข้อมูลการใช้ใน ${a.lookback_days} วันล่าสุด — ใช้ค่าเฉลี่ย 180 วันแทน · แจ้งเมื่อ stock ≤ ${a.lead_time_days} วัน`
+          : `คำนวณจากค่าใช้เฉลี่ยใน ${a.lookback_days} วันย้อนหลัง · แจ้งเมื่อ stock ≤ ${a.threshold_days} วัน`}
       </div>
     </div>
 
