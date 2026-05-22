@@ -2529,12 +2529,17 @@ async function loadDetailPivot() {
     let allInvoices, allOutflows;
     try {
       // ดึงทุก records ที่ receive_date <= monthEnd
+      // ถ้าดูเดือนปัจจุบัน → cap ที่ TODAY ด้วย เพื่อไม่นับ invoice ล่วงหน้า
+      const today = new Date().toISOString().slice(0, 10);
+      const isCurrentMonth = currentMonth === today.slice(0, 7);
+      const receiveCap = (isCurrentMonth && today < monthEnd) ? today : monthEnd;
+
       // หรือ (SCG + invoice_date <= monthEnd) — เผื่อ SCG บิลในเดือนนี้แต่ยังไม่รับเข้า
       const [main, scgExtra] = await Promise.all([
         fetchAllRows(() => supabase
           .from('paper_invoices')
           .select('id, supplier, paper_type, width_mm, weight_kg, price_per_kg, receive_date, invoice_date')
-          .lte('receive_date', monthEnd)),
+          .lte('receive_date', receiveCap)),
         fetchAllRows(() => supabase
           .from('paper_invoices')
           .select('id, supplier, paper_type, width_mm, weight_kg, price_per_kg, receive_date, invoice_date')
@@ -2610,7 +2615,9 @@ async function loadDetailPivot() {
       }
 
       // รับเข้าเดือนนี้
-      if (effDate >= monthStart && effDate <= monthEnd) {
+      // ถ้าเดือนปัจจุบัน: ไม่นับ invoice ที่ยังไม่ถึงวันรับเข้า (> today)
+      const inCap = isCurrentMonth ? receiveCap : monthEnd;
+      if (effDate >= monthStart && effDate <= inCap) {
         cell.in.rolls += 1;
         cell.in.kg += weight;
         cell.in.value += value;
@@ -2625,9 +2632,11 @@ async function loadDetailPivot() {
         cell.out.value += outKg * price;
       }
       
-      // คงเหลือสิ้นเดือน
+      // คงเหลือ (Balance)
+      // ถ้าเดือนปัจจุบัน: นับเฉพาะ invoice ที่รับเข้าแล้ว (<= today) และยังไม่ถูกจ่ายออก
+      const balCap = isCurrentMonth ? receiveCap : monthEnd;
       const wasOutByEnd = outs.some(o => o.date <= monthEnd);
-      if (!wasOutByEnd) {
+      if (effDate <= balCap && !wasOutByEnd) {
         cell.bal.rolls += 1;
         cell.bal.kg += weight;
         cell.bal.value += value;
