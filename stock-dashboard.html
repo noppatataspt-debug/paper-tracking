@@ -2526,13 +2526,14 @@ async function loadDetailPivot() {
     const prevMonthStr = prevMonth(currentMonth);
     const prevMonthEnd = endOfMonth(prevMonthStr);
     
+    // ถ้าดูเดือนปัจจุบัน → cap ที่ TODAY เพื่อไม่นับ invoice ล่วงหน้า
+    const today = new Date().toISOString().slice(0, 10);
+    const isCurrentMonth = currentMonth === today.slice(0, 7);
+    const receiveCap = (isCurrentMonth && today < monthEnd) ? today : monthEnd;
+
     let allInvoices, allOutflows;
     try {
-      // ดึงทุก records ที่ receive_date <= monthEnd
-      // ถ้าดูเดือนปัจจุบัน → cap ที่ TODAY ด้วย เพื่อไม่นับ invoice ล่วงหน้า
-      const today = new Date().toISOString().slice(0, 10);
-      const isCurrentMonth = currentMonth === today.slice(0, 7);
-      const receiveCap = (isCurrentMonth && today < monthEnd) ? today : monthEnd;
+      // ดึงทุก records ที่ receive_date <= receiveCap
 
       // หรือ (SCG + invoice_date <= monthEnd) — เผื่อ SCG บิลในเดือนนี้แต่ยังไม่รับเข้า
       const [main, scgExtra] = await Promise.all([
