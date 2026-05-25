@@ -3295,7 +3295,9 @@ async function saveInvoice(idx, receiveDate, sourceFile) {
       paper_type: r.paper_type,
       invoice_no: d.invoice_no,
       supplier: result.supplier,
-      invoice_date: d.invoice_date || null,
+      // SCG: ใช้ invoice_date จากไฟล์ (วันที่บิล SCG สำคัญสำหรับ lot traceability)
+      // Supplier อื่น: ใช้ receive_date แทน (วันที่รับเข้าจริง)
+      invoice_date: result.supplier === 'SCG' ? (d.invoice_date || null) : receiveDate,
       receive_date: receiveDate,
       width_mm: r.width_mm || null,
       weight_kg: r.weight_kg,
