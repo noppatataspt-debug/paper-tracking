@@ -2581,6 +2581,8 @@ const state = {
   listData: [],         // for list tab
   listPage: 1,
   listPerPage: 100,
+  listDatePage: 1,      // paginate by invoice_date
+  listDatesPerPage: 10, // จำนวนวัน (invoice_date) ต่อหน้า
 };
 
 // ============================================================
@@ -3817,7 +3819,8 @@ async function saveManual() {
 }
 
 // ============================================================
-// TAB 3: LIST (Grouped by Date → Supplier+Invoice → Rolls)
+// TAB 3: LIST (Grouped by invoice_date → Supplier+Invoice → Rolls)
+// Paginate by วันที่ (invoice_date) — ไม่ตัดกลางวัน
 // ============================================================
 async function loadList() {
   const container = $('#l-grouped-list');
@@ -3829,30 +3832,63 @@ async function loadList() {
     const filterStatus = $('#l-filter-status').value;
     const filterCategory = $('#l-filter-category')?.value || '';
     const filterProject = $('#l-filter-project')?.value || '';
-    
-    // โหลดข้อมูลแบบ paginated by "วันที่รับ" — ดึง 100 ม้วนล่าสุดต่อหน้า
-    let q = supabase.from('paper_invoices')
-      .select('*', { count: 'exact' })
-      .order('receive_date', { ascending: false, nullsFirst: false })
-      .order('supplier', { ascending: true })
-      .order('invoice_no', { ascending: true })
-      .order('paper_lot', { ascending: true })
-      .range((state.listPage - 1) * state.listPerPage, state.listPage * state.listPerPage - 1);
-    
-    if (filterSupp) q = q.eq('supplier', filterSupp);
-    if (filterStatus) q = q.eq('status', filterStatus);
-    if (filterCategory) q = q.eq('paper_category', filterCategory);
-    if (filterProject) q = q.eq('project_code', filterProject);
+
+    // Step 1: ดึง distinct invoice_dates ที่ตรงกับ filter (เรียงจากใหม่ → เก่า)
+    // ใช้สำหรับ pagination — หน้าละ listDatesPerPage วัน
+    let dq = supabase.from('paper_invoices')
+      .select('invoice_date')
+      .order('invoice_date', { ascending: false, nullsFirst: false });
+    if (filterSupp)     dq = dq.eq('supplier', filterSupp);
+    if (filterStatus)   dq = dq.eq('status', filterStatus);
+    if (filterCategory) dq = dq.eq('paper_category', filterCategory);
+    if (filterProject)  dq = dq.eq('project_code', filterProject);
     if (search) {
-      q = q.or(`paper_lot.ilike.%${search}%,paper_lot_normalized.ilike.%${search.replace(/-/g,'').toUpperCase()}%,invoice_no.ilike.%${search}%,supplier.ilike.%${search}%`);
+      dq = dq.or(`paper_lot.ilike.%${search}%,paper_lot_normalized.ilike.%${search.replace(/-/g,'').toUpperCase()}%,invoice_no.ilike.%${search}%,supplier.ilike.%${search}%`);
     }
-    
-    const { data, count, error } = await q;
-    if (error) throw error;
-    
-    state.listData = data || [];
-    $('#list-count').textContent = count ? count.toLocaleString() : '0';
-    renderGroupedList(data || [], count || 0);
+    const { data: allDateRows, error: dErr } = await dq;
+    if (dErr) throw dErr;
+
+    // distinct dates (ลบซ้ำ)
+    const allDates = [...new Set((allDateRows || []).map(r => r.invoice_date || '(ไม่ระบุ)'))];
+    const totalDates = allDates.length;
+    const totalPages = Math.max(1, Math.ceil(totalDates / state.listDatesPerPage));
+    if (state.listDatePage > totalPages) state.listDatePage = totalPages;
+    const pageDates = allDates.slice(
+      (state.listDatePage - 1) * state.listDatesPerPage,
+      state.listDatePage * state.listDatesPerPage
+    );
+
+    // Step 2: ดึง rows ทั้งหมดของ dates ในหน้านี้
+    let rows = [];
+    let totalCount = 0;
+    if (pageDates.length > 0) {
+      const realDates = pageDates.filter(d => d !== '(ไม่ระบุ)');
+      let q = supabase.from('paper_invoices')
+        .select('*', { count: 'exact' })
+        .in('invoice_date', realDates.length ? realDates : ['__none__'])
+        .order('invoice_date', { ascending: false, nullsFirst: false })
+        .order('supplier',     { ascending: true })
+        .order('invoice_no',   { ascending: true })
+        .order('paper_lot',    { ascending: true });
+      if (filterSupp)     q = q.eq('supplier', filterSupp);
+      if (filterStatus)   q = q.eq('status', filterStatus);
+      if (filterCategory) q = q.eq('paper_category', filterCategory);
+      if (filterProject)  q = q.eq('project_code', filterProject);
+      if (search) {
+        q = q.or(`paper_lot.ilike.%${search}%,paper_lot_normalized.ilike.%${search.replace(/-/g,'').toUpperCase()}%,invoice_no.ilike.%${search}%,supplier.ilike.%${search}%`);
+      }
+      // ดึงทั้งหมดของวันที่เลือก (ไม่มี .range() — ป้องกันตัดกลางวัน)
+      const { data, count, error } = await q;
+      if (error) throw error;
+      rows = data || [];
+      totalCount = count || 0;
+    }
+
+    // แสดงจำนวนรวม (ทุก record ที่ match filter)
+    const totalAll = allDateRows?.length ?? 0;
+    $('#list-count').textContent = totalAll.toLocaleString();
+    state.listData = rows;
+    renderGroupedList(rows, totalDates, totalPages);
   } catch (e) {
     console.error(e);
     container.innerHTML = `<div style="text-align:center; color:var(--danger); padding:20px">โหลดไม่ได้: ${escapeHtml(e.message)}</div>`;
@@ -3865,7 +3901,7 @@ function groupRows(rows) {
   const dayMap = new Map();
 
   for (const r of rows) {
-    const date = r.receive_date || '(ไม่ระบุ)';
+    const date = r.invoice_date || r.receive_date || '(ไม่ระบุ)';  // แสดงตาม invoice_date
     const supplier = r.supplier || '(ไม่ระบุ)';
     const po = r.po_no || '__NO_PO__';   // sentinel for "no PO" group
     const inv = r.invoice_no || '(ไม่ระบุ)';
@@ -3900,7 +3936,7 @@ function calcSubtotal(rolls) {
   return { weight, remaining, value, hasPrice, total: rolls.length };
 }
 
-function renderGroupedList(rows, totalCount) {
+function renderGroupedList(rows, totalDates, totalPages) {
   const container = $('#l-grouped-list');
 
   if (!rows.length) {
@@ -4174,23 +4210,22 @@ function renderGroupedList(rows, totalCount) {
     });
   });
   
-  // Pagination
-  const totalPages = Math.ceil(totalCount / state.listPerPage);
+  // Pagination by invoice_date (ไม่ตัดกลางวัน)
   if (totalPages > 1) {
-    let pagHTML = `<button ${state.listPage === 1 ? 'disabled' : ''} data-page="prev">← ก่อน</button>`;
-    pagHTML += `<span style="padding: 6px 12px;">หน้า <strong>${state.listPage}</strong> / ${totalPages} (รวม ${totalCount.toLocaleString()} รายการ)</span>`;
-    pagHTML += `<button ${state.listPage >= totalPages ? 'disabled' : ''} data-page="next">ถัดไป →</button>`;
+    let pagHTML = `<button ${state.listDatePage === 1 ? 'disabled' : ''} data-page="prev">← ก่อน</button>`;
+    pagHTML += `<span style="padding: 6px 12px;">หน้า <strong>${state.listDatePage}</strong> / ${totalPages} (รวม ${totalDates.toLocaleString()} วัน)</span>`;
+    pagHTML += `<button ${state.listDatePage >= totalPages ? 'disabled' : ''} data-page="next">ถัดไป →</button>`;
     $('#l-pagination').innerHTML = pagHTML;
     
     $$('#l-pagination button').forEach(btn => {
       btn.addEventListener('click', () => {
-        if (btn.dataset.page === 'prev' && state.listPage > 1) state.listPage--;
-        if (btn.dataset.page === 'next' && state.listPage < totalPages) state.listPage++;
+        if (btn.dataset.page === 'prev' && state.listDatePage > 1) state.listDatePage--;
+        if (btn.dataset.page === 'next' && state.listDatePage < totalPages) state.listDatePage++;
         loadList();
       });
     });
   } else {
-    $('#l-pagination').innerHTML = `<span style="color:var(--text-dim); padding: 6px;">รวม ${totalCount.toLocaleString()} รายการ</span>`;
+    $('#l-pagination').innerHTML = `<span style="color:var(--text-dim); padding: 6px;">รวม ${totalDates.toLocaleString()} วัน</span>`;
   }
 }
 
@@ -4199,26 +4234,26 @@ function setupListFilters() {
   $('#l-search').addEventListener('input', () => {
     clearTimeout(searchTimer);
     searchTimer = setTimeout(() => {
-      state.listPage = 1;
+      state.listDatePage = 1;
       loadList();
     }, 400);
   });
   $('#l-filter-supplier').addEventListener('change', () => {
-    state.listPage = 1;
+    state.listDatePage = 1;
     loadList();
   });
   $('#l-filter-status').addEventListener('change', () => {
-    state.listPage = 1;
+    state.listDatePage = 1;
     loadList();
   });
   const catFilter = $('#l-filter-category');
   if (catFilter) catFilter.addEventListener('change', () => {
-    state.listPage = 1;
+    state.listDatePage = 1;
     loadList();
   });
   const projFilter = $('#l-filter-project');
   if (projFilter) projFilter.addEventListener('change', () => {
-    state.listPage = 1;
+    state.listDatePage = 1;
     loadList();
   });
   $('#l-refresh').addEventListener('click', loadList);
@@ -4628,8 +4663,15 @@ async function saveSinglePrice() {
       }
     });
     
+    const scrollTarget2 = editingRollId ? `roll-${editingRollId}` : null;
     window.closeSinglePrice();
-    loadList();
+    await loadList();
+    if (scrollTarget2) {
+      requestAnimationFrame(() => {
+        const el = document.getElementById(scrollTarget2);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    }
   } catch (err) {
     errorDiv.textContent = '❌ ' + err.message;
     errorDiv.style.display = 'block';
@@ -4804,8 +4846,19 @@ async function saveBulkPrice() {
       throw new Error(`${errors.length}/${updates.length} ม้วนล้มเหลว: ${errors[0]}`);
     }
     
+    // จำ invoice ที่กำลังแก้ไว้ก่อน close
+    const scrollTarget = bulkPriceContext
+      ? `inv-${(bulkPriceContext.supplier||'').replace(/\s+/g,'-')}-${(bulkPriceContext.invoice_no||'').replace(/\s+/g,'-')}`
+      : null;
     window.closeBulkPrice();
-    loadList();
+    await loadList();
+    // Scroll กลับมาที่ invoice เดิมหลัง render เสร็จ
+    if (scrollTarget) {
+      requestAnimationFrame(() => {
+        const el = document.getElementById(scrollTarget);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    }
   } catch (err) {
     errorDiv.textContent = '❌ ' + err.message;
     errorDiv.style.display = 'block';
