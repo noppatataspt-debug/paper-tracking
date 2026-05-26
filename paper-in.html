@@ -4691,7 +4691,7 @@ window.openBulkPrice = async function(supplier, invoice_no, date) {
   const rolls = state.listData.filter(r => 
     r.supplier === supplier && 
     (r.invoice_no || '(ไม่ระบุ)') === invoice_no &&
-    (r.receive_date || '(ไม่ระบุ)') === date
+    (r.invoice_date || r.receive_date || '(ไม่ระบุ)') === date
   );
   
   if (!rolls.length) {
@@ -4877,7 +4877,7 @@ window.openDeleteBatch = async function(supplier, invoice_no, date) {
   const rolls = state.listData.filter(r => 
     r.supplier === supplier && 
     (r.invoice_no || '(ไม่ระบุ)') === invoice_no &&
-    (r.receive_date || '(ไม่ระบุ)') === date
+    (r.invoice_date || r.receive_date || '(ไม่ระบุ)') === date
   );
   
   if (!rolls.length) return alert('ไม่พบม้วนใน batch นี้');
@@ -5051,7 +5051,7 @@ window.openEditBatch = async function(supplier, invoice_no, date) {
   const rolls = state.listData.filter(r => 
     r.supplier === supplier && 
     (r.invoice_no || '(ไม่ระบุ)') === invoice_no &&
-    (r.receive_date || '(ไม่ระบุ)') === date
+    (r.invoice_date || r.receive_date || '(ไม่ระบุ)') === date
   );
   
   if (!rolls.length) return alert('ไม่พบม้วนใน batch นี้');
