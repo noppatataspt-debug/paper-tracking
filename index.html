@@ -1990,22 +1990,39 @@ scanInput.addEventListener('input', () => {
   const v = scanInput.value.trim();
   if (!v) return;
 
-  const underscoreCount = (v.match(/_/g) || []).length;
+  const parts = v.split('_');
+  const underscoreCount = parts.length - 1;
 
-  // ถ้ามี _ ครบ 4 ตัวขึ้นไป = มี barcode อย่างน้อย 1 ตัวที่ครบรูปแบบ
-  // → submit ทันที (handleScan จะจัดการเก็บส่วนเกินไว้ให้เอง)
+  // ถ้ามี _ ครบ 4 ตัว = โครงสร้างครบแล้ว
+  // แต่ต้องรอให้ jumbo_lot (ส่วนที่ 5) มาครบด้วย
+  // Handheld scanner บน tablet อาจส่ง input เป็น stream → jumbo_lot มาไม่ครบ
   if (underscoreCount >= 4) {
-    scanTimer = setTimeout(handleScan, 80);
+    const jumboLotPart = parts[4] || '';
+    // jumbo_lot ของ SCG ยาว ~10-15 ตัว (เช่น 77-5-A8295-3H)
+    // ถ้า >= 5 ตัวอักษรถือว่าน่าจะครบ → fire ได้
+    // ถ้าสั้นกว่านั้น → รออีก 200ms ให้ scanner ส่งมาครบก่อน
+    const jumboReady = jumboLotPart.length >= 5;
+    if (jumboReady) {
+      // มีข้อมูลครบ → submit (150ms เผื่อ scanner ส่งข้อมูลครบ)
+      scanTimer = setTimeout(handleScan, 150);
+    } else {
+      // jumbo_lot ยังมาไม่ครบ → รอ 300ms
+      scanIdleTimer = setTimeout(() => {
+        if (scanInput.value.trim() === v) {
+          handleScan();
+        }
+      }, 300);
+    }
     return;
   }
 
-  // ถ้า _ น้อยกว่า 4 → รอ 200ms ดูว่ามี barcode เข้ามาอีกไหม
-  // ถ้าไม่มี → ถือว่าผิดรูปแบบ → handleScan จะเด้ง modal
+  // _ น้อยกว่า 4 → ยังไม่ครบโครงสร้าง → รอ 300ms
+  // (เพิ่มจาก 200ms เพื่อรองรับ handheld scanner ที่ส่งช้ากว่า keyboard)
   scanIdleTimer = setTimeout(() => {
     if (scanInput.value.trim() === v) {
       handleScan();
     }
-  }, 200);
+  }, 300);
 });
 
 function renderScans() {
