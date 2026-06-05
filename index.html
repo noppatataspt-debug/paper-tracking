@@ -1978,51 +1978,29 @@ function processOneBarcode(bcRaw) {
   return false;  // no modal
 }
 
+// ============================================================
+// Scan input — trigger หลัก: Enter (scanner ส่งท้าย barcode เสมอ)
+// ไม่ใช้ timer-based auto-submit เพราะ handheld scanner บน tablet
+// ส่ง input เป็น stream ทีละกลุ่ม → timer fire ก่อน barcode ครบ
+// ============================================================
 scanInput.addEventListener('keydown', e => {
-  if (e.key === 'Enter') { e.preventDefault(); handleScan(); }
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    handleScan();
+  }
 });
 
-let scanTimer;
-let scanIdleTimer;
+// input event: ใช้สำหรับ visual feedback เท่านั้น (ไม่ trigger handleScan)
+// ยกเว้นกรณี paste หลายบรรทัด (มี newline = scanner ส่ง Enter ใน value)
 scanInput.addEventListener('input', () => {
-  clearTimeout(scanTimer);
-  clearTimeout(scanIdleTimer);
-  const v = scanInput.value.trim();
-  if (!v) return;
-
-  const parts = v.split('_');
-  const underscoreCount = parts.length - 1;
-
-  // ถ้ามี _ ครบ 4 ตัว = โครงสร้างครบแล้ว
-  // แต่ต้องรอให้ jumbo_lot (ส่วนที่ 5) มาครบด้วย
-  // Handheld scanner บน tablet อาจส่ง input เป็น stream → jumbo_lot มาไม่ครบ
-  if (underscoreCount >= 4) {
-    const jumboLotPart = parts[4] || '';
-    // jumbo_lot ของ SCG ยาว ~10-15 ตัว (เช่น 77-5-A8295-3H)
-    // ถ้า >= 5 ตัวอักษรถือว่าน่าจะครบ → fire ได้
-    // ถ้าสั้นกว่านั้น → รออีก 200ms ให้ scanner ส่งมาครบก่อน
-    const jumboReady = jumboLotPart.length >= 5;
-    if (jumboReady) {
-      // มีข้อมูลครบ → submit (150ms เผื่อ scanner ส่งข้อมูลครบ)
-      scanTimer = setTimeout(handleScan, 150);
-    } else {
-      // jumbo_lot ยังมาไม่ครบ → รอ 300ms
-      scanIdleTimer = setTimeout(() => {
-        if (scanInput.value.trim() === v) {
-          handleScan();
-        }
-      }, 300);
-    }
-    return;
+  const v = scanInput.value;
+  // บาง scanner/OS ใส่ newline (\n หรือ \r\n) แทน keydown Enter
+  // ตรวจจับตรงนี้เพื่อรองรับ edge case นั้น
+  if (v.includes('\n') || v.includes('\r')) {
+    // trim newline แล้ว process เหมือนกด Enter
+    scanInput.value = v.replace(/[\r\n]/g, '');
+    handleScan();
   }
-
-  // _ น้อยกว่า 4 → ยังไม่ครบโครงสร้าง → รอ 300ms
-  // (เพิ่มจาก 200ms เพื่อรองรับ handheld scanner ที่ส่งช้ากว่า keyboard)
-  scanIdleTimer = setTimeout(() => {
-    if (scanInput.value.trim() === v) {
-      handleScan();
-    }
-  }, 300);
 });
 
 function renderScans() {
