@@ -414,6 +414,26 @@ body {
   border-left: 3px solid var(--warning);
 }
 .outflow-row.prestock:hover { background: #fed7aa; }
+.outflow-row.duplicate {
+  background: #fff1f2;
+  border-left: 3px solid #ef4444;
+}
+.outflow-row.duplicate:hover { background: #fecaca; }
+.outflow-duplicate-tag {
+  display: inline-block;
+  background: #ef4444;
+  color: white;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  margin-top: 3px;
+}
+.outflow-lot .duplicate-icon {
+  display: inline-block;
+  margin-right: 4px;
+  color: #ef4444;
+}
 
 .outflow-time { color: var(--text-dim); font-size: 13px; font-family: var(--mono); }
 .outflow-lot { font-family: var(--mono); font-weight: 700; font-size: 16px; }
@@ -876,6 +896,22 @@ body {
     <p style="font-size:13px;color:var(--warning);">⚠️ Lot นี้จะถูก highlight ในรายการ จนกว่าหัวหน้าจะลงข้อมูลรับเข้าคลัง</p>
     <div class="modal-actions">
       <button class="modal-btn-ok" onclick="window.closePreStockReminder()">รับทราบ</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Modal: Duplicate Warning ===== -->
+<div class="modal-overlay" id="modalDuplicate">
+  <div class="modal">
+    <div class="modal-icon" style="color:#ef4444;">🔴</div>
+    <h3 style="color:#ef4444;">พบ Lot ซ้ำ!</h3>
+    <p>Lot นี้ถูกบันทึกออกแล้ววันนี้:</p>
+    <p><span class="lot-display" id="modalDupLot" style="background:#fff1f2;border-color:#ef4444;color:#ef4444;"></span></p>
+    <div id="modalDupDetail" style="background:#fff1f2;border:1px solid #fecaca;border-radius:8px;padding:10px 14px;font-size:13px;margin:8px 0 14px;text-align:left;line-height:1.8;"></div>
+    <p style="font-size:13px;color:#ef4444;font-weight:600;">⚠️ บันทึกซ้ำอาจทำให้ข้อมูลผิดพลาด</p>
+    <div class="modal-actions" style="gap:10px;">
+      <button class="modal-btn-ok" style="background:#ef4444;" onclick="window.confirmDuplicate()">บันทึกซ้ำ (ยืนยัน)</button>
+      <button class="modal-btn-ok" style="background:var(--text-dim);" onclick="window.cancelDuplicate()">ยกเลิก</button>
     </div>
   </div>
 </div>
@@ -1499,6 +1535,18 @@ window.closePreStockReminder = function() {
   document.getElementById('modalPreStockReminder').classList.remove('show');
 };
 
+// ===== Duplicate modal =====
+window.confirmDuplicate = function() {
+  document.getElementById('modalDuplicate').classList.remove('show');
+  window._dupProceed = true;
+  if (window._dupResolve) window._dupResolve();
+};
+window.cancelDuplicate = function() {
+  document.getElementById('modalDuplicate').classList.remove('show');
+  window._dupProceed = false;
+  if (window._dupResolve) window._dupResolve();
+};
+
 function clearLookup() {
   currentLot = null;
   currentInvoice = null;
@@ -1573,25 +1621,30 @@ document.getElementById('btnSubmit').addEventListener('click', async () => {
   // Guard 3: Pre-check duplicate ใน list ล่าสุด (เฉพาะที่ยังไม่ voided)
   const date = document.getElementById('outflowDate').value;
   const machineId = getCurrentMachine();
+  // ซ้ำ = paper_lot_normalized เดียวกัน, วันเดียวกัน (ไม่จำกัดเครื่อง — เพราะม้วนเดียวกันใช้ได้แค่ครั้งเดียว)
   const dupCandidate = (allOutflows || []).find(o =>
     !o.voided &&
     (o.paper_lot_normalized || '').toUpperCase() === normLot &&
-    o.machine_id === machineId &&
     (o.outflow_date || '').slice(0, 10) === date
   );
   if (dupCandidate) {
-    const confirmMsg =
-      `⚠️ พบรายการซ้ำ:\n\n` +
-      `   Lot: ${dupCandidate.paper_lot}\n` +
-      `   เครื่อง: ${MACHINE_LABELS[machineId] || machineId}\n` +
-      `   วันที่: ${dupCandidate.outflow_date}\n` +
-      `   เวลา: ${fmtTime(dupCandidate.created_at)}\n\n` +
-      `ต้องการบันทึกซ้ำหรือไม่?`;
-    if (!confirm(confirmMsg)) {
-      return;
-    }
+    // แสดง modal แทน confirm() — สวยกว่าและรองรับ mobile
+    document.getElementById('modalDupLot').textContent = dupCandidate.paper_lot;
+    document.getElementById('modalDupDetail').innerHTML =
+      `<b>เครื่อง:</b> ${escapeHtml(MACHINE_LABELS[dupCandidate.machine_id] || dupCandidate.machine_id || '?')}<br>` +
+      `<b>วันที่:</b> ${escapeHtml(dupCandidate.outflow_date || '')}<br>` +
+      `<b>เวลาบันทึก:</b> ${escapeHtml(fmtTimeFull(dupCandidate.created_at))}<br>` +
+      (dupCandidate.paper_type ? `<b>ประเภท:</b> ${escapeHtml(dupCandidate.paper_type)}<br>` : '') +
+      (dupCandidate.weight_kg ? `<b>น้ำหนัก:</b> ${dupCandidate.weight_kg} kg` : '');
+    document.getElementById('modalDuplicate').classList.add('show');
+    // หยุดรอ — ถ้า user กด "ยืนยัน" ค่อย continue โดย resolve promise
+    await new Promise(resolve => { window._dupResolve = resolve; });
+    const proceed = window._dupProceed;
+    window._dupResolve = null;
+    window._dupProceed = false;
+    if (!proceed) return;
   }
-  
+
   // Set submitting flag — ป้องกันการกดซ้ำตั้งแต่จุดนี้ไปจนถึง finally
   isSubmitting = true;
   btn.disabled = true;
@@ -1722,7 +1775,35 @@ function renderList() {
   });
   
   const sortedDates = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
-  
+
+  // หา paper_lot_normalized ที่ซ้ำกันในวันเดียวกัน (ไม่ voided)
+  // key = "date::lot_normalized" → ถ้าเจอมากกว่า 1 row = ซ้ำ
+  const dupKeys = new Set();
+  const seenKeys = {};
+  filtered.forEach(o => {
+    if (o.voided) return;
+    const k = `${(o.outflow_date || '').slice(0, 10)}::${(o.paper_lot_normalized || '').toUpperCase()}`;
+    if (seenKeys[k]) {
+      dupKeys.add(k);       // row ที่ 2+ = ซ้ำ
+      dupKeys.add(k + '::first');  // mark row แรกด้วย
+    } else {
+      seenKeys[k] = true;
+    }
+  });
+  // สร้าง Set ของ id ที่เป็น duplicate
+  const dupIds = new Set();
+  const lotCount = {};
+  filtered.forEach(o => {
+    if (o.voided) return;
+    const k = `${(o.outflow_date || '').slice(0, 10)}::${(o.paper_lot_normalized || '').toUpperCase()}`;
+    lotCount[k] = (lotCount[k] || 0) + 1;
+  });
+  filtered.forEach(o => {
+    if (o.voided) return;
+    const k = `${(o.outflow_date || '').slice(0, 10)}::${(o.paper_lot_normalized || '').toUpperCase()}`;
+    if (lotCount[k] > 1) dupIds.add(o.id);
+  });
+
   list.innerHTML = sortedDates.map(date => {
     const machines = byDate[date];
     const allRows = Object.values(machines).flat();
@@ -1764,9 +1845,10 @@ function renderList() {
                 <span><span class="toggle-icon">▼</span>${mLabel} <span class="m-inline-stats">· ${mRolls.toLocaleString()} ม้วน · ${mKg.toLocaleString()} kg</span></span>
               </div>
               ${rows.map(o => `
-                <div class="outflow-row ${o.voided ? 'voided' : ''} ${o.outflow_reason === 'pre_stock' ? 'prestock' : ''}">
+                <div class="outflow-row ${o.voided ? 'voided' : ''} ${o.outflow_reason === 'pre_stock' ? 'prestock' : ''} ${dupIds.has(o.id) ? 'duplicate' : ''}">
                   <div class="outflow-time" title="บันทึกเข้าระบบ: ${fmtTimeFull(o.created_at)}">${fmtTimeFull(o.created_at)}</div>
                   <div class="outflow-lot">
+                    ${dupIds.has(o.id) ? '<span class="duplicate-icon">🔴</span>' : ''}
                     ${o.outflow_reason === 'pre_stock' ? '<span class="prestock-icon">⚠️</span>' : ''}${escapeHtml(o.paper_lot)}
                   </div>
                   <div class="outflow-info">
@@ -1775,6 +1857,7 @@ function renderList() {
                     ${o.width_mm ? ` · ${o.width_mm}mm` : ''}
                     ${o.weight_kg ? ` · ${o.weight_kg}kg` : ''}
                     ${o.outflow_reason === 'pre_stock' ? '<br><span class="outflow-prestock-tag">⚠️ รอลงข้อมูลรับเข้า</span>' : ''}
+                    ${dupIds.has(o.id) ? '<br><span class="outflow-duplicate-tag">🔴 Lot ซ้ำ — บันทึกมากกว่า 1 ครั้ง</span>' : ''}
                   </div>
                   <div>
                     ${o.voided 
