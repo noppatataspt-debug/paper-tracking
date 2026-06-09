@@ -1979,27 +1979,68 @@ function processOneBarcode(bcRaw) {
 }
 
 // ============================================================
-// Scan input — trigger หลัก: Enter (scanner ส่งท้าย barcode เสมอ)
-// ไม่ใช้ timer-based auto-submit เพราะ handheld scanner บน tablet
-// ส่ง input เป็น stream ทีละกลุ่ม → timer fire ก่อน barcode ครบ
 // ============================================================
+// Scan input — รองรับทั้ง keyboard บนคอม และ handheld scanner บน tablet
+//
+// ปัญหาของ handheld scanner บน tablet:
+//   - ส่ง barcode เป็น stream ทีละกลุ่ม character (ไม่ใช่ครั้งเดียว)
+//   - Enter (keydown) อาจถูก OS/browser intercept ก่อนถึง input
+//   - ผลคือ handleScan() ถูก trigger กลางคัน → jumbo_lot ถูกตัด
+//
+// Solution: ใช้ทั้ง 2 trigger พร้อมกัน
+//   1. keydown Enter → handleScan() ทันที (สำหรับ keyboard)
+//   2. input idle timer → handleScan() หลังหยุดรับข้อมูล 400ms
+//      แต่จะ fire เฉพาะเมื่อ barcode "ดูครบ" แล้วเท่านั้น
+//      (ครบ = มี _ ครบ 4 ตัว + jumbo_lot มี - อย่างน้อย 1 ตัว)
+// ============================================================
+
+// ตรวจว่า barcode ดูครบ format แล้วหรือยัง
+// format: paper_type _ cut_date _ roll_no _ slitter _ jumbo_lot
+// jumbo_lot ของ SCG เช่น 77-6-A3681-3H (มี - เสมอ)
+function isBarcodeComplete(v) {
+  const parts = v.split('_');
+  if (parts.length < 5) return false;
+  const jumbo = parts[4] || '';
+  // jumbo_lot ต้องมี - อย่างน้อย 1 ตัว และยาว >= 4 ตัวอักษร
+  return jumbo.includes('-') && jumbo.length >= 4;
+}
+
+let _scanIdleTimer = null;
+
 scanInput.addEventListener('keydown', e => {
   if (e.key === 'Enter') {
     e.preventDefault();
+    clearTimeout(_scanIdleTimer);
     handleScan();
   }
 });
 
-// input event: ใช้สำหรับ visual feedback เท่านั้น (ไม่ trigger handleScan)
-// ยกเว้นกรณี paste หลายบรรทัด (มี newline = scanner ส่ง Enter ใน value)
 scanInput.addEventListener('input', () => {
+  clearTimeout(_scanIdleTimer);
   const v = scanInput.value;
-  // บาง scanner/OS ใส่ newline (\n หรือ \r\n) แทน keydown Enter
-  // ตรวจจับตรงนี้เพื่อรองรับ edge case นั้น
+
+  // บาง scanner/OS ใส่ newline ใน value แทน keydown Enter
   if (v.includes('\n') || v.includes('\r')) {
-    // trim newline แล้ว process เหมือนกด Enter
     scanInput.value = v.replace(/[\r\n]/g, '');
     handleScan();
+    return;
+  }
+
+  const trimmed = v.trim();
+  if (!trimmed) return;
+
+  if (isBarcodeComplete(trimmed)) {
+    // barcode ครบ format แล้ว → รอ 350ms หลังหยุดรับข้อมูล
+    // (เผื่อ scanner ยังส่ง trailing chars เช่น CR)
+    _scanIdleTimer = setTimeout(() => {
+      if (scanInput.value.trim() === trimmed) handleScan();
+    }, 350);
+  } else {
+    // barcode ยังไม่ครบ → รอนานขึ้น (600ms)
+    // ถ้าหยุดนานกว่านี้แล้วยังไม่ครบ = scanner ส่งข้อมูลผิด/ขาด
+    _scanIdleTimer = setTimeout(() => {
+      if (scanInput.value.trim() === trimmed) handleScan();
+    }, 600);
   }
 });
 
