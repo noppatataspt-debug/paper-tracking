@@ -2198,6 +2198,7 @@ async function parseNTPM_XLSX(file) {
       if (serial && /U\d{4}\/\d+/i.test(serial) && qty && qty > 0) {
         rolls.push({
           paper_lot: serial,
+          paper_lot_normalized: normalizeLot(serial),
           weight_kg: qty,
           paper_type: currentType,
           width_mm:   currentWidth,
