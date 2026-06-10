@@ -2109,9 +2109,18 @@ function parseNTPM_COA_PDF_text(text) {
 // ============================================================
 async function parseNTPM_XLSX(file) {
   const buf = await file.arrayBuffer();
-  const wb = XLSX.read(buf, { type: 'array' });
+  const wb = XLSX.read(buf, { type: 'array', sheetStubs: false });
   const ws = wb.Sheets[wb.SheetNames[0]];
-  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+
+  // จำกัด range อ่านแค่ 10 cols แรก (A-J) เพราะ data NTPM อยู่ใน A-F
+  // หลีกเลี่ยงการอ่าน 257 cols ว่างทั้งหมดของ template → เร็วขึ้นมาก
+  const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+  range.e.c = Math.min(range.e.c, 9); // cap ที่ col J (index 9)
+  const rows = XLSX.utils.sheet_to_json(ws, {
+    header: 1,
+    range,          // อ่านเฉพาะ range ที่กำหนด
+    // ไม่ใส่ defval → sparse array (skip empty cells) → เล็กกว่ามาก
+  });
 
   // Helpers
   const strAt = (row, idx) => {
