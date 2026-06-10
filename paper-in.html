@@ -2089,6 +2089,108 @@ function parseNTPM_COA_PDF_text(text) {
   };
 }
 
+
+// ============================================================
+// NTPM Loading Note XLSX Parser
+// ============================================================
+// Format (Loading_Note_ASIA_PAPER_TUBE_ETA_*.xlsx):
+//   Row 1: LOADING NOTE / DELIVERY ORDER
+//   Row 2: SO Num. : SON003240
+//   Row 3: Invoice Num. : EAC000131
+//   Row 4: PO Num. : PO-690231
+//   Row 5: Customer: ASIA PAPER TUBE CO., LTD
+//   Row 6: NO. | ITEM CODE | ... | LOADED QTY | UOM
+//   Row 7: <no> | ( CBS ) JR-CBS-450G1010 | ... | 22414 | KG
+//   Row 8: Description : : J/ROLL CORE BOARD TYPE S 450GSM 1010MM
+//   Row 9: NO. | SERIAL NUMBER | QTY. | UOM
+//   Row 10+: <no> | U2503/00528 | 682 | KG
+//   (Total Quantity row = end of this item group)
+//   (next item group continues with another NO./ITEM CODE row)
+// ============================================================
+async function parseNTPM_XLSX(file) {
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, { type: 'array' });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+
+  // Helpers
+  const strAt = (row, idx) => {
+    const v = row && row[idx];
+    return (v !== null && v !== undefined && String(v).trim() !== '') ? String(v).trim() : null;
+  };
+  const numAt = (row, idx) => {
+    const v = row && row[idx];
+    if (v === null || v === undefined || String(v).trim() === '') return null;
+    const n = parseFloat(String(v).replace(/,/g, ''));
+    return isNaN(n) ? null : n;
+  };
+  const rowText = (row) => (row || []).map(v => v != null ? String(v).trim() : '').join(' ');
+
+  // === Header metadata — scan แต่ละ row หา text ===
+  let invoice_no = null, po_no = null, so_no = null;
+  for (const row of rows.slice(0, 12)) {
+    const txt = rowText(row);
+    const mI = txt.match(/Invoice\s*Num\.?\s*:\s*([A-Z0-9]+)/i);  if (mI) invoice_no = mI[1];
+    const mP = txt.match(/PO\s*Num\.?\s*:\s*([A-Z0-9\-]+)/i);     if (mP) po_no  = mP[1];
+    const mS = txt.match(/SO\s*Num\.?\s*:\s*([A-Z0-9]+)/i);       if (mS) so_no  = mS[1];
+  }
+  if (!invoice_no) throw new Error('หา Invoice Number ไม่พบใน NTPM XLSX');
+
+  // === Auto-detect column positions (robust ต่อ layout ที่ต่างกัน) ===
+  // หา col ที่มี JR-XXXX-NNNGnnn → itemCodeCol
+  // หา row ที่มี "SERIAL NUMBER" → serialCol = col ที่มี "serial", qtyCol = col ถัดไป
+  let itemCodeCol = 1, serialCol = 3, qtyCol = 4;
+  for (const row of rows) {
+    for (let c = 0; c < Math.min((row || []).length, 10); c++) {
+      const v = strAt(row, c);
+      if (v && /JR-[A-Z]+-\d+G\d+/i.test(v)) { itemCodeCol = c; }
+      if (v && /serial\s*number/i.test(v)) { serialCol = c; qtyCol = c + 1; }
+    }
+  }
+
+  // === State machine: parse item groups + rolls ===
+  const rolls = [];
+  let currentType = null, currentWidth = null, currentItem = null;
+  let inRolls = false;
+
+  for (const row of rows) {
+    const txt = rowText(row);
+
+    // "SERIAL NUMBER" header row → เริ่ม collect rolls
+    if (/serial\s*number/i.test(txt)) { inRolls = true; continue; }
+
+    // item code row: มี JR- pattern ที่ itemCodeCol
+    const itemCell = strAt(row, itemCodeCol);
+    if (itemCell && /JR-[A-Z]+-\d+G\d+/i.test(itemCell)) {
+      currentItem = itemCell;
+      const m = itemCell.match(/JR-([A-Z]+)-(\d+)G(\d+)/i);
+      if (m) { currentType = m[1].toUpperCase() + '-' + m[2]; currentWidth = parseInt(m[3]); }
+      inRolls = false; continue;
+    }
+
+    // Total row → end of group
+    if (/total\s*quantity/i.test(txt)) { inRolls = false; continue; }
+
+    // collect roll
+    if (inRolls) {
+      const serial = strAt(row, serialCol);
+      const qty    = numAt(row, qtyCol);
+      if (serial && /U\d{4}\/\d+/i.test(serial) && qty && qty > 0) {
+        rolls.push({
+          paper_lot: serial,
+          weight_kg: qty,
+          paper_type: currentType,
+          width_mm:   currentWidth,
+          item_code:  currentItem,
+        });
+      }
+    }
+  }
+
+  if (rolls.length === 0) throw new Error('ไม่พบรายการม้วนใน NTPM XLSX — ตรวจสอบ format ไฟล์');
+  return { supplier: 'NTPM', invoice_no, invoice_date: null, po_no, so_no, rolls };
+}
+
 function parseSCG_TXT(text) {
   const lines = text.split(/\r?\n/).filter(l => l.trim().length >= 100);
   if (!lines.length) throw new Error('ไม่พบข้อมูลใน SCG TXT');
@@ -2542,6 +2644,10 @@ function detectSupplier(filename, content) {
   if (n.includes('ntpm') && n.endsWith('.pdf')) return 'NTPM_PDF';
   // NTPM COA — เก็บไว้แต่ไม่ใช้ตอนนี้
   if (n.startsWith('coa-son') && n.endsWith('.pdf')) return 'NTPM_COA_PDF';
+  // NTPM Loading Note XLSX — ชื่อมักมี "loading" หรือ "loading_note" หรือ "EAC" + xlsx
+  if ((n.endsWith('.xlsx') || n.endsWith('.xls')) && (nLN.includes('loading') || /eac\d/.test(n))) {
+    return 'NTPM_XLSX';
+  }
 
   return null;
 }
@@ -2868,8 +2974,8 @@ async function handleFiles(fileList) {
         continue;
       }
       
-      // NTPM Loading Note (PDF) — เก็บไว้ merge กับ COA (ถ้ามี)
-      if (supplier === 'NTPM_PDF') {
+      // NTPM Loading Note (PDF หรือ XLSX) — เก็บไว้ merge กับ COA (ถ้ามี)
+      if (supplier === 'NTPM_PDF' || supplier === 'NTPM_XLSX') {
         result.filename = file.name;
         const invKey = String(result.data.invoice_no || '').trim().toUpperCase();
         if (invKey) ntpmLnByInv[invKey] = result;
@@ -3068,6 +3174,11 @@ async function parseFile(file, supplier) {
   if (supplier === 'NTPM_PDF') {
     const text = await extractPdfText(file);
     const data = parseNTPM_PDF_text(text);
+    return { supplier: 'NTPM', data, status: 'ok' };
+  }
+
+  if (supplier === 'NTPM_XLSX') {
+    const data = await parseNTPM_XLSX(file);
     return { supplier: 'NTPM', data, status: 'ok' };
   }
 
