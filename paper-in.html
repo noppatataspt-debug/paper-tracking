@@ -2000,93 +2000,104 @@ function parseNTPM_COA_PDF_text(text) {
     throw new Error('ไฟล์นี้ไม่ใช่ NTPM COA (ไม่พบ marker NTPM)');
   }
 
-  // === Metadata ===
+  // === Invoice metadata (ใช้ร่วมกันทุก item) ===
   const mInv = text.match(/Invoice\s*No\.?\s*:?\s*([A-Z0-9-]+)/i);
   if (!mInv) throw new Error('หา Invoice No. ไม่เจอใน COA');
   const invoice_no = mInv[1].trim();
 
-  // Date — NTPM ใช้ format DD/MM/YYYY → แปลงเป็น YYYY-MM-DD
+  // Date — DD/MM/YYYY → YYYY-MM-DD (ใช้วันแรกที่เจอ)
   const mDate = text.match(/Date\s*:?\s*(\d{1,2})\/(\d{1,2})\/(\d{4})/);
   let delivery_date = null;
   if (mDate) {
-    const dd = mDate[1].padStart(2, '0');
-    const mm = mDate[2].padStart(2, '0');
-    delivery_date = `${mDate[3]}-${mm}-${dd}`;
+    delivery_date = `${mDate[3]}-${mDate[2].padStart(2,'0')}-${mDate[1].padStart(2,'0')}`;
   }
 
-  // Substance spec (gsm) — จาก Item Code: JR-<TYPE>-<GSM>G<WIDTH>
-  let substance_spec_gsm = null;
-  let item_code = null;
-  const mItem = text.match(/JR-([A-Z]+)-(\d+)G(\d+)/i);
-  if (mItem) {
-    item_code = mItem[0].toUpperCase();
-    substance_spec_gsm = parseInt(mItem[2], 10);
+  // === Split text เป็น sections ตาม Item Code ===
+  // หา position ของทุก JR-XXXX-NNNGnnn → แบ่ง text เป็นส่วนๆ
+  const itemPattern = /JR-([A-Z]+)-(\d+)G(\d+)/gi;
+  const itemMatches = [...text.matchAll(itemPattern)];
+
+  // deduplicate โดยใช้ item code เป็น key (อาจเจอซ้ำหลายครั้งในหน้าเดียว)
+  const seen = new Set();
+  const items = [];
+  for (const m of itemMatches) {
+    const key = m[0].toUpperCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      items.push({ item_code: key, type: m[1].toUpperCase(), gsm: parseInt(m[2]), width: parseInt(m[3]), pos: m.index });
+    }
   }
 
-  // === Extract ranges (อาจมีหลาย group) ===
-  // Pattern: "<min> – <max>" หรือ "<min> - <max>" (en-dash, em-dash, hyphen)
-  // NTPM ใช้ en-dash (\u2013) แต่ Ply Bond บางที่เป็น hyphen
-  // หา line ที่เป็น 4 ranges ติดกัน: GSM Thickness Moisture PlyBond
-  const dash = '[\\s]*[\\u2013\\u2014\\-][\\s]*';   // any dash with optional spaces
+  if (items.length === 0) throw new Error('หา Item Code ไม่เจอใน COA');
+
+  // === Range regex ===
+  const dash = '[\\s]*[\\u2013\\u2014\\-][\\s]*';
   const num = '(\\d+(?:\\.\\d+)?)';
   const rangeRe = new RegExp(
     `${num}${dash}${num}\\s+${num}${dash}${num}\\s+${num}${dash}${num}\\s+${num}${dash}${num}`,
     'g'
   );
 
-  const groups = [];
-  let m;
-  while ((m = rangeRe.exec(text)) !== null) {
-    groups.push({
-      substance:  [parseFloat(m[1]), parseFloat(m[2])],  // GSM
-      thickness:  [parseFloat(m[3]), parseFloat(m[4])],  // μm (จะแปลงเป็น mm ตอน return)
-      moisture:   [parseFloat(m[5]), parseFloat(m[6])],  // %
-      bonding:    [parseFloat(m[7]), parseFloat(m[8])],  // J/m² (Ply Bond)
-    });
-  }
-
-  if (groups.length === 0) {
-    throw new Error('หา ranges (GSM/Thickness/Moisture/PlyBond) ไม่เจอใน COA');
-  }
-
-  // === Average across groups (1 ค่าต่อ invoice เหมือน Muda) ===
   const round2 = (v) => Math.round(v * 100) / 100;
-  const avgRange = (key) => {
+
+  const avgRange = (groups, key) => {
     const mins = groups.map(g => g[key][0]).filter(v => Number.isFinite(v));
     const maxs = groups.map(g => g[key][1]).filter(v => Number.isFinite(v));
     if (!mins.length || !maxs.length) return null;
-    const minAvg = mins.reduce((a, b) => a + b, 0) / mins.length;
-    const maxAvg = maxs.reduce((a, b) => a + b, 0) / maxs.length;
-    return [round2(minAvg), round2(maxAvg)];
+    return [
+      round2(mins.reduce((a,b)=>a+b,0)/mins.length),
+      round2(maxs.reduce((a,b)=>a+b,0)/maxs.length),
+    ];
   };
 
-  const substance = avgRange('substance');
-  const thicknessUm = avgRange('thickness');
-  const moisture = avgRange('moisture');
-  const bonding = avgRange('bonding');
+  // === Parse ranges ต่อ item section ===
+  // ตัด text ระหว่าง item positions
+  const coaItems = items.map((item, idx) => {
+    const start = item.pos;
+    const end   = idx + 1 < items.length ? items[idx + 1].pos : text.length;
+    const section = text.slice(start, end);
 
-  // Convert thickness: μm → mm (ให้ตรงกับ Muda — เพราะ save logic คูณ ×1000 เพื่อแปลงกลับเป็น μm)
-  const thickness = thicknessUm
-    ? [round2(thicknessUm[0] / 1000 * 1000) / 1000, round2(thicknessUm[1] / 1000 * 1000) / 1000]
-    : null;
+    // reset lastIndex ก่อน exec
+    rangeRe.lastIndex = 0;
+    const groups = [];
+    let m;
+    while ((m = rangeRe.exec(section)) !== null) {
+      groups.push({
+        substance: [parseFloat(m[1]), parseFloat(m[2])],
+        thickness: [parseFloat(m[3]), parseFloat(m[4])],
+        moisture:  [parseFloat(m[5]), parseFloat(m[6])],
+        bonding:   [parseFloat(m[7]), parseFloat(m[8])],
+      });
+    }
 
-  // Return schema ตรงกับ Muda invoice_coa (test_results: {substance, thickness, moisture, bursting, bonding, cobb})
-  return {
-    supplier: 'NTPM_COA',
-    invoice_no,
-    delivery_date,
-    picking_list: item_code,           // ใช้ ITEM CODE เป็น picking_list
-    substance_spec_gsm,
-    test_results: {
-      substance,                       // gsm  (avg of group ranges)
-      thickness,                       // mm   (converted from μm)
-      moisture,                        // %
-      bursting: null,                  // NTPM COA ไม่มี
-      bonding,                         // J/m² (Ply Bond)
-      cobb: null,                      // NTPM COA ไม่มี
-    },
-    groups_count: groups.length,       // เก็บไว้ใน raw_data
-  };
+    const thicknessUm = avgRange(groups, 'thickness');
+    const thickness = thicknessUm
+      ? [round2(thicknessUm[0] / 1000), round2(thicknessUm[1] / 1000)]
+      : null;
+
+    return {
+      supplier: 'NTPM_COA',
+      invoice_no,
+      delivery_date,
+      picking_list: item.item_code,
+      substance_spec_gsm: item.gsm,
+      paper_type: item.type + '-' + item.gsm,   // เช่น CBR-360, CBR-450
+      width_mm: item.width,
+      test_results: {
+        substance: avgRange(groups, 'substance'),
+        thickness,
+        moisture:  avgRange(groups, 'moisture'),
+        bursting: null,
+        bonding:  avgRange(groups, 'bonding'),
+        cobb: null,
+      },
+      groups_count: groups.length,
+    };
+  });
+
+  // คืน array เสมอ (แม้จะมี item เดียว)
+  // back-compat: ถ้า caller คาดหวัง single object ก็ใช้ coaItems[0]
+  return coaItems;
 }
 
 
@@ -3084,27 +3095,40 @@ async function handleFiles(fileList) {
     const ln = ntpmLnByInv[invKey];
     const coa = ntpmCoaByInv[invKey];
     if (coa) {
-      // แนบ COA ที่ระดับ invoice (ทุกม้วนใช้ค่าเดียวกัน — ตามที่ตกลง)
-      ln.invoice_coa = coa.coa_parsed;
-      ln.hasCoa = true;
-      ln.coa_source = 'pdf_local';     // mark ว่า parse local ไม่ใช่ AI — ไม่ต้องโชว์ "ตรวจสอบก่อน save"
+      const coaItems = coa.coa_items || (coa.coa_parsed ? [coa.coa_parsed] : []);
+      if (coaItems.length === 1) {
+        // 1 item type → แนบที่ระดับ invoice (ทุกม้วนใช้ค่าเดียวกัน)
+        ln.invoice_coa = coaItems[0];
+        ln.hasCoa = true;
+      } else if (coaItems.length > 1) {
+        // หลาย item types → สร้าง map paper_type → COA
+        // แต่ละม้วนใน ln.data.rolls จะ lookup จาก coaByType ตาม paper_type
+        const coaByType = {};
+        for (const c of coaItems) coaByType[c.paper_type] = c;
+        ln.coa_by_type = coaByType;  // เก็บไว้ใช้ตอน render + save
+        ln.invoice_coa = coaItems[0]; // fallback สำหรับ display card header
+        ln.hasCoa = true;
+      }
+      ln.coa_source = 'pdf_local';
     }
     state.parsedInvoices.push(ln);
     addInvoiceCard(ln);
     if (coa) {
       playSuccessSound();
-      showToast(`✅ NTPM Invoice ${ln.data.invoice_no}: matched กับ COA แล้ว`, 'success');
+      const coaCount = (coa.coa_items || [coa.coa_parsed]).length;
+      showToast(`✅ NTPM Invoice ${ln.data.invoice_no}: matched COA ${coaCount} ประเภทแล้ว`, 'success');
     }
   }
-  
+
   // NTPM COA อย่างเดียว (ไม่มี Loading Note matching) → เตือน
   for (const invKey of Object.keys(ntpmCoaByInv)) {
     if (!ntpmLnByInv[invKey]) {
       const coa = ntpmCoaByInv[invKey];
+      const firstInv = (coa.coa_items || [coa.coa_parsed])[0];
       addInvoiceCard({
         filename: coa.filename,
         supplier: 'NTPM COA',
-        warning: `COA Invoice ${coa.coa_parsed.invoice_no} ไม่พบ Loading Note (PDF) คู่กัน — กรุณา upload Loading Note ด้วย`,
+        warning: `COA Invoice ${firstInv?.invoice_no} ไม่พบ Loading Note คู่กัน — กรุณา upload Loading Note ด้วย`,
         status: 'warn',
       });
     }
@@ -3192,14 +3216,15 @@ async function parseFile(file, supplier) {
   }
 
   if (supplier === 'NTPM_COA_PDF') {
-    // NTPM COA PDF — parse local ด้วย regex (ไม่ต้องใช้ Claude API)
+    // NTPM COA PDF — parse local ด้วย regex — คืน array of COA ต่อ item type
     const text = await extractPdfText(file);
-    const coa_parsed = parseNTPM_COA_PDF_text(text);
+    const coa_items = parseNTPM_COA_PDF_text(text);  // array
     return {
       supplier: 'NTPM_COA',
       filename: file.name,
-      coa_parsed,                       // schema เดียวกับ Muda invoice_coa
-      coa_source: 'pdf_local',          // mark ว่ามาจาก local parsing (ไม่ใช่ AI)
+      coa_items,                        // [{paper_type, picking_list, test_results, ...}, ...]
+      coa_parsed: coa_items[0],         // back-compat: first item (single-type invoice)
+      coa_source: 'pdf_local',
       status: 'ok',
     };
   }
@@ -3291,22 +3316,19 @@ function addInvoiceCard(result) {
   
   // COA values display (เฉพาะถ้ามี invoice_coa จาก AI/local)
   let coaValuesHtml = '';
-  if (result.invoice_coa) {
-    const coa = result.invoice_coa;
-    const tr = coa.test_results || {};
+  if (result.invoice_coa || result.coa_by_type) {
+    const coaTitle = result.coa_source === 'pdf_ai'
+      ? '📋 COA (อ่านจาก PDF — AI) — <span style="color:var(--warning); font-weight:700;">⚠️ กรุณาตรวจสอบ</span>'
+      : '📋 COA (อ่านจาก PDF)';
     const fmt = (range, unit) => {
       if (!range || !Array.isArray(range)) return '<span style="color:var(--text-muted);">—</span>';
       if (range[0] === range[1]) return `${range[0]} ${unit}`;
       return `${range[0]} ~ ${range[1]} ${unit}`;
     };
-    // Title ต่างกันตาม source: AI ต้องตรวจสอบ, local อ่านแม่นจาก regex
-    const coaTitle = result.coa_source === 'pdf_ai'
-      ? '📋 COA (อ่านจาก PDF — AI) — <span style="color:var(--warning); font-weight:700;">⚠️ กรุณาตรวจสอบ</span>'
-      : '📋 COA (อ่านจาก PDF)';
-    coaValuesHtml = `
-      <div class="coa-values-block">
-        <div class="coa-values-title">${coaTitle}</div>
-        <div class="coa-values-grid">
+    const coaBlock = (coa) => {
+      const tr = coa.test_results || {};
+      return `
+        <div class="coa-values-grid" style="margin-bottom:10px;">
           <div><span class="lbl">Picking List:</span> <span class="val">${escapeHtml(coa.picking_list || '—')}</span></div>
           <div><span class="lbl">Delivery Date:</span> <span class="val">${escapeHtml(coa.delivery_date || '—')}</span></div>
           <div><span class="lbl">Substance Spec:</span> <span class="val">${coa.substance_spec_gsm || '—'} gsm</span></div>
@@ -3316,9 +3338,33 @@ function addInvoiceCard(result) {
           <div><span class="lbl">Bursting:</span> <span class="val">${fmt(tr.bursting, 'kg/cm²')}</span></div>
           <div><span class="lbl">Bonding:</span> <span class="val">${fmt(tr.bonding, 'J/m²')}</span></div>
           <div><span class="lbl">Cobb:</span> <span class="val">${fmt(tr.cobb, 'gsm')}</span></div>
-        </div>
-      </div>
-    `;
+        </div>`;
+    };
+
+    if (result.coa_by_type && Object.keys(result.coa_by_type).length > 1) {
+      // Multi-type: แสดงแยกต่อ paper_type
+      const blocks = Object.entries(result.coa_by_type).map(([ptype, coa]) =>
+        `<div style="border-top:1px solid var(--border); padding-top:8px; margin-top:4px;">
+           <div style="font-size:12px; font-weight:700; color:var(--primary); margin-bottom:4px;">
+             📦 ${escapeHtml(ptype)}
+           </div>
+           ${coaBlock(coa)}
+         </div>`
+      ).join('');
+      coaValuesHtml = `
+        <div class="coa-values-block">
+          <div class="coa-values-title">${coaTitle} — ${Object.keys(result.coa_by_type).length} ประเภท</div>
+          ${blocks}
+        </div>`;
+    } else {
+      // Single-type
+      const coa = result.invoice_coa;
+      coaValuesHtml = `
+        <div class="coa-values-block">
+          <div class="coa-values-title">${coaTitle}</div>
+          ${coaBlock(coa)}
+        </div>`;
+    }
   }
   
   div.innerHTML = `
@@ -3474,11 +3520,10 @@ async function saveInvoice(idx, receiveDate, sourceFile) {
       
       const qaRecords = [];
       
-      // Case 2: Invoice-level COA (Muda) → apply to every roll
-      if (result.invoice_coa) {
-        const coa = result.invoice_coa;
-        const tr = coa.test_results || {};
-        // Helper: midpoint of [min, max] range
+      // Case 2: Invoice-level COA (Muda / NTPM single-type) → apply to every roll
+      // Case 2b: NTPM multi-type → lookup COA per paper_type via coa_by_type
+      if (result.invoice_coa || result.coa_by_type) {
+        const isLocal = result.coa_source === 'pdf_local';
         const mid = arr => {
           if (!arr || !Array.isArray(arr)) return null;
           if (arr[0] == null && arr[1] == null) return null;
@@ -3486,27 +3531,16 @@ async function saveInvoice(idx, receiveDate, sourceFile) {
           if (arr[1] == null) return arr[0];
           return (Number(arr[0]) + Number(arr[1])) / 2;
         };
-        
-        // Compute mid values + apply unit conversions
-        const midSubstance = mid(tr.substance);
-        const midThickness = mid(tr.thickness);
-        const midMoisture  = mid(tr.moisture);
-        const midBursting  = mid(tr.bursting);
-        const midBonding   = mid(tr.bonding);
-        const midCobb      = mid(tr.cobb);
-        
-        const basisWeight = midSubstance;                                  // gsm → gsm
-        const caliper     = midThickness != null ? midThickness * 1000 : null;  // mm → μm
-        const moisture    = midMoisture;                                    // % → %
-        const burst       = midBursting != null ? midBursting * 98.0665 : null; // kg/cm² → kPa
-        const plybond     = midBonding;                                     // J/m² → J/m²
-        const cobbVal     = midCobb;                                        // gsm → gsm (top + bottom)
-        
-        d.rolls.forEach(r => {
-          if (!invoiceIdByLot[r.paper_lot_normalized]) return;
-          // Differentiate AI (Muda) vs local regex (NTPM) for traceability
-          const isLocal = result.coa_source === 'pdf_local';
-          qaRecords.push({
+        const makeQA = (coa, r) => {
+          if (!coa || !invoiceIdByLot[r.paper_lot_normalized]) return null;
+          const tr = coa.test_results || {};
+          const midSubstance = mid(tr.substance);
+          const midThickness = mid(tr.thickness);
+          const midMoisture  = mid(tr.moisture);
+          const midBursting  = mid(tr.bursting);
+          const midBonding   = mid(tr.bonding);
+          const midCobb      = mid(tr.cobb);
+          return {
             scope: 'roll',
             paper_invoice_id: invoiceIdByLot[r.paper_lot_normalized],
             paper_lot: r.paper_lot,
@@ -3515,13 +3549,13 @@ async function saveInvoice(idx, receiveDate, sourceFile) {
             production_date: coa.delivery_date || null,
             width_cm: r.width_mm ? r.width_mm / 10 : null,
             source: isLocal ? 'paper_in_pdf_local' : 'paper_in_pdf_ai',
-            basis_weight: basisWeight,
-            caliper: caliper,
-            moisture: moisture,
-            burst: burst,
-            plybond: plybond,
-            cobb_top: cobbVal,
-            cobb_bottom: cobbVal,
+            basis_weight: midSubstance,
+            caliper: midThickness != null ? midThickness * 1000 : null,
+            moisture: midMoisture,
+            burst: midBursting != null ? midBursting * 98.0665 : null,
+            plybond: midBonding,
+            cobb_top: midCobb,
+            cobb_bottom: midCobb,
             raw_data: {
               coa_origin: isLocal ? 'pdf_regex_local' : 'pdf_claude_api',
               picking_list: coa.picking_list,
@@ -3529,9 +3563,18 @@ async function saveInvoice(idx, receiveDate, sourceFile) {
               ranges: tr,
               units_input: { burst: 'kg/cm²', thickness: 'mm' },
               ai_usage: isLocal ? null : result.coa_usage,
-              groups_count: coa.groups_count || null,   // NTPM: จำนวน group ที่เฉลี่ย
+              groups_count: coa.groups_count || null,
             },
-          });
+          };
+        };
+
+        d.rolls.forEach(r => {
+          // multi-type: lookup COA ตาม paper_type ของม้วนนั้น
+          const coa = result.coa_by_type
+            ? (result.coa_by_type[r.paper_type] || result.invoice_coa)
+            : result.invoice_coa;
+          const qa = makeQA(coa, r);
+          if (qa) qaRecords.push(qa);
         });
       }
       
