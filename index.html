@@ -663,6 +663,53 @@
     .context-bar { flex-direction: column; align-items: flex-start; gap: 10px; }
     .machine-grid { grid-template-columns: repeat(2, 1fr); }
   }
+
+  /* ===== Lot-only (Jumbo direct) manual panel ===== */
+  .lotonly-panel {
+    display: none;
+    margin-bottom: 22px;
+    padding: 16px 16px 18px;
+    border: 2px solid var(--accent);
+    border-radius: 14px;
+    background: var(--accent-bg);
+  }
+  .lotonly-panel.show { display: block; }
+  .lotonly-head {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 14px; font-weight: 800; color: var(--accent);
+    margin-bottom: 4px;
+  }
+  .lotonly-sub { font-size: 13px; color: var(--text-dim); font-weight: 500; margin-bottom: 14px; }
+  .lotonly-panel .field { margin-bottom: 0; }
+  .lotonly-panel input[type="text"],
+  .lotonly-panel input[type="date"] { background: #fff; }
+  .lot-adv-toggle {
+    margin-top: 14px; font-size: 13px; font-weight: 700; color: var(--accent-2);
+    background: none; border: none; cursor: pointer; padding: 4px 0; width: auto;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .lot-adv-body { display: none; margin-top: 12px; }
+  .lot-adv-body.show { display: block; }
+  .lot-adv-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+  .lot-adv-grid .field-label { font-size: 13px; }
+  @media (max-width: 560px) { .lot-adv-grid { grid-template-columns: 1fr; } }
+
+  /* prefix bar on scan screen */
+  .lot-prefix-bar {
+    display: none;
+    align-items: center; flex-wrap: wrap; gap: 10px;
+    margin-bottom: 14px; padding: 12px 14px;
+    border: 2px dashed var(--accent);
+    border-radius: 12px; background: var(--accent-bg);
+  }
+  .lot-prefix-bar.show { display: flex; }
+  .lot-prefix-bar .lp-item { font-size: 13px; color: var(--text); font-weight: 600; }
+  .lot-prefix-bar .lp-item b { color: var(--accent); font-family: var(--mono); }
+  .lot-prefix-bar .lp-edit {
+    margin-left: auto; font-size: 12px; font-weight: 700; color: var(--accent-2);
+    background: #fff; border: 1.5px solid var(--accent-2); border-radius: 8px;
+    padding: 6px 12px; cursor: pointer; width: auto;
+  }
 </style>
 </head>
 <body>
@@ -763,6 +810,43 @@
         <div class="machine-grid" id="machine-grid"></div>
       </div>
 
+      <!-- Lot-only panel: shows only for SL dept / Slip sheet / LAM-SHEET (jumbo ใช้ตรง ไม่ slit) -->
+      <div class="lotonly-panel" id="lotonly-panel">
+        <div class="lotonly-head">📋 ข้อมูลม้วน Jumbo (กรอกเอง)</div>
+        <div class="lotonly-sub">เครื่องนี้ใช้ม้วน Jumbo ตรง ไม่ได้ slit — ที่หน้าสแกนจะยิงแค่ <b>Paper Lot</b> ส่วนข้อมูลอื่นกรอกที่นี่ครั้งเดียว</div>
+
+        <div class="field">
+          <label class="field-label">
+            ประเภทกระดาษ <span class="required">*</span>
+            <span class="hint" id="lot-pt-hint">เลือก/พิมพ์ประเภทกระดาษ</span>
+          </label>
+          <input type="text" id="lot-paper-type" list="lot-paper-type-list"
+                 placeholder="เช่น CPS450, M700-490..." autocomplete="off">
+          <datalist id="lot-paper-type-list"></datalist>
+        </div>
+
+        <button type="button" class="lot-adv-toggle" id="lot-adv-toggle">
+          <span id="lot-adv-caret">▸</span> ตัวเลือกเพิ่มเติม (วันที่ตัด · ม้วนที่ · slitter)
+        </button>
+        <div class="lot-adv-body" id="lot-adv-body">
+          <div class="lot-adv-grid">
+            <div class="field">
+              <label class="field-label">วันที่ตัด</label>
+              <input type="date" id="lot-cut-date">
+            </div>
+            <div class="field">
+              <label class="field-label">ม้วนที่</label>
+              <input type="text" id="lot-roll-no" value="1" inputmode="numeric">
+            </div>
+            <div class="field">
+              <label class="field-label">Slitter</label>
+              <input type="text" id="lot-slitter" value="0" inputmode="numeric">
+            </div>
+          </div>
+          <div class="lotonly-sub" style="margin:10px 0 0;">ค่าเริ่มต้น: วันที่ตัด = วันที่ผลิต · ม้วนที่ = 1 · slitter = 0 (jumbo ตรง) — แก้ได้ถ้าต้องการ</div>
+        </div>
+      </div>
+
       <div class="field">
         <label class="field-label">
           สินค้า <span class="required">*</span>
@@ -806,6 +890,15 @@
           </div>
         </div>
         <div class="product-selector" id="product-selector"></div>
+      </div>
+
+      <!-- Prefix bar: shows manual jumbo info in lot-only mode -->
+      <div class="lot-prefix-bar" id="lot-prefix-bar">
+        <span class="lp-item">ประเภท: <b id="lp-paper-type">—</b></span>
+        <span class="lp-item">วันตัด: <b id="lp-cut-date">—</b></span>
+        <span class="lp-item">ม้วน: <b id="lp-roll-no">—</b></span>
+        <span class="lp-item">slitter: <b id="lp-slitter">—</b></span>
+        <button type="button" class="lp-edit" id="lp-edit-btn">แก้ข้อมูลม้วน</button>
       </div>
 
       <div class="scanner-box" id="scanner-box">
@@ -899,7 +992,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // DATA will be populated from Supabase on page load
-let DATA = { machines: [], products: [] };
+let DATA = { machines: [], products: [], paperTypes: [] };
 
 const state = {
   date: '',
@@ -909,8 +1002,33 @@ const state = {
   products: [],  // array of product names
   currentProductIdx: 0,  // ตัวที่กำลังสแกนอยู่
   scans: [],  // { ..., productIdx }
-  sharedMode: true  // default: ม้วน 1 ตัว = share ทุกสินค้า
+  sharedMode: true,  // default: ม้วน 1 ตัว = share ทุกสินค้า
+  lotOnly: false,    // true = เครื่อง jumbo-direct (สแกนแค่ paper lot)
+  lotMeta: { paper_type: '', cut_date: '', roll_no: '1', slitter: '0' }  // ข้อมูลที่กรอกเองในโหมด lot-only
 };
+
+// ============================================================
+// LOT-ONLY CONFIG — เครื่อง/แผนกที่ใช้ม้วน Jumbo ตรง (ไม่ slit)
+//   → สแกนแค่ paper lot, ข้อมูลอื่นกรอกเองก่อนสแกน
+//   ปรับรายชื่อได้ที่นี่ที่เดียว
+// ============================================================
+const LOT_ONLY_CONFIG = {
+  departments: ['SL'],                       // ทุกเครื่องในแผนกเหล่านี้
+  machines: ['Slip sheet', 'LAM-SHEET']      // เครื่องเฉพาะ (ข้ามแผนก) — เทียบแบบไม่สนตัวพิมพ์/ช่องว่าง
+};
+function normName(s) { return String(s || '').trim().toLowerCase().replace(/\s+/g, ''); }
+function isLotOnlyMachine(m) {
+  if (!m) return false;
+  if (LOT_ONLY_CONFIG.departments.map(normName).includes(normName(m.dp))) return true;
+  if (LOT_ONLY_CONFIG.machines.map(normName).includes(normName(m.name))) return true;
+  return false;
+}
+function toDDMMYY(iso) {
+  // 'YYYY-MM-DD' → 'ddmmyy'
+  if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return '';
+  const [y, mo, d] = iso.split('-');
+  return d + mo + y.slice(2);
+}
 
 // Sample barcodes for quick-test chips
 const SAMPLE_BARCODES = [
@@ -1088,6 +1206,21 @@ function validateBarcode(bc) {
     warnings,
     fatal: false
   };
+}
+
+// Validate a paper lot (lot-only mode) — only the lot is scanned
+function validateLot(lot) {
+  const warnings = [];
+  const v = (lot || '').trim();
+  if (!v) return { valid: false, warnings: ['Paper Lot ว่างเปล่า'], fatal: true };
+  if (v.includes('_')) {
+    // มี _ แต่ไม่ครบ 5 ส่วน → น่าจะสแกนผิด/ไม่สมบูรณ์
+    warnings.push('Paper Lot มี "_" — ตรวจสอบว่าสแกนถูกช่องไหม');
+    return { valid: false, warnings, fatal: true };
+  }
+  if (v.length < 4) warnings.push(`Paper Lot "${v}" สั้นผิดปกติ (< 4 ตัวอักษร)`);
+  if (v.length > 30) warnings.push('Paper Lot ยาวผิดปกติ อาจสแกนติดกัน 2 ม้วน');
+  return { valid: warnings.length === 0, warnings, fatal: false };
 }
 
 function showToast(msg, type) {
@@ -1317,10 +1450,34 @@ function renderMachineGrid() {
       state.machineName = m.name;
       state.dp = m.dp;
       document.getElementById('machine-hint').textContent = '✓ เลือก: ' + m.name;
+      applyLotOnlyUI(m);
       renderMachineGrid();
       checkSetup();
     });
   });
+}
+
+// ============================================================
+// Lot-only UI — แสดง/ซ่อน panel กรอกข้อมูล Jumbo ตามเครื่องที่เลือก
+// ============================================================
+function buildPaperTypeList() {
+  const dl = document.getElementById('lot-paper-type-list');
+  if (!dl) return;
+  dl.innerHTML = (DATA.paperTypes || [])
+    .map(pt => `<option value="${escapeHtml(pt)}"></option>`).join('');
+}
+function applyLotOnlyUI(m) {
+  const panel = document.getElementById('lotonly-panel');
+  state.lotOnly = isLotOnlyMachine(m);
+  if (state.lotOnly) {
+    panel.classList.add('show');
+    buildPaperTypeList();
+    // ตั้งค่าเริ่มต้นวันที่ตัด = วันที่ผลิต (ถ้ายังว่าง)
+    const cutEl = document.getElementById('lot-cut-date');
+    if (cutEl && !cutEl.value) cutEl.value = fDate.value || '';
+  } else {
+    panel.classList.remove('show');
+  }
 }
 
 // Initial renders happen after Supabase load (see loadMasterData below)
@@ -1750,15 +1907,57 @@ function getValidProducts() {
 }
 function checkSetup() {
   const validProducts = getValidProducts();
-  btnStart.disabled = !(fDate.value && state.machineId && validProducts.length > 0);
+  let ok = fDate.value && state.machineId && validProducts.length > 0;
+  // โหมด lot-only: ต้องกรอกประเภทกระดาษด้วย
+  if (ok && state.lotOnly) {
+    const pt = (document.getElementById('lot-paper-type').value || '').trim();
+    ok = ok && pt.length > 0;
+  }
+  btnStart.disabled = !ok;
 }
-fDate.addEventListener('change', checkSetup);
+fDate.addEventListener('change', () => {
+  // วันที่ตัด (lot-only) ตามวันที่ผลิตถ้ายังไม่ถูกแก้เอง
+  const cutEl = document.getElementById('lot-cut-date');
+  if (cutEl && state.lotOnly && (!cutEl.value || cutEl.dataset.touched !== '1')) {
+    cutEl.value = fDate.value || '';
+  }
+  checkSetup();
+});
+
+// --- Lot-only panel listeners ---
+document.getElementById('lot-adv-toggle').addEventListener('click', () => {
+  const body = document.getElementById('lot-adv-body');
+  const caret = document.getElementById('lot-adv-caret');
+  const open = body.classList.toggle('show');
+  caret.textContent = open ? '▾' : '▸';
+});
+document.getElementById('lot-paper-type').addEventListener('input', checkSetup);
+document.getElementById('lot-cut-date').addEventListener('change', (e) => {
+  e.target.dataset.touched = '1';  // กันไม่ให้ถูก overwrite ด้วยวันที่ผลิต
+});
 
 btnStart.addEventListener('click', () => {
   const validProducts = getValidProducts();
   if (validProducts.length === 0) {
     showToast('⚠️ กรุณาเลือกสินค้าอย่างน้อย 1 รายการ', true);
     return;
+  }
+  // โหมด lot-only: เก็บข้อมูลที่กรอกเอง
+  if (state.lotOnly) {
+    const pt = (document.getElementById('lot-paper-type').value || '').trim().toUpperCase().replace(/\s+/g, '');
+    if (!pt) {
+      showToast('⚠️ กรุณากรอกประเภทกระดาษ', true);
+      return;
+    }
+    const cutIso = document.getElementById('lot-cut-date').value || fDate.value;
+    let rollNo = (document.getElementById('lot-roll-no').value || '1').trim() || '1';
+    let slitter = (document.getElementById('lot-slitter').value || '0').trim() || '0';
+    state.lotMeta = {
+      paper_type: pt,
+      cut_date: toDDMMYY(cutIso) || toDDMMYY(fDate.value),
+      roll_no: rollNo,
+      slitter: slitter
+    };
   }
   state.date = fDate.value;
   state.products = validProducts;  // [{name, isNew}]
@@ -1767,11 +1966,36 @@ btnStart.addEventListener('click', () => {
   const dStr = d.toLocaleDateString('th-TH', {day:'2-digit',month:'short',year:'2-digit'});
   document.getElementById('ctx-date').textContent = dStr;
   document.getElementById('ctx-machine').textContent = state.machineName;
+  applyScanModeUI();
   renderProductSelector();
   goToScreen(2);
 });
 
+// แสดง/ซ่อน prefix bar + ปรับ label ช่องสแกนตามโหมด
+function applyScanModeUI() {
+  const bar = document.getElementById('lot-prefix-bar');
+  const label = document.querySelector('#scanner-box .scanner-label');
+  const hint = document.querySelector('#scanner-box .scan-hint');
+  const inp = document.getElementById('scan-input');
+  if (state.lotOnly) {
+    bar.classList.add('show');
+    document.getElementById('lp-paper-type').textContent = state.lotMeta.paper_type || '—';
+    document.getElementById('lp-cut-date').textContent = state.lotMeta.cut_date || '—';
+    document.getElementById('lp-roll-no').textContent = state.lotMeta.roll_no || '—';
+    document.getElementById('lp-slitter').textContent = state.lotMeta.slitter || '—';
+    if (label) label.textContent = 'สแกนเฉพาะ Paper Lot (เลขล็อตม้วน Jumbo)';
+    if (hint) hint.textContent = 'ยิงเฉพาะเลขล็อต — ระบบจะเติมประเภท/วันตัดให้อัตโนมัติ';
+    if (inp) inp.placeholder = 'รอรับ Paper Lot...';
+  } else {
+    bar.classList.remove('show');
+    if (label) label.textContent = 'วาง cursor ในช่อง แล้วยิง QR ได้เลย';
+    if (hint) hint.textContent = 'สแกนต่อเนื่องได้เรื่อย ๆ — ไม่ต้องกดอะไรระหว่างสแกน';
+    if (inp) inp.placeholder = 'รอรับการสแกน...';
+  }
+}
+
 document.getElementById('btn-edit-ctx').addEventListener('click', () => goToScreen(1));
+document.getElementById('lp-edit-btn').addEventListener('click', () => goToScreen(1));
 
 // ========== SCREEN 2: SCANNING ==========
 const scanInput = document.getElementById('scan-input');
@@ -1900,6 +2124,38 @@ function handleScan() {
 function processOneBarcode(bcRaw) {
   // returns true if error modal was shown
 
+  // ===== Lot-only mode: ยิงแค่ paper lot =====
+  if (state.lotOnly) {
+    // ถ้าเผลอยิง QR เต็ม (มี _ ครบ 5 ส่วน) → parse เป็น barcode ปกติ ใช้ค่าจากที่ยิง
+    const norm = normalizeBarcode(bcRaw);
+    const candidate = norm.normalized;
+    if (candidate.split('_').length === 5) {
+      const parsedFull = parseBarcode(candidate);
+      const valFull = validateBarcode(candidate);
+      if (parsedFull && !valFull.fatal) {
+        return addScanRecord(parsedFull, candidate, valFull, norm.wasChanged);
+      }
+    }
+    // โหมดปกติของ lot-only: ทั้งสตริง = paper lot
+    const lot = (bcRaw || '').trim().toUpperCase();
+    const lotVal = validateLot(lot);
+    if (lotVal.fatal) {
+      showErrorModal(bcRaw, lotVal.warnings);
+      return true;
+    }
+    const m = state.lotMeta;
+    const parsedLot = {
+      paper_type: m.paper_type,
+      cut_date: m.cut_date,
+      roll_no: m.roll_no,
+      slitter: m.slitter,
+      jumbo_lot: lot
+    };
+    const fullBc = [m.paper_type, m.cut_date, m.roll_no, m.slitter, lot].join('_');
+    return addScanRecord(parsedLot, fullBc, lotVal, false);
+  }
+
+  // ===== Normal mode: full barcode =====
   // 1) Auto-normalize — แก้ case, space, cut_date format
   const normResult = normalizeBarcode(bcRaw);
   const bc = normResult.normalized;
@@ -1924,6 +2180,11 @@ function processOneBarcode(bcRaw) {
     return true;  // modal was shown
   }
 
+  return addScanRecord(parsed, bc, validation, normResult.wasChanged);
+}
+
+// บันทึกผลสแกน 1 รายการ (ใช้ร่วมกันทั้งโหมด full barcode และ lot-only)
+function addScanRecord(parsed, bc, validation, normChanged) {
   const scanId = Date.now() + Math.random();
   if (state.sharedMode) {
     // Shared mode (default): ม้วนนี้ใส่ให้ทุกสินค้า
@@ -1942,7 +2203,7 @@ function processOneBarcode(bcRaw) {
     const label = state.products.length === 1
       ? state.products[0].name
       : `${state.products.length} สินค้า`;
-    const normSuffix = normResult.wasChanged ? ' 🔧' : '';
+    const normSuffix = normChanged ? ' 🔧' : '';
     if (validation.valid) {
       showToast('✓ ' + label + ' · ' + parsed.paper_type + normSuffix);
       playBeep('success');
@@ -1963,7 +2224,7 @@ function processOneBarcode(bcRaw) {
       warnings: validation.warnings,
       ...parsed
     });
-    const normSuffix = normResult.wasChanged ? ' 🔧' : '';
+    const normSuffix = normChanged ? ' 🔧' : '';
     if (validation.valid) {
       showToast('✓ ' + currentProduct.name + ' · ' + parsed.paper_type + normSuffix);
       playBeep('success');
@@ -2028,6 +2289,16 @@ scanInput.addEventListener('input', () => {
 
   const trimmed = v.trim();
   if (!trimmed) return;
+
+  // โหมด lot-only: ยิงแค่ paper lot (ไม่มี _) → ตรวจความครบแบบ lot
+  if (state.lotOnly && !trimmed.includes('_')) {
+    // ล็อต SCG เช่น 77-4-A7914-4G | NTPM เช่น 05640606661W
+    const looksComplete = /^[0-9A-Z]{2}-\d-A\d{4}-\d[A-Z]$/i.test(trimmed) || trimmed.length >= 8;
+    _scanIdleTimer = setTimeout(() => {
+      if (scanInput.value.trim() === trimmed) handleScan();
+    }, looksComplete ? 350 : 600);
+    return;
+  }
 
   if (isBarcodeComplete(trimmed)) {
     // barcode ครบ format แล้ว → รอ 350ms หลังหยุดรับข้อมูล
@@ -2223,16 +2494,20 @@ function setConnStatus(online, label) {
 async function loadMasterData() {
   showLoading('กำลังโหลดข้อมูลเครื่องและสินค้า...');
   try {
-    const [machinesRes, productsRes] = await Promise.all([
+    const [machinesRes, productsRes, paperTypesRes] = await Promise.all([
       supabase.from('machines').select('id, name, dp').eq('is_active', true).order('id'),
-      supabase.from('products').select('product_name').eq('is_active', true).order('product_name')
+      supabase.from('products').select('product_name').eq('is_active', true).order('product_name'),
+      supabase.from('paper_types').select('paper_type').eq('is_active', true).order('paper_type')
     ]);
 
     if (machinesRes.error) throw machinesRes.error;
     if (productsRes.error) throw productsRes.error;
+    // paper_types ไม่ critical — ถ้า error ก็ยังใช้ระบบได้ (แค่ไม่มี autocomplete)
+    if (paperTypesRes.error) console.warn('โหลด paper_types ไม่ได้:', paperTypesRes.error.message);
 
     DATA.machines = machinesRes.data || [];
     DATA.products = (productsRes.data || []).map(r => r.product_name);
+    DATA.paperTypes = (paperTypesRes.data || []).map(r => r.paper_type).filter(Boolean);
 
     setConnStatus(true, `✓ ${DATA.machines.length} เครื่อง · ${DATA.products.length} สินค้า`);
 
@@ -2240,6 +2515,7 @@ async function loadMasterData() {
     renderDpTabs();
     renderMachineGrid();
     renderProductRows();
+    buildPaperTypeList();
   } catch (err) {
     console.error('Failed to load master data:', err);
     setConnStatus(false, '✗ เชื่อมต่อ DB ไม่ได้');
@@ -2606,6 +2882,17 @@ document.getElementById('btn-new').addEventListener('click', () => {
   state.products = [];
   state.currentProductIdx = 0;
   productEntries = [{ value: '', isValid: false }];
+  // reset โหมด lot-only
+  state.lotOnly = false;
+  state.lotMeta = { paper_type: '', cut_date: '', roll_no: '1', slitter: '0' };
+  document.getElementById('lotonly-panel').classList.remove('show');
+  document.getElementById('lot-paper-type').value = '';
+  document.getElementById('lot-roll-no').value = '1';
+  document.getElementById('lot-slitter').value = '0';
+  const _cd = document.getElementById('lot-cut-date');
+  _cd.value = ''; _cd.dataset.touched = '';
+  document.getElementById('lot-prefix-bar').classList.remove('show');
+  applyScanModeUI();
   // ⚠️ Keep the previously-selected date (sticky) so users batch-recording
   //    multiple machines on the same backdate don't have to reselect.
   //    The backdate warning + submit confirm prevent accidental misuse.
