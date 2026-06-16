@@ -2395,23 +2395,50 @@ function parseMPK_CSV(text) {
 // Columns: senddate, sendno, maker, car_no, type, width (inch),
 //          width (mm), diameter, productdate, refrollno, kgs, po
 // ============================================================
+// รองรับ 2 รูปแบบ header ของ UTP:
+//   เก่า: senddate, sendno, type, width (mm), refrollno, kgs, po
+//   ใหม่: dp_no, status, customer, dx_no, car_no, ship_date, serial_no,
+//         grade, width, kgs, diameter, do_no, roll_full_meter, PO
 function parseUnited_XLSX(rows) {
   if (!rows || rows.length < 2) throw new Error('ไฟล์ United ไม่มีข้อมูล');
 
-  // หา header row
-  const headers = rows[0].map(c => String(c || '').trim().toLowerCase());
-  const col = {
-    senddate: headers.indexOf('senddate'),
-    sendno: headers.indexOf('sendno'),
-    type: headers.indexOf('type'),
-    width_mm: headers.findIndex(c => c === 'width (mm)' || c === 'width(mm)'),
-    refrollno: headers.indexOf('refrollno'),
-    kgs: headers.indexOf('kgs'),
-    po: headers.indexOf('po'),
+  // ── เลือก column ที่จะใช้เป็น "invoice_no" (เปลี่ยนได้ที่นี่) ──
+  // ลำดับความสำคัญ: dp_no → do_no → dx_no → sendno (รูปแบบเก่า)
+  const INVOICE_COL_PRIORITY = ['dp_no', 'do_no', 'dx_no', 'sendno'];
+
+  // header → index (lowercase, ตัด space ซ้ำ)
+  const headers = rows[0].map(c => String(c || '').trim().toLowerCase().replace(/\s+/g, ' '));
+  const idx = (...names) => {
+    for (const nm of names) {
+      const i = headers.indexOf(nm);
+      if (i !== -1) return i;
+    }
+    return -1;
   };
 
-  if (col.refrollno === -1 || col.kgs === -1) {
-    throw new Error('ไม่พบ column refrollno หรือ kgs ในไฟล์ United');
+  const col = {
+    // ม้วน (lot) : ใหม่=serial_no, เก่า=refrollno
+    lot:      idx('serial_no', 'refrollno', 'ref roll no'),
+    // ชนิดกระดาษ : ใหม่=grade, เก่า=type
+    type:     idx('grade', 'type'),
+    // หน้ากว้าง (mm) : ใหม่=width, เก่า=width (mm)
+    width_mm: idx('width (mm)', 'width(mm)', 'width'),
+    // น้ำหนัก
+    kgs:      idx('kgs', 'kg', 'weight'),
+    // วันที่ : ใหม่=ship_date, เก่า=senddate
+    date:     idx('ship_date', 'senddate', 'send date'),
+    // PO
+    po:       idx('po'),
+  };
+  // หา column สำหรับ invoice ตามลำดับ priority
+  col.invoice = -1;
+  for (const nm of INVOICE_COL_PRIORITY) {
+    const i = headers.indexOf(nm);
+    if (i !== -1) { col.invoice = i; break; }
+  }
+
+  if (col.lot === -1 || col.kgs === -1) {
+    throw new Error('ไม่พบ column serial_no/refrollno หรือ kgs ในไฟล์ UTP');
   }
 
   const rolls = [];
@@ -2419,15 +2446,19 @@ function parseUnited_XLSX(rows) {
 
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
-    if (!row || !row[col.refrollno]) continue;
+    if (!row || !row[col.lot]) continue;
 
-    const lot = String(row[col.refrollno]).trim();
+    const lot = String(row[col.lot]).trim();
     const weight = parseNum(row[col.kgs]);
     if (!lot || !weight) continue;
 
-    if (!invoice_no && col.sendno !== -1) invoice_no = String(row[col.sendno]).trim();
-    if (!invoice_date && col.senddate !== -1) invoice_date = parseDate(row[col.senddate]);
-    if (!po_no && col.po !== -1) po_no = String(row[col.po]).trim();
+    if (!invoice_no && col.invoice !== -1) invoice_no = String(row[col.invoice]).trim();
+    if (!invoice_date && col.date !== -1) invoice_date = parseDate(row[col.date]);
+    if (!po_no && col.po !== -1) {
+      const rawPo = row[col.po];
+      // PO อาจมาเป็น number (690427) → ตัด .0 ออก
+      po_no = (typeof rawPo === 'number') ? String(Math.round(rawPo)) : String(rawPo).trim();
+    }
 
     // Normalize paper_type: เพิ่ม - ระหว่างตัวอักษรกับตัวเลข (e.g. KI185 → KI-185)
     // ยกเว้น whitelist ที่ใน DB ไม่มี - (CB350, CBS350, CPS450)
@@ -2670,6 +2701,35 @@ function detectSupplier(filename, content) {
     return 'NTPM_XLSX';
   }
 
+  return null;
+}
+
+// ============================================================
+// Fallback: ตรวจ supplier จาก "เนื้อหา" ของไฟล์ xls/xlsx
+// ใช้กรณีชื่อไฟล์ไม่สื่อ (เช่น 16_6_69.xls ของ UTP)
+// อ่านแค่ header row แล้วดู signature
+// ============================================================
+async function sniffXlsxSupplier(file) {
+  try {
+    const buf = await readAsArrayBuffer(file);
+    const wb = XLSX.read(buf, { type: 'array' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+    if (!rows || !rows.length) return null;
+    const h = rows[0].map(c => String(c || '').trim().toLowerCase().replace(/\s+/g, ' '));
+    const has = (...names) => names.some(n => h.includes(n));
+
+    // UTP/United: ต้องมี (serial_no หรือ refrollno) + kgs + (grade หรือ type)
+    if (has('serial_no', 'refrollno') && has('kgs', 'kg') && has('grade', 'type')) {
+      return 'United_XLSX';
+    }
+    // NTPM Loading Note (เผื่อชื่อไฟล์ไม่สื่อ)
+    if (h.some(c => c.includes('loading note')) || h.includes('eta')) {
+      return 'NTPM_XLSX';
+    }
+  } catch (e) {
+    console.warn('sniffXlsxSupplier failed:', e);
+  }
   return null;
 }
 
@@ -2940,7 +3000,11 @@ async function handleFiles(fileList) {
   
   for (const file of files) {
     try {
-      const supplier = detectSupplier(file.name, '');
+      let supplier = detectSupplier(file.name, '');
+      // ชื่อไฟล์ไม่สื่อ + เป็น xls/xlsx → ลองตรวจจากเนื้อหา (เช่น UTP ชื่อ 16_6_69.xls)
+      if (!supplier && /\.xlsx?$/i.test(file.name)) {
+        supplier = await sniffXlsxSupplier(file);
+      }
       const result = await parseFile(file, supplier);
       
       if (!result) {
