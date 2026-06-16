@@ -1110,6 +1110,15 @@ tr:hover td { background: var(--panel-2); }
   padding: 6px 10px;
 }
 .group-inv.expanded + .group-inv-children { display: block; }
+/* ไฮไลต์ invoice ที่เพิ่งบันทึกราคา แล้วค่อยๆ จางหาย */
+.group-inv.just-saved {
+  animation: justSavedPulse 2.6s ease-out;
+}
+@keyframes justSavedPulse {
+  0%   { background: #fef9c3; box-shadow: 0 0 0 2px #facc15 inset; }
+  60%  { background: #fef9c3; box-shadow: 0 0 0 2px #facc15 inset; }
+  100% { background: transparent; box-shadow: none; }
+}
 
 .group-inv-children table {
   font-size: 13px;
@@ -4313,7 +4322,7 @@ function renderGroupedList(rows, totalDates, totalPages) {
             : '';
 
           html += `
-            <div class="group-inv${isFirstInv ? ' expanded' : ''}" data-supplier="${escapeHtml(supplier)}" data-target="${invId}">
+            <div class="group-inv${isFirstInv ? ' expanded' : ''}" data-supplier="${escapeHtml(supplier)}" data-target="${invId}" data-invkey="${escapeHtml(supplier + ' ::: ' + invoice_no + ' ::: ' + date)}">
               <div class="group-inv-header">
                 <div class="group-inv-left">
                   <span class="group-inv-arrow">▶</span>
@@ -4437,6 +4446,7 @@ function renderGroupedList(rows, totalDates, totalPages) {
       target.style.display = el.classList.contains('expanded') ? 'block' : 'none';
     });
   });
+
   
   // Pagination by invoice_date (ไม่ตัดกลางวัน)
   if (totalPages > 1) {
@@ -5000,9 +5010,38 @@ document.addEventListener('DOMContentLoaded', () => {
   if (saveBtn) saveBtn.addEventListener('click', saveBulkPrice);
 });
 
+// ขยายกลุ่ม (วัน → supplier → PO → invoice) ของ invoice ที่ระบุ แล้วเลื่อนจอไปหา + ไฮไลต์
+// invKey = "supplier ::: invoice_no ::: date" (ตรงกับ data-invkey ตอน render)
+function expandAndScrollToInvoice(invKey) {
+  const inv = [...document.querySelectorAll('.group-inv')]
+    .find(el => el.dataset.invkey === invKey);
+  if (!inv) return false;
+
+  const expand = (groupEl) => {
+    if (!groupEl) return;
+    groupEl.classList.add('expanded');
+    groupEl.classList.remove('collapsed');
+    const tgt = document.getElementById(groupEl.dataset.target);
+    if (tgt) tgt.style.display = 'block';
+  };
+
+  // ขยาย parent ทุกชั้นจากบนลงล่าง (day → supplier → PO)
+  const dayChildren = inv.closest('.group-day-children');
+  const supChildren = inv.closest('.group-sup-children');
+  const poChildren  = inv.closest('.group-po-children');
+  if (dayChildren) expand(dayChildren.previousElementSibling); // .group-day
+  if (supChildren) expand(supChildren.previousElementSibling); // .group-sup
+  if (poChildren)  expand(poChildren.previousElementSibling);  // .group-po
+  expand(inv); // กางตัว invoice เองเพื่อโชว์ตารางม้วน
+
+  inv.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  inv.classList.add('just-saved');
+  setTimeout(() => inv.classList.remove('just-saved'), 2600);
+  return true;
+}
+
 async function saveBulkPrice() {
   if (!bulkPriceContext) return;
-  
   const btn = $('#btnSaveBulkPrice');
   const errorDiv = $('#bulkPriceError');
   const mode = $('#bulkPriceMode').value;
@@ -5074,17 +5113,16 @@ async function saveBulkPrice() {
       throw new Error(`${errors.length}/${updates.length} ม้วนล้มเหลว: ${errors[0]}`);
     }
     
-    // จำ invoice ที่กำลังแก้ไว้ก่อน close
-    const scrollTarget = bulkPriceContext
-      ? `inv-${(bulkPriceContext.supplier||'').replace(/\s+/g,'-')}-${(bulkPriceContext.invoice_no||'').replace(/\s+/g,'-')}`
+    // จำ invoice ที่กำลังแก้ไว้ก่อน close (ใช้ key เดียวกับ data-invkey ตอน render)
+    const invKey = bulkPriceContext
+      ? `${bulkPriceContext.supplier} ::: ${bulkPriceContext.invoice_no} ::: ${bulkPriceContext.date}`
       : null;
     window.closeBulkPrice();
     await loadList();
-    // Scroll กลับมาที่ invoice เดิมหลัง render เสร็จ
-    if (scrollTarget) {
+    // เด้งกลับมาที่ invoice เดิม (กางกลุ่มให้เห็นยอดรวม + ตารางม้วนที่เพิ่งบันทึก)
+    if (invKey) {
       requestAnimationFrame(() => {
-        const el = document.getElementById(scrollTarget);
-        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        requestAnimationFrame(() => expandAndScrollToInvoice(invKey));
       });
     }
   } catch (err) {
