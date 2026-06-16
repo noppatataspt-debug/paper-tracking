@@ -314,6 +314,12 @@ body {
   font-weight: 600; cursor: pointer;
 }
 .list-controls button:hover { background: #1e40af; }
+.list-controls .custom-range { display: flex; align-items: center; gap: 6px; }
+.list-controls .custom-range input[type="date"] { flex: none; min-width: auto; }
+.list-controls .range-sep { color: var(--text-dim); font-weight: 700; }
+.list-controls .btn-clear { background: #6b7280; }
+.list-controls .btn-clear:hover { background: #4b5563; }
+.filter-count { font-size: 12px; color: var(--text-dim); margin: -4px 0 10px 2px; min-height: 16px; }
 
 /* Group view */
 .group-day {
@@ -805,15 +811,31 @@ body {
 
     <div class="list-controls">
       <input type="text" id="searchInput" placeholder="🔍 ค้นหา lot...">
+      <select id="filterSupplier" title="กรองตาม Supplier">
+        <option value="">ทุก Supplier</option>
+      </select>
+      <select id="filterType" title="กรองตามประเภทกระดาษ">
+        <option value="">ทุกประเภท</option>
+      </select>
       <select id="filterPeriod">
         <option value="today">วันนี้</option>
         <option value="week">7 วัน</option>
         <option value="month" selected>เดือนนี้</option>
+        <option value="lastmonth">เดือนที่แล้ว</option>
+        <option value="year">ปีนี้</option>
+        <option value="custom">📅 กำหนดช่วงเอง</option>
         <option value="all">ทั้งหมด</option>
       </select>
+      <div id="customRange" class="custom-range" style="display:none;">
+        <input type="date" id="filterFrom" title="ตั้งแต่วันที่">
+        <span class="range-sep">→</span>
+        <input type="date" id="filterTo" title="ถึงวันที่">
+      </div>
+      <button id="btnClearFilters" class="btn-clear" title="ล้างตัวกรองทั้งหมด">✕ ล้าง</button>
       <button id="btnExport">📥 Export CSV</button>
       <button id="btnAdminLogin" class="btn-admin-login">🔐 Admin</button>
     </div>
+    <div id="filterCount" class="filter-count"></div>
 
     <div id="outflowList">
       <div class="empty-state">
@@ -1095,6 +1117,7 @@ let isPreStock = false;
 let currentMode = null;     // 'winder' | 'sheeter'
 let currentSlitter = null;  // '1' | '2' | ... | '6'
 let allOutflows = [];
+let currentFiltered = [];   // รายการหลังผ่านตัวกรอง (search/supplier/type) — ใช้ตอน Export
 let pendingPreStockLot = null;
 let isSubmitting = false;   // กันกดปุ่มซ้ำระหว่าง submit
 let lastSubmitAt = 0;       // throttle หลัง submit สำเร็จ
@@ -1728,14 +1751,27 @@ async function loadOutflows() {
     .select('*')
     .order('created_at', { ascending: false });
   
-  if (period !== 'all') {
-    const now = new Date();
-    let from;
-    if (period === 'today') from = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    else if (period === 'week') from = new Date(now.getTime() - 7*24*60*60*1000);
-    else if (period === 'month') from = new Date(now.getFullYear(), now.getMonth(), 1);
-    if (from) query = query.gte('outflow_date', from.toISOString().split('T')[0]);
+  const now = new Date();
+  const ymd = d => d.toISOString().split('T')[0];
+  if (period === 'today') {
+    query = query.gte('outflow_date', ymd(new Date(now.getFullYear(), now.getMonth(), now.getDate())));
+  } else if (period === 'week') {
+    query = query.gte('outflow_date', ymd(new Date(now.getTime() - 7*24*60*60*1000)));
+  } else if (period === 'month') {
+    query = query.gte('outflow_date', ymd(new Date(now.getFullYear(), now.getMonth(), 1)));
+  } else if (period === 'lastmonth') {
+    const from = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const to   = new Date(now.getFullYear(), now.getMonth(), 0); // วันสุดท้ายของเดือนก่อน
+    query = query.gte('outflow_date', ymd(from)).lte('outflow_date', ymd(to));
+  } else if (period === 'year') {
+    query = query.gte('outflow_date', ymd(new Date(now.getFullYear(), 0, 1)));
+  } else if (period === 'custom') {
+    const f = document.getElementById('filterFrom').value;
+    const t = document.getElementById('filterTo').value;
+    if (f) query = query.gte('outflow_date', f);
+    if (t) query = query.lte('outflow_date', t);
   }
+  // period === 'all' → ไม่กรองวันที่
   
   const { data, error } = await query;
   if (error) {
@@ -1744,17 +1780,57 @@ async function loadOutflows() {
   }
   
   allOutflows = data || [];
+  populateFilterDropdowns();
   renderList();
   renderStats();
 }
 
+// เติม dropdown Supplier + ประเภทกระดาษ จากข้อมูลที่โหลดมา (คงค่าที่เลือกไว้ถ้ายังมี)
+function populateFilterDropdowns() {
+  const supSel = document.getElementById('filterSupplier');
+  const typeSel = document.getElementById('filterType');
+  if (!supSel || !typeSel) return;
+  const prevSup = supSel.value;
+  const prevType = typeSel.value;
+
+  const suppliers = [...new Set(allOutflows.map(o => o.supplier_name).filter(Boolean))].sort();
+  const types = [...new Set(allOutflows.map(o => o.paper_type).filter(Boolean))]
+    .sort((a, b) => String(a).localeCompare(String(b)));
+
+  supSel.innerHTML = '<option value="">ทุก Supplier</option>' +
+    suppliers.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
+  typeSel.innerHTML = '<option value="">ทุกประเภท</option>' +
+    types.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+
+  if (suppliers.includes(prevSup)) supSel.value = prevSup;
+  if (types.includes(prevType)) typeSel.value = prevType;
+}
+
 function renderList() {
   const search = document.getElementById('searchInput').value.trim().toUpperCase();
+  const supFilter = document.getElementById('filterSupplier')?.value || '';
+  const typeFilter = document.getElementById('filterType')?.value || '';
   let filtered = allOutflows;
   if (search) {
     filtered = filtered.filter(o => 
       (o.paper_lot_normalized || '').includes(normalize(search))
     );
+  }
+  if (supFilter)  filtered = filtered.filter(o => (o.supplier_name || '') === supFilter);
+  if (typeFilter) filtered = filtered.filter(o => (o.paper_type || '') === typeFilter);
+
+  currentFiltered = filtered;  // เก็บไว้ให้ Export ใช้ (export เฉพาะที่กรองอยู่)
+
+  // อัปเดตตัวนับผลลัพธ์
+  const countEl = document.getElementById('filterCount');
+  if (countEl) {
+    const activeRolls = filtered.filter(o => !o.voided).length;
+    const activeKg = Math.round(filtered.filter(o => !o.voided).reduce((s, o) => s + (Number(o.weight_kg) || 0), 0));
+    const totalActive = allOutflows.filter(o => !o.voided).length;
+    const hasFilter = search || supFilter || typeFilter;
+    countEl.textContent = hasFilter
+      ? `🔎 แสดง ${activeRolls.toLocaleString()} ม้วน · ${activeKg.toLocaleString()} kg (กรองจากทั้งหมด ${totalActive.toLocaleString()} ม้วน)`
+      : `รวม ${activeRolls.toLocaleString()} ม้วน · ${activeKg.toLocaleString()} kg`;
   }
   
   const list = document.getElementById('outflowList');
@@ -1966,14 +2042,47 @@ window.voidOutflow = async function(id, lot) {
 };
 
 document.getElementById('searchInput').addEventListener('input', renderList);
-document.getElementById('filterPeriod').addEventListener('change', loadOutflows);
+document.getElementById('filterSupplier').addEventListener('change', renderList);
+document.getElementById('filterType').addEventListener('change', renderList);
+
+document.getElementById('filterPeriod').addEventListener('change', () => {
+  const isCustom = document.getElementById('filterPeriod').value === 'custom';
+  document.getElementById('customRange').style.display = isCustom ? 'flex' : 'none';
+  if (isCustom) {
+    // ตั้งค่าเริ่มต้นช่วงวันที่เป็น "เดือนนี้" ถ้ายังว่าง
+    const ff = document.getElementById('filterFrom');
+    const ft = document.getElementById('filterTo');
+    if (!ff.value && !ft.value) {
+      const now = new Date();
+      ff.value = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+      ft.value = now.toISOString().split('T')[0];
+    }
+  }
+  loadOutflows();
+});
+
+document.getElementById('filterFrom').addEventListener('change', () => {
+  if (document.getElementById('filterPeriod').value === 'custom') loadOutflows();
+});
+document.getElementById('filterTo').addEventListener('change', () => {
+  if (document.getElementById('filterPeriod').value === 'custom') loadOutflows();
+});
+
+document.getElementById('btnClearFilters').addEventListener('click', () => {
+  document.getElementById('searchInput').value = '';
+  document.getElementById('filterSupplier').value = '';
+  document.getElementById('filterType').value = '';
+  renderList();
+});
 
 // ====== Export CSV ======
 document.getElementById('btnExport').addEventListener('click', () => {
   const rows = [
     ['วันที่ตัดออก', 'เวลาบันทึก', 'เครื่อง', 'Paper Lot', 'Supplier', 'ประเภท', 'หน้ากว้าง', 'น้ำหนัก', 'Pre-stock', 'สถานะ']
   ];
-  allOutflows.forEach(o => {
+  // Export เฉพาะรายการที่กรองอยู่ (ตาม search/supplier/type/period ที่เลือก)
+  const exportRows = currentFiltered.length ? currentFiltered : allOutflows;
+  exportRows.forEach(o => {
     rows.push([
       o.outflow_date || '',
       o.created_at || '',
