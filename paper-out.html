@@ -1785,16 +1785,33 @@ async function loadOutflows() {
   renderStats();
 }
 
-// เติม dropdown Supplier + ประเภทกระดาษ จากข้อมูลที่โหลดมา (คงค่าที่เลือกไว้ถ้ายังมี)
-function populateFilterDropdowns() {
+// เติม dropdown Supplier + ประเภทกระดาษ แบบ cascade (สัมพันธ์กัน)
+// changed = 'supplier' | 'type' | null  → บอกว่าผู้ใช้เพิ่งเปลี่ยนช่องไหน (ตัวนั้นจะคงค่าไว้)
+function populateFilterDropdowns(changed = null) {
   const supSel = document.getElementById('filterSupplier');
   const typeSel = document.getElementById('filterType');
   if (!supSel || !typeSel) return;
-  const prevSup = supSel.value;
-  const prevType = typeSel.value;
 
-  const suppliers = [...new Set(allOutflows.map(o => o.supplier_name).filter(Boolean))].sort();
-  const types = [...new Set(allOutflows.map(o => o.paper_type).filter(Boolean))]
+  let curSup = supSel.value;
+  let curType = typeSel.value;
+
+  // ถ้าเลือกทั้ง supplier และประเภท แต่ไม่มี row ที่ตรงทั้งคู่ →
+  // รีเซ็ตตัวที่ "ไม่ได้เพิ่งเลือก" (คงตัวที่ผู้ใช้เพิ่งกดไว้)
+  if (curSup && curType) {
+    const ok = allOutflows.some(o =>
+      (o.supplier_name || '') === curSup && (o.paper_type || '') === curType);
+    if (!ok) {
+      if (changed === 'type') curSup = '';   // เพิ่งเปลี่ยนประเภท → คงประเภท ล้าง supplier
+      else curType = '';                      // กรณีอื่น → คง supplier ล้างประเภท
+    }
+  }
+
+  // ตัวเลือก supplier มาจาก row ที่ตรงประเภทที่เลือก (ถ้ามี) — และในทางกลับกัน
+  const supSource  = curType ? allOutflows.filter(o => (o.paper_type || '')    === curType) : allOutflows;
+  const typeSource = curSup  ? allOutflows.filter(o => (o.supplier_name || '') === curSup)  : allOutflows;
+
+  const suppliers = [...new Set(supSource.map(o => o.supplier_name).filter(Boolean))].sort();
+  const types = [...new Set(typeSource.map(o => o.paper_type).filter(Boolean))]
     .sort((a, b) => String(a).localeCompare(String(b)));
 
   supSel.innerHTML = '<option value="">ทุก Supplier</option>' +
@@ -1802,8 +1819,8 @@ function populateFilterDropdowns() {
   typeSel.innerHTML = '<option value="">ทุกประเภท</option>' +
     types.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
 
-  if (suppliers.includes(prevSup)) supSel.value = prevSup;
-  if (types.includes(prevType)) typeSel.value = prevType;
+  supSel.value  = suppliers.includes(curSup) ? curSup : '';
+  typeSel.value = types.includes(curType) ? curType : '';
 }
 
 function renderList() {
@@ -2042,8 +2059,14 @@ window.voidOutflow = async function(id, lot) {
 };
 
 document.getElementById('searchInput').addEventListener('input', renderList);
-document.getElementById('filterSupplier').addEventListener('change', renderList);
-document.getElementById('filterType').addEventListener('change', renderList);
+document.getElementById('filterSupplier').addEventListener('change', () => {
+  populateFilterDropdowns('supplier');   // narrow ช่องประเภทตาม supplier ที่เลือก
+  renderList();
+});
+document.getElementById('filterType').addEventListener('change', () => {
+  populateFilterDropdowns('type');       // narrow ช่อง supplier ตามประเภทที่เลือก
+  renderList();
+});
 
 document.getElementById('filterPeriod').addEventListener('change', () => {
   const isCustom = document.getElementById('filterPeriod').value === 'custom';
@@ -2072,6 +2095,7 @@ document.getElementById('btnClearFilters').addEventListener('click', () => {
   document.getElementById('searchInput').value = '';
   document.getElementById('filterSupplier').value = '';
   document.getElementById('filterType').value = '';
+  populateFilterDropdowns();   // คืนตัวเลือกเต็มทั้งสองช่อง
   renderList();
 });
 
