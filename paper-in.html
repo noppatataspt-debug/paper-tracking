@@ -1119,6 +1119,13 @@ tr:hover td { background: var(--panel-2); }
   60%  { background: #fef9c3; box-shadow: 0 0 0 2px #facc15 inset; }
   100% { background: transparent; box-shadow: none; }
 }
+/* ไฮไลต์แถวม้วนเดี่ยวที่เพิ่งใส่ราคา */
+tr.just-saved-row > td { animation: justSavedRow 2.6s ease-out; }
+@keyframes justSavedRow {
+  0%   { background: #fef9c3; }
+  60%  { background: #fef9c3; }
+  100% { background: transparent; }
+}
 
 .group-inv-children table {
   font-size: 13px;
@@ -1210,7 +1217,7 @@ tr:hover td { background: var(--panel-2); }
       <div class="supplier-badges">
         <span class="supp-badge supp-ok">SCG ✓</span>
         <span class="supp-badge supp-ok">MPK ✓</span>
-        <span class="supp-badge supp-ok">United ✓</span>
+        <span class="supp-badge supp-ok">UTP ✓</span>
         <span class="supp-badge supp-ok">Muda ✓</span>
         <span class="supp-badge supp-ok">NTPM ✓</span>
         <span class="supp-badge supp-pending">AP</span>
@@ -1234,7 +1241,7 @@ tr:hover td { background: var(--panel-2); }
       <ul>
         <li><strong>SCG:</strong> Upload ไฟล์ .txt (ชื่อ 0535xxxxxx.txt) — พร้อมไฟล์ COA .xlsx ถ้ามี</li>
         <li><strong>MPK:</strong> Upload ไฟล์ Packing List .csv</li>
-        <li><strong>United:</strong> Upload ไฟล์ .xlsx (ASPT-xxxx.xlsx)</li>
+        <li><strong>UTP:</strong> Upload ไฟล์ .xlsx/.xls (ASPT-xxxx, UTP, หรือชื่อวันที่ เช่น 16_6_69.xls)</li>
         <li><strong>Muda:</strong> Upload ไฟล์ .xls (Asia_Tube_PL_xxxx.xls) <strong>+ COA .pdf</strong> — ระบบ match invoice กันเอง 🤖</li>
         <li><strong>Supplier อื่น:</strong> ใช้ Tab "กรอกมือ" ก่อน</li>
       </ul>
@@ -3266,7 +3273,7 @@ async function parseFile(file, supplier) {
     const ws = wb.Sheets[wb.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
     const data = parseUnited_XLSX(rows);
-    return { supplier: 'United', data, status: 'ok' };
+    return { supplier: 'UTP', data, status: 'ok' };
   }
   
   if (supplier === 'Muda_XLS') {
@@ -4059,7 +4066,7 @@ async function saveManual() {
 // TAB 3: LIST (Grouped by invoice_date → Supplier+Invoice → Rolls)
 // Paginate by วันที่ (invoice_date) — ไม่ตัดกลางวัน
 // ============================================================
-async function loadList() {
+async function loadList(focusDate = null) {
   const container = $('#l-grouped-list');
   container.innerHTML = '<div style="text-align:center; padding:40px; color:var(--text-dim)">กำลังโหลด...</div>';
   
@@ -4089,6 +4096,12 @@ async function loadList() {
     const allDates = [...new Set((allDateRows || []).map(r => r.invoice_date || '(ไม่ระบุ)'))];
     const totalDates = allDates.length;
     const totalPages = Math.max(1, Math.ceil(totalDates / state.listDatesPerPage));
+    // ถ้าระบุ focusDate (เช่นหลังบันทึกราคา) → เด้งไปหน้าที่มีวันนั้นเสมอ
+    // (pagination แบ่งทั้งวัน วันเดียวกันอยู่หน้าเดียวกัน → invoice เดียวกันไม่ข้ามหน้า)
+    if (focusDate) {
+      const di = allDates.indexOf(focusDate);
+      if (di !== -1) state.listDatePage = Math.floor(di / state.listDatesPerPage) + 1;
+    }
     if (state.listDatePage > totalPages) state.listDatePage = totalPages;
     const pageDates = allDates.slice(
       (state.listDatePage - 1) * state.listDatesPerPage,
@@ -4359,7 +4372,7 @@ function renderGroupedList(rows, totalDates, totalPages) {
                   ${arr.map(r => {
                     const rollValue = (r.price_per_kg && r.weight_kg) ? (parseFloat(r.price_per_kg) * parseFloat(r.weight_kg)) : null;
                     return `
-                    <tr>
+                    <tr id="roll-${r.id}">
                       <td class="td-mono">${escapeHtml(r.paper_lot)}</td>
                       <td class="td-mono">${escapeHtml(r.paper_type || '—')}</td>
                       <td>${renderCategoryBadge(r.paper_category)}</td>
@@ -4901,13 +4914,18 @@ async function saveSinglePrice() {
       }
     });
     
-    const scrollTarget2 = editingRollId ? `roll-${editingRollId}` : null;
+    // สร้าง key ของ invoice + วันสำหรับเด้งกลับ (จาก row ที่เพิ่งแก้)
+    const invKey = row
+      ? `${row.supplier || '(ไม่ระบุ)'} ::: ${row.invoice_no || '(ไม่ระบุ)'} ::: ${row.invoice_date || row.receive_date || '(ไม่ระบุ)'}`
+      : null;
+    const focusDate = row?.invoice_date || '(ไม่ระบุ)';
+    const rollId = singlePriceId;
     window.closeSinglePrice();
-    await loadList();
-    if (scrollTarget2) {
+    await loadList(focusDate);
+    // เด้งกลับมาที่ม้วนที่เพิ่งใส่ราคา (กางกลุ่ม + ไฮไลต์แถวนั้น)
+    if (invKey) {
       requestAnimationFrame(() => {
-        const el = document.getElementById(scrollTarget2);
-        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        requestAnimationFrame(() => expandAndScrollToInvoice(invKey, rollId));
       });
     }
   } catch (err) {
@@ -5012,7 +5030,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // ขยายกลุ่ม (วัน → supplier → PO → invoice) ของ invoice ที่ระบุ แล้วเลื่อนจอไปหา + ไฮไลต์
 // invKey = "supplier ::: invoice_no ::: date" (ตรงกับ data-invkey ตอน render)
-function expandAndScrollToInvoice(invKey) {
+// rollId (ออปชัน) = ถ้าระบุ จะเลื่อน + ไฮไลต์ที่แถวม้วนนั้นแทน header
+function expandAndScrollToInvoice(invKey, rollId = null) {
   const inv = [...document.querySelectorAll('.group-inv')]
     .find(el => el.dataset.invkey === invKey);
   if (!inv) return false;
@@ -5034,9 +5053,17 @@ function expandAndScrollToInvoice(invKey) {
   if (poChildren)  expand(poChildren.previousElementSibling);  // .group-po
   expand(inv); // กางตัว invoice เองเพื่อโชว์ตารางม้วน
 
-  inv.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  inv.classList.add('just-saved');
-  setTimeout(() => inv.classList.remove('just-saved'), 2600);
+  // ถ้าระบุม้วน → เลื่อน+ไฮไลต์ที่แถวม้วนนั้น, ไม่งั้นไฮไลต์ทั้ง invoice
+  const rollEl = rollId ? document.getElementById(`roll-${rollId}`) : null;
+  if (rollEl) {
+    rollEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    rollEl.classList.add('just-saved-row');
+    setTimeout(() => rollEl.classList.remove('just-saved-row'), 2600);
+  } else {
+    inv.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    inv.classList.add('just-saved');
+    setTimeout(() => inv.classList.remove('just-saved'), 2600);
+  }
   return true;
 }
 
@@ -5117,8 +5144,10 @@ async function saveBulkPrice() {
     const invKey = bulkPriceContext
       ? `${bulkPriceContext.supplier} ::: ${bulkPriceContext.invoice_no} ::: ${bulkPriceContext.date}`
       : null;
+    // focusDate ใช้ key เดียวกับ pagination (invoice_date) เพื่อเด้งไปหน้าที่ถูกต้อง
+    const focusDate = bulkPriceContext?.rolls?.[0]?.invoice_date || '(ไม่ระบุ)';
     window.closeBulkPrice();
-    await loadList();
+    await loadList(focusDate);
     // เด้งกลับมาที่ invoice เดิม (กางกลุ่มให้เห็นยอดรวม + ตารางม้วนที่เพิ่งบันทึก)
     if (invKey) {
       requestAnimationFrame(() => {
