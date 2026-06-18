@@ -240,11 +240,13 @@
       <div class="grid" style="margin-bottom:10px;">
         <div><label class="fl">Supplier</label><select id="flt-supplier"><option value="">— ทั้งหมด —</option></select></div>
         <div><label class="fl">Product</label><select id="flt-product"><option value="">— ทั้งหมด —</option></select></div>
-        <div><label class="fl">รับเข้า ตั้งแต่</label><input type="date" id="flt-from"></div>
+        <div><label class="fl">ใช้วันที่ของ</label><select id="flt-datefield"><option value="receive_date" selected>วันรับเข้า</option><option value="coa_date">วันที่ COA</option></select></div>
+        <div><label class="fl">ตั้งแต่</label><input type="date" id="flt-from"></div>
         <div><label class="fl">ถึง</label><input type="date" id="flt-to"></div>
       </div>
       <div style="display:flex; gap:10px; margin-bottom:8px; flex-wrap:wrap;">
         <button class="btn outline sm" id="reload-lots">🔄 รีโหลด</button>
+        <button class="btn outline sm" id="default-flt">📅 ใช้ค่าเริ่มต้น (3 เดือน)</button>
         <button class="btn outline sm" id="clear-flt">ล้างตัวกรอง</button>
         <span id="lots-count" style="align-self:center; font-size:13px; color:var(--text-dim);"></span>
       </div>
@@ -632,23 +634,44 @@ async function loadLots() {
     state.lotRows = rows;
     // populate filter options
     const sups = [...new Set(rows.map(r => r.supplier).filter(Boolean))].sort();
-    const prods = [...new Set(rows.map(r => r.product).filter(Boolean))].sort();
-    const fill = (sel, arr) => { const cur = sel.value;
-      sel.innerHTML = '<option value="">— ทั้งหมด —</option>' + arr.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
-      if (arr.includes(cur)) sel.value = cur; };
-    fill($('#flt-supplier'), sups); fill($('#flt-product'), prods);
+    fillFlt($('#flt-supplier'), sups);
+    refreshFltProductOptions();
+    if (!$('#flt-from').value && !$('#flt-to').value) setFltDefaultDates(); // ครั้งแรก = 3 เดือนย้อนหลัง
     renderLotsFiltered();
   } catch (e) { console.error(e); wrap.innerHTML = `<div class="empty" style="color:var(--danger)">โหลดไม่ได้: ${escapeHtml(e.message||e)}</div>`; }
+}
+
+// default ช่วงวัน = 3 เดือนย้อนหลัง → วันนี้ (เหมือนหน้ากระดาษ)
+function setFltDefaultDates() {
+  const today = new Date();
+  const back = new Date(today); back.setMonth(back.getMonth() - 3);
+  const fmt = d => new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,10);
+  $('#flt-from').value = fmt(back);
+  $('#flt-to').value = fmt(today);
+}
+
+function fillFlt(sel, arr) {
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">— ทั้งหมด —</option>' + arr.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+  if (arr.includes(cur)) sel.value = cur;
+}
+// product cascade ตาม supplier ที่เลือก
+function refreshFltProductOptions() {
+  const sup = $('#flt-supplier').value;
+  const prods = [...new Set((state.lotRows || []).filter(r => !sup || r.supplier === sup).map(r => r.product).filter(Boolean))].sort();
+  fillFlt($('#flt-product'), prods);
 }
 
 function renderLotsFiltered() {
   const wrap = $('#lots-list');
   const fs = $('#flt-supplier').value, fp = $('#flt-product').value;
   const ff = $('#flt-from').value, ft = $('#flt-to').value;
-  const rows = (state.lotRows || []).filter(r =>
-    (!fs || r.supplier === fs) && (!fp || r.product === fp) &&
-    (!ff || (r.receive_date && r.receive_date >= ff)) &&
-    (!ft || (r.receive_date && r.receive_date <= ft)));
+  const df = $('#flt-datefield')?.value || 'receive_date';
+  const rows = (state.lotRows || []).filter(r => {
+    const d = r[df] || null;
+    return (!fs || r.supplier === fs) && (!fp || r.product === fp) &&
+           (!ff || (d && d >= ff)) && (!ft || (d && d <= ft));
+  });
   $('#lots-count').textContent = `${rows.length} batch`;
   if (!rows.length) { wrap.innerHTML = `<div class="empty">ไม่พบข้อมูลตามตัวกรอง</div>`; return; }
   const lots = new Map();
@@ -789,10 +812,12 @@ $('#login-password').addEventListener('keydown', e => { if (e.key === 'Enter') d
 $('#login-username').addEventListener('keydown', e => { if (e.key === 'Enter') $('#login-password').focus(); });
 $('#logout-btn').addEventListener('click', doLogout);
 $('#reload-lots').addEventListener('click', loadLots);
-['#flt-supplier','#flt-product','#flt-from','#flt-to'].forEach(s => $(s).addEventListener('change', renderLotsFiltered));
+$('#default-flt').addEventListener('click', () => { setFltDefaultDates(); renderLotsFiltered(); });
+$('#flt-supplier').addEventListener('change', () => { refreshFltProductOptions(); renderLotsFiltered(); });
+['#flt-product','#flt-from','#flt-to','#flt-datefield'].forEach(s => $(s).addEventListener('change', renderLotsFiltered));
 $('#clear-flt').addEventListener('click', () => {
-  $('#flt-supplier').value = ''; $('#flt-product').value = ''; $('#flt-from').value = ''; $('#flt-to').value = '';
-  renderLotsFiltered();
+  $('#flt-supplier').value = ''; $('#flt-product').value = ''; setFltDefaultDates();
+  refreshFltProductOptions(); renderLotsFiltered();
 });
 setupTabs(); setupMaterialToggle(); setupUpload();
 // โหมดเปิด: ไม่ต้อง login — เข้าหน้าได้เลย (ถ้าเผอิญมี session อยู่ จะบันทึกชื่อผู้ใช้ให้)

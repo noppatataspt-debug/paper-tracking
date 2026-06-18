@@ -1100,7 +1100,12 @@
       <div class="filter-grid">
         <div><label class="field-label">Supplier</label><select id="mat-supplier"><option value="">— ทั้งหมด —</option></select></div>
         <div><label class="field-label">Product</label><select id="mat-product"><option value="">— ทั้งหมด —</option></select></div>
-        <div><label class="field-label">รับเข้า ตั้งแต่</label><input type="date" id="mat-from"></div>
+        <div><label class="field-label">ใช้วันที่ของ</label>
+          <select id="mat-datefield">
+            <option value="receive_date" selected>วันรับเข้า</option>
+            <option value="coa_date">วันที่ COA</option>
+          </select></div>
+        <div><label class="field-label">ตั้งแต่</label><input type="date" id="mat-from"></div>
         <div><label class="field-label">ถึง</label><input type="date" id="mat-to"></div>
         <div><label class="field-label">แหล่งค่า</label>
           <select id="mat-source">
@@ -1112,6 +1117,7 @@
       </div>
       <div style="display:flex; gap:8px; flex-wrap:wrap;">
         <button class="btn" id="mat-apply">📊 แสดงข้อมูล</button>
+        <button class="btn outline" id="mat-default" style="background:var(--panel); color:var(--text); border:1.5px solid var(--border);">📅 ใช้ค่าเริ่มต้น (3 เดือน)</button>
         <button class="btn outline" id="mat-clear" style="background:var(--panel); color:var(--text); border:1.5px solid var(--border);">ล้างตัวกรอง</button>
         <button class="btn outline" id="mat-reload" style="background:var(--panel); color:var(--text); border:1.5px solid var(--border);">🔄 รีโหลด</button>
         <span id="mat-count" style="align-self:center; font-size:13px; color:var(--text-dim);"></span>
@@ -5066,22 +5072,39 @@ async function loadMaterialView() {
     state.matSpecs = specs;
     state.matBatches = batches;
     fillSelect($('#mat-supplier'), [...new Set(batches.map(b => b.supplier).filter(Boolean))].sort());
-    fillSelect($('#mat-product'),  [...new Set(batches.map(b => b.product).filter(Boolean))].sort());
+    refreshMatProductOptions();
     refreshTrendParamOptions();
+    if (!$('#mat-from').value && !$('#mat-to').value) setMatDefaultDates(); // ครั้งแรก = 3 เดือนย้อนหลัง
     renderMaterialView();
   } catch (e) {
     console.error(e);
     $('#mat-charts').innerHTML = `<div class="empty" style="color:var(--danger)">โหลดไม่ได้: ${escapeHtml(e.message || e)}</div>`;
   }
 }
+// default ช่วงวัน = 3 เดือนย้อนหลัง → วันนี้ (เหมือนหน้ากระดาษ)
+function setMatDefaultDates() {
+  const today = new Date();
+  const back = new Date(today); back.setMonth(back.getMonth() - 3);
+  const fmt = d => d.toISOString().slice(0, 10);
+  $('#mat-from').value = fmt(back);
+  $('#mat-to').value = fmt(today);
+}
+// product cascade ตาม supplier ที่เลือก
+function refreshMatProductOptions() {
+  const sup = $('#mat-supplier').value;
+  const prods = [...new Set((state.matBatches || []).filter(b => !sup || b.supplier === sup).map(b => b.product).filter(Boolean))].sort();
+  fillSelect($('#mat-product'), prods);
+}
 
 // ---- filtering ----
 function getMatFilteredRows() {
   const fs = $('#mat-supplier').value, fp = $('#mat-product').value, ff = $('#mat-from').value, ft = $('#mat-to').value;
-  return (state.matBatches || []).filter(b =>
-    (!fs || b.supplier === fs) && (!fp || b.product === fp) &&
-    (!ff || (b.receive_date && b.receive_date >= ff)) &&
-    (!ft || (b.receive_date && b.receive_date <= ft)));
+  const df = $('#mat-datefield')?.value || 'receive_date';
+  return (state.matBatches || []).filter(b => {
+    const d = b[df] || null;
+    return (!fs || b.supplier === fs) && (!fp || b.product === fp) &&
+           (!ff || (d && d >= ff)) && (!ft || (d && d <= ft));
+  });
 }
 // product context for spec overlay: explicit filter, else single product among rows
 function matProductContext(rows) {
@@ -5101,7 +5124,8 @@ function matNumericKeys(product, rows) {
 }
 function matSeries(rows, key, source) {
   const coa = [], qa = [], all = [];
-  const xOf = b => b.coa_date || b.receive_date || null;
+  const df = $('#mat-datefield')?.value || 'receive_date';
+  const xOf = b => b[df] || b.coa_date || b.receive_date || null;
   for (const b of rows) {
     const x = xOf(b); if (!x) continue;
     if (source !== 'qa') { const v = b.coa_values?.[key]; if (v != null && !isNaN(+v)) { coa.push({x, y:+v, batch:b.batch_no}); all.push(+v); } }
@@ -5324,15 +5348,17 @@ function setMatView(v) {
 $$('.pm-btn').forEach(b => b.addEventListener('click', () => setPageMat(b.dataset.mat)));
 $$('#mat-tabs .tab').forEach(t => t.addEventListener('click', () => setMatView(t.dataset.mview)));
 $('#mat-apply').addEventListener('click', renderMaterialView);
-$('#mat-supplier').addEventListener('change', () => { refreshTrendParamOptions(); renderMaterialView(); });
+$('#mat-supplier').addEventListener('change', () => { refreshMatProductOptions(); refreshTrendParamOptions(); renderMaterialView(); });
 $('#mat-product').addEventListener('change', () => { refreshTrendParamOptions(); renderMaterialView(); });
+$('#mat-datefield').addEventListener('change', renderMaterialView);
+$('#mat-default').addEventListener('click', () => { setMatDefaultDates(); renderMaterialView(); });
 $('#mat-from').addEventListener('change', renderMaterialView);
 $('#mat-to').addEventListener('change', renderMaterialView);
 $('#mat-source').addEventListener('change', renderMaterialView);
 $('#mat-trend-param').addEventListener('change', renderMaterialView);
 $('#mat-lookup-go').addEventListener('click', renderMatLookup);
 $('#mat-lookup-q').addEventListener('keydown', e => { if (e.key === 'Enter') renderMatLookup(); });
-$('#mat-clear').addEventListener('click', () => { $('#mat-supplier').value=''; $('#mat-product').value=''; $('#mat-from').value=''; $('#mat-to').value=''; refreshTrendParamOptions(); renderMaterialView(); });
+$('#mat-clear').addEventListener('click', () => { $('#mat-supplier').value=''; $('#mat-product').value=''; setMatDefaultDates(); refreshMatProductOptions(); refreshTrendParamOptions(); renderMaterialView(); });
 $('#mat-reload').addEventListener('click', loadMaterialView);
 
 // ============================================================
