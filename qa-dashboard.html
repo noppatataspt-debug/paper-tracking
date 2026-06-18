@@ -331,6 +331,26 @@
     /* Allow horizontal overflow visible */
     [style*="overflow-x"] { overflow-x: visible !important; }
   }
+
+  /* ===== Material (กาว/แคลเซียม) quality module ===== */
+  .page-mat-toggle { display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; }
+  .pm-btn { padding:11px 22px; background:var(--panel); border:2px solid var(--border); border-radius:12px;
+    font-family:inherit; font-size:16px; font-weight:800; cursor:pointer; color:var(--text-dim); transition:all .15s; }
+  .pm-btn:hover { border-color:var(--accent); }
+  .pm-btn.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  #material-app { display:none; }
+  body.mat-mode #material-app { display:block; }
+  body.mat-mode #paper-tabs, body.mat-mode .view { display:none !important; }
+  .mat-chip { display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; font-weight:700;
+    margin:1px; font-family:var(--mono); }
+  .mat-chip.pass { background:var(--success-bg); color:var(--success); }
+  .mat-chip.fail { background:var(--danger-bg); color:var(--danger); }
+  .mat-chip.warn { background:var(--warning-bg); color:var(--warning); }
+  .mat-chip.none { background:var(--panel-2); color:var(--text-dim); }
+  table.mat-tbl { width:100%; border-collapse:collapse; font-size:13px; }
+  table.mat-tbl th, table.mat-tbl td { border:1px solid var(--border); padding:7px 9px; text-align:center; white-space:nowrap; }
+  table.mat-tbl th { background:var(--panel-2); font-weight:700; font-size:12px; }
+  table.mat-tbl td.l, table.mat-tbl th.l { text-align:left; }
 </style>
 </head>
 <body>
@@ -433,7 +453,13 @@
     </div>
   </div>
 
-  <div class="tabs">
+  <div class="page-mat-toggle" id="page-mat-toggle">
+    <button class="pm-btn active" data-mat="paper">📄 กระดาษ</button>
+    <button class="pm-btn" data-mat="glue">🧴 กาว</button>
+    <button class="pm-btn" data-mat="calcium">⚪ แคลเซียม</button>
+  </div>
+
+  <div class="tabs" id="paper-tabs">
     <button class="tab active" data-view="monitor">📊 Monitor by Supplier</button>
     <button class="tab" data-view="trend">📈 Parameter Trend</button>
     <button class="tab" data-view="lookup">🔍 Lot Lookup</button>
@@ -1057,6 +1083,37 @@
     <div id="il-results"></div>
   </div>
 
+  <!-- ============ MATERIAL (กาว / แคลเซียม) quality monitoring ============ -->
+  <div id="material-app">
+    <div class="panel">
+      <div class="panel-title">📈 Monitor คุณภาพ<span id="mat-title">กาว</span> (จาก COA)</div>
+      <div class="panel-sub">กราฟแนวโน้มค่าทดสอบเทียบ spec · จุด = แต่ละ batch · แถบเขียว = ช่วง spec · เส้นประแดง = ขอบ spec</div>
+      <div class="filter-grid">
+        <div>
+          <label class="field-label">Product</label>
+          <select id="mat-product"></select>
+        </div>
+        <div>
+          <label class="field-label">แหล่งค่า</label>
+          <select id="mat-source">
+            <option value="both" selected>COA + In-coming</option>
+            <option value="coa">COA (supplier)</option>
+            <option value="qa">In-coming (ASPT)</option>
+          </select>
+        </div>
+        <div style="display:flex; align-items:flex-end;">
+          <button class="btn" id="mat-reload">🔄 รีโหลด</button>
+        </div>
+      </div>
+    </div>
+    <div class="small-multiples" id="mat-charts"></div>
+    <div class="panel" style="margin-top:14px;">
+      <div class="panel-title">📋 batch ล่าสุด</div>
+      <div class="panel-sub">ค่า COA (supplier) · ≈ = ค่า in-coming ของ ASPT · เขียว=ผ่าน แดง=หลุดสเปก</div>
+      <div style="overflow-x:auto;"><div id="mat-table"></div></div>
+    </div>
+  </div>
+
 </div>
 
 <div class="toast" id="toast"></div>
@@ -1406,6 +1463,12 @@ const state = {
   cachedSupplierTypes: {}, // supplier -> [paper_types]
   charts: {},
   currentLot: null,        // lot info for issue form auto-fill
+  // --- material (กาว/แคลเซียม) ---
+  pageMat: 'paper',
+  material: 'glue',
+  matSpecs: [],
+  matBatches: [],
+  matCharts: [],
 };
 
 async function init() {
@@ -4900,6 +4963,202 @@ $('#print-orient-landscape').addEventListener('change', updateOrientLabels);
 $('#print-modal').addEventListener('click', e => {
   if (e.target.id === 'print-modal') closePrintModal();
 });
+
+// ============================================================
+// MATERIAL (กาว / แคลเซียม) quality monitoring
+// ============================================================
+const MAT_PARAM_LABELS = {
+  appearance:'Appearance', viscosity:'Viscosity', solids_content:'Solids', ph:'pH', film:'Film',
+  brightness:'Brightness', fineness_325:'Fineness 325#', d50:'D50', d98:'D98',
+  oil_absorption:'Oil Absorption', moisture:'Moisture'
+};
+const MAT_NAME = { glue:'กาว', calcium:'แคลเซียม' };
+const matLabel = p => MAT_PARAM_LABELS[p] || p;
+
+function matSpecFor(product, parameter) {
+  return state.matSpecs.find(s => s.product === product && s.parameter === parameter) || null;
+}
+function matSpecsForProduct(product) {
+  return state.matSpecs.filter(s => s.product === product)
+    .sort((a,b) => (a.display_order - b.display_order) || a.parameter.localeCompare(b.parameter));
+}
+function matFlag(spec, val) {
+  if (val == null || val === '' || !spec) return null;
+  if (spec.value_type === 'text') {
+    const v = String(val).trim().toLowerCase();
+    if (['passed','pass','ผ่าน','ok','yes'].includes(v)) return 'pass';
+    if (spec.target_text && v === String(spec.target_text).trim().toLowerCase()) return 'pass';
+    return 'warn';
+  }
+  const n = +val; if (isNaN(n)) return null;
+  if (spec.min_value != null && n < +spec.min_value) return 'fail';
+  if (spec.max_value != null && n > +spec.max_value) return 'fail';
+  return 'pass';
+}
+
+function setPageMat(mat) {
+  state.pageMat = mat;
+  $$('.pm-btn').forEach(b => b.classList.toggle('active', b.dataset.mat === mat));
+  if (mat === 'paper') { document.body.classList.remove('mat-mode'); return; }
+  state.material = mat;
+  document.body.classList.add('mat-mode');
+  $('#mat-title').textContent = MAT_NAME[mat];
+  loadMaterialView();
+}
+
+async function loadMaterialView() {
+  $('#mat-charts').innerHTML = '<div class="panel"><div class="loading"><div class="spinner"></div>กำลังโหลด...</div></div>';
+  $('#mat-table').innerHTML = '';
+  try {
+    const [specs, batches] = await Promise.all([
+      callRPCList('material_list_specs', { p_material_type: state.material }),
+      callRPCList('material_list_batches', { p_material_type: state.material }),
+    ]);
+    state.matSpecs = specs;
+    state.matBatches = batches;
+    const products = [...new Set(batches.map(b => b.product).filter(Boolean))].sort();
+    const sel = $('#mat-product'); const prev = sel.value;
+    sel.innerHTML = products.map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('');
+    if (products.includes(prev)) sel.value = prev;
+    if (!products.length) {
+      $('#mat-charts').innerHTML = `<div class="empty">ยังไม่มีข้อมูล ${MAT_NAME[state.material]}</div>`;
+      return;
+    }
+    renderMaterialView();
+  } catch (e) {
+    console.error(e);
+    $('#mat-charts').innerHTML = `<div class="empty" style="color:var(--danger)">โหลดไม่ได้: ${escapeHtml(e.message || e)}</div>`;
+  }
+}
+
+function renderMaterialView() {
+  (state.matCharts || []).forEach(c => { try { c.destroy(); } catch {} });
+  state.matCharts = [];
+  const product = $('#mat-product').value;
+  const source = $('#mat-source').value; // both | coa | qa
+  const rows = state.matBatches.filter(b => b.product === product);
+  renderMatCharts(product, rows, source);
+  renderMatTable(product, rows);
+}
+
+function renderMatCharts(product, rows, source) {
+  const cont = $('#mat-charts'); cont.innerHTML = '';
+  const specRows = matSpecsForProduct(product);
+  const numericKeys = [];
+  for (const s of specRows) if (s.value_type !== 'text' && !numericKeys.includes(s.parameter)) numericKeys.push(s.parameter);
+  // include numeric keys that exist in data but have no spec
+  for (const b of rows) for (const src of ['coa_values','qa_values'])
+    for (const k in (b[src] || {})) {
+      const v = b[src][k];
+      if (typeof v === 'number' && !numericKeys.includes(k) && matSpecFor(product,k)?.value_type !== 'text')
+        numericKeys.push(k);
+    }
+  if (!numericKeys.length) { cont.innerHTML = '<div class="empty">ไม่มี parameter ตัวเลขให้แสดงกราฟ</div>'; return; }
+
+  const xOf = b => b.coa_date || b.receive_date || null;
+
+  for (const key of numericKeys) {
+    const spec = matSpecFor(product, key);
+    const specMin = spec?.min_value != null ? +spec.min_value : null;
+    const specMax = spec?.max_value != null ? +spec.max_value : null;
+    const coaPts = [], qaPts = [], allVals = [];
+    for (const b of rows) {
+      const x = xOf(b); if (!x) continue;
+      if (source !== 'qa') { const v = b.coa_values?.[key]; if (v != null && !isNaN(+v)) { coaPts.push({x, y:+v, batch:b.batch_no}); allVals.push(+v); } }
+      if (source !== 'coa') { const v = b.qa_values?.[key];  if (v != null && !isNaN(+v)) { qaPts.push({x, y:+v, batch:b.batch_no});  allVals.push(+v); } }
+    }
+    if (!coaPts.length && !qaPts.length) continue;
+    coaPts.sort((a,b) => new Date(a.x) - new Date(b.x));
+    qaPts.sort((a,b) => new Date(a.x) - new Date(b.x));
+    const stats = calcStats(allVals);
+    let outc = 0; for (const v of allVals) { if (specMin != null && v < specMin) outc++; else if (specMax != null && v > specMax) outc++; }
+    const unit = spec?.unit || '';
+
+    const wrap = document.createElement('div'); wrap.className = 'mini-chart';
+    wrap.innerHTML = `
+      <div class="mini-chart-head">
+        <span class="mini-chart-label">${escapeHtml(matLabel(key))} <span style="color:var(--text-dim); font-weight:500; font-size:12px;">${escapeHtml(unit)}</span></span>
+        <span class="mini-chart-stat">μ ${fmtNum(stats?.mean)} · n=${allVals.length}${spec ? ` · spec ${specMin!=null?'≥'+fmtNum(specMin):''}${specMax!=null?' ≤'+fmtNum(specMax):''}` : ''}${outc ? ` · <span style="color:var(--danger)">⚠ ${outc} หลุด spec</span>` : ''}</span>
+      </div>
+      <div class="mini-chart-canvas"><canvas></canvas></div>`;
+    cont.appendChild(wrap);
+
+    const allX = [...coaPts, ...qaPts].map(p => p.x);
+    const xMin = allX.reduce((a,b) => new Date(a) < new Date(b) ? a : b);
+    const xMax = allX.reduce((a,b) => new Date(a) > new Date(b) ? a : b);
+
+    const datasets = [];
+    // spec band (เขียวอ่อน) = ช่วงที่ผ่าน spec
+    if (specMin != null && specMax != null) {
+      datasets.push({ label:'_bandTop', data:[{x:xMin,y:specMax},{x:xMax,y:specMax}],
+        borderColor:'rgba(4,120,87,0)', backgroundColor:'rgba(4,120,87,0.10)', borderWidth:0, pointRadius:0, fill:'+1', tension:0 });
+      datasets.push({ label:'_bandBot', data:[{x:xMin,y:specMin},{x:xMax,y:specMin}],
+        borderColor:'rgba(4,120,87,0)', borderWidth:0, pointRadius:0, fill:false, tension:0 });
+    }
+    if (coaPts.length) datasets.push({ label:'COA', data:coaPts, borderColor:'#1d4ed8',
+      backgroundColor: coaPts.map(p => matFlag(spec,p.y)==='fail' ? '#b91c1c' : '#1d4ed8'),
+      borderWidth:2, pointRadius:4, pointHoverRadius:7, tension:0.15, fill:false });
+    if (qaPts.length) datasets.push({ label:'In-coming', data:qaPts, borderColor:'#c2410c',
+      backgroundColor: qaPts.map(p => matFlag(spec,p.y)==='fail' ? '#b91c1c' : '#c2410c'),
+      borderWidth:2, borderDash:[5,3], pointStyle:'rectRot', pointRadius:5, pointHoverRadius:8, tension:0.15, fill:false });
+    if (specMin != null) datasets.push({ label:'Min spec', data:[{x:xMin,y:specMin},{x:xMax,y:specMin}],
+      borderColor:'#b91c1c', borderWidth:1.6, borderDash:[8,4], pointRadius:0, fill:false });
+    if (specMax != null) datasets.push({ label:'Max spec', data:[{x:xMin,y:specMax},{x:xMax,y:specMax}],
+      borderColor:'#b91c1c', borderWidth:1.6, borderDash:[8,4], pointRadius:0, fill:false });
+
+    const ys = allVals.slice(); if (specMin != null) ys.push(specMin); if (specMax != null) ys.push(specMax);
+    const yMin = Math.min(...ys), yMax = Math.max(...ys); const pad = (yMax - yMin) * 0.12 || Math.abs(yMax*0.1) || 1;
+
+    const chart = new Chart(wrap.querySelector('canvas').getContext('2d'), {
+      type:'line', data:{ datasets },
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        interaction:{ mode:'nearest', axis:'x', intersect:false },
+        scales:{ x: getTimeAxisConfig([...coaPts, ...qaPts]), y:{ ticks:{ font:{ size:10 } }, min:yMin-pad, max:yMax+pad } },
+        plugins:{
+          legend:{ display:true, labels:{ filter:i => i.text && !i.text.startsWith('_'), font:{ size:11 }, usePointStyle:true } },
+          tooltip:{ filter:c => c.dataset.label && !c.dataset.label.startsWith('_'),
+            callbacks:{ title:items => items[0]?.raw?.x ? fmtDate(items[0].raw.x) : '',
+              label:c => `${c.dataset.label}: ${fmtNum(c.parsed.y)}${c.raw?.batch ? ' (batch '+c.raw.batch+')' : ''}` } }
+        }
+      }
+    });
+    state.matCharts.push(chart);
+  }
+}
+
+function renderMatTable(product, rows) {
+  const specRows = matSpecsForProduct(product);
+  const keys = specRows.length ? specRows.map(s => s.parameter)
+    : [...new Set(rows.flatMap(b => Object.keys(b.coa_values || {})))];
+  const sorted = rows.slice().sort((a,b) =>
+    new Date(b.coa_date || b.receive_date || 0) - new Date(a.coa_date || a.receive_date || 0));
+  const head = `<tr><th class="l">Batch</th><th>COA date</th><th>Exp</th>${keys.map(k => `<th>${escapeHtml(matLabel(k))}</th>`).join('')}<th>QA</th></tr>`;
+  const body = sorted.map(b => {
+    const exp = b.exp_date
+      ? (b.days_to_expiry != null && b.days_to_expiry <= 30
+          ? `<span class="mat-chip ${b.days_to_expiry < 0 ? 'fail' : 'warn'}">${escapeHtml(b.exp_date)}</span>`
+          : escapeHtml(b.exp_date))
+      : '—';
+    const cells = keys.map(k => {
+      const spec = matSpecFor(product, k);
+      const part = (v, inc) => { if (v == null || v === '') return ''; const f = matFlag(spec, v) || 'none'; return `<span class="mat-chip ${f}">${inc?'≈':''}${escapeHtml(v)}</span>`; };
+      const coaC = part(b.coa_values?.[k], false);
+      const qaC = (b.qa_status === 'tested') ? part(b.qa_values?.[k], true) : '';
+      return `<td>${coaC || '—'}${qaC ? '<br>'+qaC : ''}</td>`;
+    }).join('');
+    return `<tr><td class="l" style="font-family:var(--mono); font-weight:700;">${escapeHtml(b.batch_no)}</td>`
+      + `<td>${escapeHtml(b.coa_date || b.receive_date || '—')}</td><td>${exp}</td>${cells}`
+      + `<td><span class="mat-chip ${b.qa_status==='tested'?'pass':'none'}">${b.qa_status==='tested'?'✓':'รอ'}</span></td></tr>`;
+  }).join('');
+  $('#mat-table').innerHTML = `<table class="mat-tbl"><thead>${head}</thead><tbody>${body}</tbody></table>`;
+}
+
+// wiring
+$$('.pm-btn').forEach(b => b.addEventListener('click', () => setPageMat(b.dataset.mat)));
+$('#mat-product').addEventListener('change', renderMaterialView);
+$('#mat-source').addEventListener('change', renderMaterialView);
+$('#mat-reload').addEventListener('click', loadMaterialView);
 
 // ============================================================
 // Boot
