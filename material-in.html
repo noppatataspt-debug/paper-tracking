@@ -148,6 +148,17 @@
   .toast.warning { background: var(--warning); color: #fff; }
 
   .hint { font-size: 11px; color: var(--text-dim); margin-top: 3px; font-family: var(--mono); }
+  /* hierarchy: date -> supplier -> lot */
+  details.mlvl { margin-bottom: 10px; }
+  details.mlvl.sup { margin: 8px 0 8px 16px; }
+  summary.mlvl-sum { cursor: pointer; padding: 10px 14px; border-radius: 10px; outline: none; }
+  summary.mlvl-sum .srow { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-weight: 800; }
+  summary.mlvl-sum.date { background: #1e293b; color: #fff; }
+  summary.mlvl-sum.sup { background: var(--panel-2); color: var(--text); }
+  .mlvl-meta { font-weight: 600; font-size: 13px; opacity: .85; }
+  .mlvl-body { padding-top: 8px; }
+  .mlvl-body .lot-row { margin-left: 14px; }
+  .lot-date-edit { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   @media (max-width: 600px) { body { padding: 14px 8px; } .header h1 { font-size: 22px; } }
 </style>
 </head>
@@ -674,26 +685,53 @@ function renderLotsFiltered() {
   });
   $('#lots-count').textContent = `${rows.length} batch`;
   if (!rows.length) { wrap.innerHTML = `<div class="empty">ไม่พบข้อมูลตามตัวกรอง</div>`; return; }
-  const lots = new Map();
+  // ลำดับชั้น: วันที่รับเข้า → supplier → lot → batch
+  const byDate = new Map();
   for (const r of rows) {
-    if (!lots.has(r.lot_id)) lots.set(r.lot_id, { info:r, batches:[] });
-    lots.get(r.lot_id).batches.push(r);
+    const d = r.receive_date || '—';
+    if (!byDate.has(d)) byDate.set(d, new Map());
+    const bySup = byDate.get(d);
+    if (!bySup.has(r.supplier)) bySup.set(r.supplier, new Map());
+    const byLot = bySup.get(r.supplier);
+    if (!byLot.has(r.lot_id)) byLot.set(r.lot_id, { info: r, batches: [] });
+    byLot.get(r.lot_id).batches.push(r);
   }
-  wrap.innerHTML = '';
-  for (const { info, batches } of lots.values()) wrap.appendChild(renderLotRow(info, batches));
-  bindQAForms();
+  const dates = [...byDate.keys()].sort().reverse(); // ใหม่สุดก่อน
+  wrap.innerHTML = dates.map(d => renderDateGroup(d, byDate.get(d))).join('');
+  bindLotEvents();
 }
 
-function renderLotRow(info, batches) {
-  const div = document.createElement('div'); div.className = 'lot-row';
-  div.innerHTML = `
+function renderDateGroup(date, bySup) {
+  let total = 0;
+  for (const byLot of bySup.values()) for (const lot of byLot.values()) total += lot.batches.length;
+  const inner = [...bySup.keys()].map(s => renderSupplierGroup(s, bySup.get(s))).join('');
+  return `<details class="mlvl date" open><summary class="mlvl-sum date"><div class="srow">
+      <span>📅 ${escapeHtml(date)}</span>
+      <span class="mlvl-meta">${bySup.size} supplier · ${total} batch</span></div></summary>
+    <div class="mlvl-body">${inner}</div></details>`;
+}
+
+function renderSupplierGroup(supplier, byLot) {
+  let cnt = 0; for (const lot of byLot.values()) cnt += lot.batches.length;
+  const inner = [...byLot.values()].map(lot => renderLotBlock(lot.info, lot.batches)).join('');
+  return `<details class="mlvl sup" open><summary class="mlvl-sum sup"><div class="srow">
+      <span>🏭 ${escapeHtml(supplier || '—')}</span>
+      <span class="mlvl-meta">${cnt} batch</span></div></summary>
+    <div class="mlvl-body">${inner}</div></details>`;
+}
+
+function renderLotBlock(info, batches) {
+  return `<div class="lot-row">
     <div class="rhead">
-      <span>🧾 ${escapeHtml(info.product)} · ${escapeHtml(info.supplier)}</span>
-      <span style="font-weight:600; color:var(--text-dim); font-size:13px;">
-        Inv: ${escapeHtml(info.invoice_no||'—')} · รับ ${escapeHtml(info.receive_date||'—')} · ${batches.length} batch</span>
+      <span>🧾 ${escapeHtml(info.product)} <span style="color:var(--text-dim); font-weight:600; font-size:13px;">· Inv ${escapeHtml(info.invoice_no||'—')} · ${batches.length} batch</span></span>
+      <span class="lot-date-edit" data-lot="${info.lot_id}">
+        <span style="font-size:12px; color:var(--text-dim); font-weight:600;">รับเข้า</span>
+        <input type="date" class="lot-date-input" value="${escapeHtml(info.receive_date||'')}" style="width:auto; padding:5px 8px; font-size:13px;">
+        <button class="btn outline sm" data-save-date>บันทึก</button>
+      </span>
     </div>
-    ${batches.map(b => renderBatch(info, b)).join('')}`;
-  return div;
+    ${batches.map(b => renderBatch(info, b)).join('')}
+  </div>`;
 }
 
 function renderBatch(info, b) {
@@ -721,15 +759,29 @@ function renderBatch(info, b) {
           <span class="badge ${b.qa_status==='tested'?'tested':'pending'}">${b.qa_status==='tested'?'QA แล้ว':'รอ QA'}</span>
           ${expWarn}
         </div>
-        <button class="btn outline sm" data-toggle-qa>${b.qa_status==='tested'?'✏️ แก้ผล QA':'🧪 กรอกผล QA'}</button>
+        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+          <button class="btn outline sm" data-toggle-edit>✏️ ปริมาณ/ราคา</button>
+          <button class="btn outline sm" data-toggle-qa>${b.qa_status==='tested'?'✏️ แก้ผล QA':'🧪 กรอกผล QA'}</button>
+        </div>
       </div>
       <div class="bt-meta">${[
         b.quantity_kg != null ? `ปริมาณ <b>${b.quantity_kg}</b> kg` : '',
+        b.price_per_kg != null ? `ราคา <b>${b.price_per_kg}</b> ฿/kg` : '',
         b.exp_date ? `Exp ${escapeHtml(b.exp_date)}` : '',
         b.qa_by ? `QA โดย ${escapeHtml(b.qa_by)}` : ''
       ].filter(Boolean).join(' · ') || '—'}</div>
       <div style="margin-top:6px;"><span style="font-size:12px; color:var(--text-dim); font-weight:700;">COA:</span> ${coaChips}</div>
       ${qaChips?`<div style="margin-top:4px;"><span style="font-size:12px; color:var(--text-dim); font-weight:700;">In-coming:</span> ${qaChips}</div>`:''}
+      <div class="qa-form" data-editform>
+        <div class="qa-grid">
+          <div><label class="fl">ปริมาณรับเข้า (kg)</label><input data-ev="quantity_kg" type="number" step="any" value="${b.quantity_kg ?? ''}"></div>
+          <div><label class="fl">ราคา (฿/kg)</label><input data-ev="price_per_kg" type="number" step="any" value="${b.price_per_kg ?? ''}"></div>
+        </div>
+        <div style="display:flex; gap:10px; justify-content:flex-end;">
+          <button class="btn outline sm" data-cancel-edit>ยกเลิก</button>
+          <button class="btn success sm" data-save-edit>💾 บันทึก</button>
+        </div>
+      </div>
       <div class="qa-form" data-qaform>
         <div class="qa-grid">
           ${keys.map(k => {
@@ -746,6 +798,40 @@ function renderBatch(info, b) {
         </div>
       </div>
     </div>`;
+}
+
+function bindLotEvents() {
+  bindQAForms();
+  $$('[data-save-date]').forEach(btn => btn.addEventListener('click', () => saveLotDate(btn)));
+  $$('.bt').forEach(bt => {
+    const ef = bt.querySelector('[data-editform]');
+    const te = bt.querySelector('[data-toggle-edit]');
+    if (te && ef) te.addEventListener('click', () => ef.classList.toggle('open'));
+    const ce = bt.querySelector('[data-cancel-edit]'); if (ce && ef) ce.addEventListener('click', () => ef.classList.remove('open'));
+    const se = bt.querySelector('[data-save-edit]'); if (se) se.addEventListener('click', () => saveBatchEdit(bt));
+  });
+}
+async function saveLotDate(btn) {
+  const wrap = btn.closest('.lot-date-edit');
+  const lotId = +wrap.dataset.lot;
+  const val = wrap.querySelector('.lot-date-input').value;
+  if (!val) { showToast('เลือกวันที่ก่อน', 'warning'); return; }
+  btn.disabled = true; const old = btn.textContent; btn.textContent = '...';
+  try {
+    await callRPC('material_update_lot', { p_lot_id: lotId, p_payload: { receive_date: val } });
+    showToast('✅ อัปเดตวันรับเข้าแล้ว', 'success');
+    loadLots();
+  } catch (e) { console.error(e); showToast('บันทึกไม่ได้: ' + (e.message||e), 'error'); btn.disabled = false; btn.textContent = old; }
+}
+async function saveBatchEdit(bt) {
+  const payload = {};
+  $$('input[data-ev]', bt).forEach(inp => { const v = inp.value.trim(); payload[inp.dataset.ev] = v === '' ? null : +v; });
+  const btn = bt.querySelector('[data-save-edit]'); btn.disabled = true; const old = btn.textContent; btn.textContent = 'กำลังบันทึก...';
+  try {
+    await callRPC('material_update_batch', { p_batch_id: +bt.dataset.batch, p_payload: payload });
+    showToast('✅ บันทึกปริมาณ/ราคาแล้ว', 'success');
+    loadLots();
+  } catch (e) { console.error(e); showToast('บันทึกไม่ได้: ' + (e.message||e), 'error'); btn.disabled = false; btn.textContent = old; }
 }
 
 function bindQAForms() {
