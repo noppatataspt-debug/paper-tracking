@@ -237,8 +237,16 @@
     <div class="panel">
       <div class="panel-title">รายการล็อตที่รับเข้า — <span id="lots-mat-label">กาว</span></div>
       <div class="panel-sub">คลิก "กรอกผล QA" ที่แต่ละ batch เพื่อใส่ค่าทดสอบ in-coming ของ ASPT · เทียบกับ spec อัตโนมัติ</div>
-      <div style="display:flex; gap:10px; margin-bottom:8px;">
+      <div class="grid" style="margin-bottom:10px;">
+        <div><label class="fl">Supplier</label><select id="flt-supplier"><option value="">— ทั้งหมด —</option></select></div>
+        <div><label class="fl">Product</label><select id="flt-product"><option value="">— ทั้งหมด —</option></select></div>
+        <div><label class="fl">รับเข้า ตั้งแต่</label><input type="date" id="flt-from"></div>
+        <div><label class="fl">ถึง</label><input type="date" id="flt-to"></div>
+      </div>
+      <div style="display:flex; gap:10px; margin-bottom:8px; flex-wrap:wrap;">
         <button class="btn outline sm" id="reload-lots">🔄 รีโหลด</button>
+        <button class="btn outline sm" id="clear-flt">ล้างตัวกรอง</button>
+        <span id="lots-count" style="align-self:center; font-size:13px; color:var(--text-dim);"></span>
       </div>
     </div>
     <div id="lots-list"><div class="loading"><div class="spinner"></div>กำลังโหลด...</div></div>
@@ -351,7 +359,7 @@ const labelOf = p => PARAM_LABELS[p] || p;
 // ============================================================
 // State
 // ============================================================
-const state = { material: 'glue', specs: [], cardSeq: 0 };
+const state = { material: 'glue', specs: [], cardSeq: 0, lotRows: [] };
 
 // specs helpers ----------------------------------------------
 async function loadSpecs() {
@@ -621,17 +629,36 @@ async function loadLots() {
   wrap.innerHTML = `<div class="loading"><div class="spinner"></div>กำลังโหลด...</div>`;
   try {
     const rows = await callRPCList('material_list_batches', { p_material_type: state.material });
-    if (!rows.length) { wrap.innerHTML = `<div class="empty">ยังไม่มีล็อตของ ${MAT_LABEL[state.material]}</div>`; return; }
-    // group by lot
-    const lots = new Map();
-    for (const r of rows) {
-      if (!lots.has(r.lot_id)) lots.set(r.lot_id, { info:r, batches:[] });
-      lots.get(r.lot_id).batches.push(r);
-    }
-    wrap.innerHTML = '';
-    for (const { info, batches } of lots.values()) wrap.appendChild(renderLotRow(info, batches));
-    bindQAForms();
+    state.lotRows = rows;
+    // populate filter options
+    const sups = [...new Set(rows.map(r => r.supplier).filter(Boolean))].sort();
+    const prods = [...new Set(rows.map(r => r.product).filter(Boolean))].sort();
+    const fill = (sel, arr) => { const cur = sel.value;
+      sel.innerHTML = '<option value="">— ทั้งหมด —</option>' + arr.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+      if (arr.includes(cur)) sel.value = cur; };
+    fill($('#flt-supplier'), sups); fill($('#flt-product'), prods);
+    renderLotsFiltered();
   } catch (e) { console.error(e); wrap.innerHTML = `<div class="empty" style="color:var(--danger)">โหลดไม่ได้: ${escapeHtml(e.message||e)}</div>`; }
+}
+
+function renderLotsFiltered() {
+  const wrap = $('#lots-list');
+  const fs = $('#flt-supplier').value, fp = $('#flt-product').value;
+  const ff = $('#flt-from').value, ft = $('#flt-to').value;
+  const rows = (state.lotRows || []).filter(r =>
+    (!fs || r.supplier === fs) && (!fp || r.product === fp) &&
+    (!ff || (r.receive_date && r.receive_date >= ff)) &&
+    (!ft || (r.receive_date && r.receive_date <= ft)));
+  $('#lots-count').textContent = `${rows.length} batch`;
+  if (!rows.length) { wrap.innerHTML = `<div class="empty">ไม่พบข้อมูลตามตัวกรอง</div>`; return; }
+  const lots = new Map();
+  for (const r of rows) {
+    if (!lots.has(r.lot_id)) lots.set(r.lot_id, { info:r, batches:[] });
+    lots.get(r.lot_id).batches.push(r);
+  }
+  wrap.innerHTML = '';
+  for (const { info, batches } of lots.values()) wrap.appendChild(renderLotRow(info, batches));
+  bindQAForms();
 }
 
 function renderLotRow(info, batches) {
@@ -762,6 +789,11 @@ $('#login-password').addEventListener('keydown', e => { if (e.key === 'Enter') d
 $('#login-username').addEventListener('keydown', e => { if (e.key === 'Enter') $('#login-password').focus(); });
 $('#logout-btn').addEventListener('click', doLogout);
 $('#reload-lots').addEventListener('click', loadLots);
+['#flt-supplier','#flt-product','#flt-from','#flt-to'].forEach(s => $(s).addEventListener('change', renderLotsFiltered));
+$('#clear-flt').addEventListener('click', () => {
+  $('#flt-supplier').value = ''; $('#flt-product').value = ''; $('#flt-from').value = ''; $('#flt-to').value = '';
+  renderLotsFiltered();
+});
 setupTabs(); setupMaterialToggle(); setupUpload();
 // โหมดเปิด: ไม่ต้อง login — เข้าหน้าได้เลย (ถ้าเผอิญมี session อยู่ จะบันทึกชื่อผู้ใช้ให้)
 renderUserBadge();
