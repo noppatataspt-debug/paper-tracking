@@ -1642,15 +1642,28 @@ document.getElementById('btnSubmit').addEventListener('click', async () => {
     if (!currentLot) return;
   }
   
-  // Guard 3: Pre-check duplicate ใน list ล่าสุด (เฉพาะที่ยังไม่ voided)
+  // Guard 3: ตรวจ Lot ซ้ำทั้งฐานข้อมูล — ไม่จำกัดวัน/เดือน (ม้วนเดียวกันใช้ได้แค่ครั้งเดียว)
   const date = document.getElementById('outflowDate').value;
   const machineId = getCurrentMachine();
-  // ซ้ำ = paper_lot_normalized เดียวกัน, วันเดียวกัน (ไม่จำกัดเครื่อง — เพราะม้วนเดียวกันใช้ได้แค่ครั้งเดียว)
-  const dupCandidate = (allOutflows || []).find(o =>
-    !o.voided &&
-    (o.paper_lot_normalized || '').toUpperCase() === normLot &&
-    (o.outflow_date || '').slice(0, 10) === date
-  );
+  let dupCandidate = null;
+  try {
+    const { data: dupRows, error: dupErr } = await supabase
+      .from('paper_outflows')
+      .select('id, paper_lot, paper_lot_normalized, machine_id, outflow_date, created_at, paper_type, weight_kg, voided')
+      .eq('paper_lot_normalized', normLot)
+      .eq('voided', false)
+      .order('created_at', { ascending: false })
+      .limit(20);
+    if (dupErr) throw dupErr;
+    dupCandidate = (dupRows || []).find(o =>
+      (o.paper_lot_normalized || '').toUpperCase() === normLot
+    ) || null;
+  } catch (e) {
+    console.warn('Dup check (DB) failed, fallback to in-memory:', e);
+    dupCandidate = (allOutflows || []).find(o =>
+      !o.voided && (o.paper_lot_normalized || '').toUpperCase() === normLot
+    ) || null;
+  }
   if (dupCandidate) {
     // แสดง modal แทน confirm() — สวยกว่าและรองรับ mobile
     document.getElementById('modalDupLot').textContent = dupCandidate.paper_lot;
@@ -1710,6 +1723,12 @@ document.getElementById('btnSubmit').addEventListener('click', async () => {
     clearScgInputs();  // เคลียร์ SCG boxes ด้วย
     lotValidation.style.display = 'none';
     clearLookup();
+
+    // บังคับเลือกเครื่องใหม่ทุกครั้ง — กันบันทึกผิดเครื่องจาก state ที่ค้างข้ามรายการ
+    currentMode = null;
+    currentSlitter = null;
+    document.querySelectorAll('.machine-btn[data-mode]').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.machine-btn[data-slitter]').forEach(b => b.classList.remove('active'));
     
     // Focus กลับช่องแรกตาม mode
     if (supplierSelect.value === 'SCG') {
@@ -1870,32 +1889,20 @@ function renderList() {
   
   const sortedDates = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
 
-  // หา paper_lot_normalized ที่ซ้ำกันในวันเดียวกัน (ไม่ voided)
-  // key = "date::lot_normalized" → ถ้าเจอมากกว่า 1 row = ซ้ำ
-  const dupKeys = new Set();
-  const seenKeys = {};
-  filtered.forEach(o => {
-    if (o.voided) return;
-    const k = `${(o.outflow_date || '').slice(0, 10)}::${(o.paper_lot_normalized || '').toUpperCase()}`;
-    if (seenKeys[k]) {
-      dupKeys.add(k);       // row ที่ 2+ = ซ้ำ
-      dupKeys.add(k + '::first');  // mark row แรกด้วย
-    } else {
-      seenKeys[k] = true;
-    }
-  });
-  // สร้าง Set ของ id ที่เป็น duplicate
+  // หา paper_lot_normalized ที่ซ้ำกัน — นับข้ามวัน (ม้วนเดียวกันใช้ได้แค่ครั้งเดียว)
+  // key = lot_normalized (ไม่ผูกกับวันแล้ว) → ถ้าเจอมากกว่า 1 row = ซ้ำ
   const dupIds = new Set();
   const lotCount = {};
   filtered.forEach(o => {
     if (o.voided) return;
-    const k = `${(o.outflow_date || '').slice(0, 10)}::${(o.paper_lot_normalized || '').toUpperCase()}`;
+    const k = (o.paper_lot_normalized || '').toUpperCase();
+    if (!k) return;
     lotCount[k] = (lotCount[k] || 0) + 1;
   });
   filtered.forEach(o => {
     if (o.voided) return;
-    const k = `${(o.outflow_date || '').slice(0, 10)}::${(o.paper_lot_normalized || '').toUpperCase()}`;
-    if (lotCount[k] > 1) dupIds.add(o.id);
+    const k = (o.paper_lot_normalized || '').toUpperCase();
+    if (k && lotCount[k] > 1) dupIds.add(o.id);
   });
 
   list.innerHTML = sortedDates.map(date => {
@@ -2190,8 +2197,9 @@ function scanLoop(video) {
         const parts = code.data.split('_');
         const lot = parts.length >= 5 ? parts[parts.length - 1] : code.data;
         
-        // ถ้า QR มีข้อมูล slitter → auto-select slitter (mode พนักงานต้องเลือกเอง)
-        if (parts.length >= 4) {
+        // ถ้า QR มีข้อมูล slitter → auto-select slitter เฉพาะตอนที่ยังไม่ได้เลือกเครื่อง
+        // (ถ้าพนักงานกดเครื่องไว้แล้ว ให้ค่าที่เลือกเองชนะเสมอ — กัน QR override ผิดเครื่อง)
+        if (parts.length >= 4 && !currentSlitter) {
           const slitterNum = parts[3];
           if (['1','2','3','4','5','6'].includes(slitterNum)) {
             const btn = document.querySelector(`.machine-btn[data-slitter="${slitterNum}"]`);
