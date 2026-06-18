@@ -154,7 +154,7 @@
 <body>
 
 <!-- ===== Login Overlay ===== -->
-<div id="login-overlay" style="display:flex; position:fixed; inset:0; background:linear-gradient(135deg,#1e293b,#334155); z-index:10000; align-items:center; justify-content:center; padding:20px;">
+<div id="login-overlay" style="display:none; position:fixed; inset:0; background:linear-gradient(135deg,#1e293b,#334155); z-index:10000; align-items:center; justify-content:center; padding:20px;">
   <div style="background:#fff; border-radius:16px; padding:32px; max-width:420px; width:100%; box-shadow:0 20px 60px rgba(0,0,0,.3);">
     <div style="text-align:center; margin-bottom:24px;">
       <div style="font-size:42px;">📥</div>
@@ -180,7 +180,7 @@
 </div>
 
 <!-- ===== Main App ===== -->
-<div id="main-app" style="display:none;">
+<div id="main-app" style="display:block;">
 <div class="container">
 
   <header class="header">
@@ -272,13 +272,9 @@ const clearStoredAuth = () => sessionStorage.removeItem(SESSION_STORAGE_KEY);
 const getToken = () => getStoredAuth()?.token || null;
 
 async function callRPC(fn, params = {}) {
-  const token = getToken();
-  if (!token) { showLogin(); throw new Error('NOT_LOGGED_IN'); }
+  const token = getToken();                 // อาจเป็น null (โหมดเปิด ไม่ต้อง login)
   const { data, error } = await supabase.rpc(fn, { p_token: token, ...params });
-  if (error) {
-    if (error.message && /session/i.test(error.message)) { clearStoredAuth(); showLogin(); throw new Error('SESSION_EXPIRED'); }
-    throw error;
-  }
+  if (error) throw error;
   return data;
 }
 const callRPCList = async (fn, p={}) => { const d = await callRPC(fn, p); return Array.isArray(d) ? d : []; };
@@ -306,7 +302,17 @@ async function doLogin() {
 }
 function showLoginErr(m){ $('#login-error').textContent = m; $('#login-error').style.display = 'block'; }
 async function doLogout() { const t = getToken(); if (t) { try { await supabase.rpc('admin_logout', { p_token: t }); } catch {} } clearStoredAuth(); location.reload(); }
-function renderUserBadge() { const a = getStoredAuth(); if (!a) return; $('#user-badge').innerHTML = `<b>${escapeHtml(a.full_name || a.username)}</b> <span style="color:var(--text-dim); font-size:12px;">(${a.role})</span>`; }
+function renderUserBadge() {
+  const a = getStoredAuth();
+  const badge = $('#user-badge');
+  if (a) {
+    badge.innerHTML = `<b>${escapeHtml(a.full_name || a.username)}</b> <span style="color:var(--text-dim); font-size:12px;">(${a.role})</span>`;
+    $('#logout-btn').style.display = '';
+  } else {
+    badge.innerHTML = `<span style="color:var(--text-dim); font-size:13px;">หน้างาน (ไม่ต้อง login)</span>`;
+    $('#logout-btn').style.display = 'none';
+  }
+}
 
 async function checkSessionAndBoot() {
   const a = getStoredAuth();
@@ -757,7 +763,9 @@ $('#login-username').addEventListener('keydown', e => { if (e.key === 'Enter') $
 $('#logout-btn').addEventListener('click', doLogout);
 $('#reload-lots').addEventListener('click', loadLots);
 setupTabs(); setupMaterialToggle(); setupUpload();
-checkSessionAndBoot();
+// โหมดเปิด: ไม่ต้อง login — เข้าหน้าได้เลย (ถ้าเผอิญมี session อยู่ จะบันทึกชื่อผู้ใช้ให้)
+renderUserBadge();
+boot();
 </script>
 </body>
 </html>
