@@ -673,11 +673,11 @@ function renderBatch(info, b) {
         </div>
         <button class="btn outline sm" data-toggle-qa>${b.qa_status==='tested'?'✏️ แก้ผล QA':'🧪 กรอกผล QA'}</button>
       </div>
-      <div class="bt-meta">
-        คงเหลือ <b>${b.remaining_kg ?? '—'}</b> / รับ ${b.quantity_kg ?? '—'} kg
-        ${b.exp_date?` · Exp ${escapeHtml(b.exp_date)}`:''}
-        ${b.qa_by?` · QA โดย ${escapeHtml(b.qa_by)}`:''}
-      </div>
+      <div class="bt-meta">${[
+        b.quantity_kg != null ? `ปริมาณ <b>${b.quantity_kg}</b> kg` : '',
+        b.exp_date ? `Exp ${escapeHtml(b.exp_date)}` : '',
+        b.qa_by ? `QA โดย ${escapeHtml(b.qa_by)}` : ''
+      ].filter(Boolean).join(' · ') || '—'}</div>
       <div style="margin-top:6px;"><span style="font-size:12px; color:var(--text-dim); font-weight:700;">COA:</span> ${coaChips}</div>
       ${qaChips?`<div style="margin-top:4px;"><span style="font-size:12px; color:var(--text-dim); font-weight:700;">In-coming:</span> ${qaChips}</div>`:''}
       <div class="qa-form" data-qaform>
