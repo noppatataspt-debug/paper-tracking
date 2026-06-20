@@ -5947,16 +5947,55 @@ function findAlertPo(alert) {
 }
 
 async function autoFulfillAlertPos(currentAlerts) {
-  // ถ้า PO ที่บันทึกแล้ว ไม่มี matching alert อีก (= stock พ้น threshold) → mark fulfilled
+  // เคลียร์ PO อัตโนมัติเมื่อเข้าเงื่อนไขใดเงื่อนไขหนึ่ง:
+  //   (A) stock พ้น threshold แล้ว (paper_type+supplier ไม่อยู่ใน alert list อีก)
+  //   (B) มีกระดาษ "รับเข้า" ใหม่ของชนิด/supplier นั้น หลังวันที่สั่งซื้อ (= ของมาเติม stock แล้ว)
+  //       → เคลียร์แม้ยังเป็น warning อยู่ เพราะ PO นั้นถือว่าได้รับของแล้ว
   if (!currentUser?.session_token || !alertsState.purchaseOrders.length) return;
 
+  const pos = alertsState.purchaseOrders;
+
+  // --- (A) ---
   const stillAlerted = new Set(
     currentAlerts.map(a => `${a.paper_type}|${a.supplier || ''}`)
   );
 
-  const toFulfill = alertsState.purchaseOrders.filter(po => {
-    const key = `${po.paper_type}|${po.supplier || ''}`;
-    return !stillAlerted.has(key);
+  // --- (B) ดึงรายการรับเข้า (paper_invoices) ของชนิดที่มี PO ค้างอยู่ ---
+  // anchor = วันสั่งซื้อ (created_at) ถ้ามี ไม่งั้นใช้ plan_arrival_date
+  const poAnchor = (po) => ((po.created_at || po.plan_arrival_date || '') + '').slice(0, 10);
+  let receipts = [];
+  try {
+    const types = [...new Set(pos.map(p => p.paper_type).filter(Boolean))];
+    const minAnchor = pos.reduce((min, p) => {
+      const d = poAnchor(p);
+      return (d && (!min || d < min)) ? d : min;
+    }, null);
+    if (types.length && minAnchor) {
+      const recData = await fetchAllRows(() => supabase
+        .from('paper_invoices')
+        .select('paper_type, supplier, receive_date')
+        .in('paper_type', types)
+        .gte('receive_date', minAnchor));
+      receipts = recData || [];
+    }
+  } catch (e) {
+    console.warn('[Alerts] ตรวจรับเข้าเพื่อเคลียร์ PO ไม่สำเร็จ:', e);
+  }
+
+  const refilledSincePo = (po) => {
+    const anchor = poAnchor(po);
+    if (!anchor) return false;
+    return receipts.some(r =>
+      r.paper_type === po.paper_type &&
+      (po.supplier ? r.supplier === po.supplier : true) &&
+      r.receive_date && (r.receive_date + '').slice(0, 10) >= anchor
+    );
+  };
+
+  const toFulfill = pos.filter(po => {
+    const leftAlertList = !stillAlerted.has(`${po.paper_type}|${po.supplier || ''}`);  // (A)
+    const goodsReceived = refilledSincePo(po);                                          // (B)
+    return leftAlertList || goodsReceived;
   });
 
   if (!toFulfill.length) return;
