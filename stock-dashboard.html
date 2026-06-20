@@ -1672,6 +1672,23 @@ body {
       <div class="section-title">💎 มูลค่ารวมแยกตาม Supplier <span style="font-size:13px;color:var(--text-muted);font-weight:500;">· คลิกเพื่อขยายดูแต่ละประเภท</span></div>
       <div id="supplierValueTable"><div class="loading-state"><span class="loading"></span></div></div>
     </div>
+    <div class="section" id="quoteCompareSection">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
+        <div style="min-width:240px;flex:1;">
+          <div class="section-title">📋 ราคาเสนอ (Quotation) — เทียบ Supplier</div>
+          <div style="font-size:13px;color:var(--text-dim);margin:2px 0 12px;">
+            💡 ราคาจากใบเสนอ/list price · เทียบด้วย <b>ราคาใหม่ (THB/kg)</b> · supplier ที่เสนอเป็น USD แปลงเป็น THB ด้วย ex rate <span id="quote-meta" style="color:var(--text-muted);"></span>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <input type="file" id="quote-file-input" accept=".xlsx,.xls" style="display:none;">
+          <button class="btn" id="quote-upload-btn">📤 อัปโหลดราคาเสนอ</button>
+          <button class="btn" id="quote-edit-toggle">✏️ แก้ไข</button>
+          <button class="btn" id="quote-add-btn" style="display:none;">➕ เพิ่มรายการ</button>
+        </div>
+      </div>
+      <div id="quoteCompareWrap"><div class="loading-state"><span class="loading"></span></div></div>
+    </div>
     <div class="section">
       <div class="section-title">⚖️ เปรียบเทียบราคาระหว่าง Supplier (ราคาล่าสุดที่รับเข้า)</div>
       <div style="font-size:13px;color:var(--text-dim);margin-bottom:14px;">
@@ -1914,6 +1931,66 @@ body {
       <div style="flex:1;"></div>
       <button id="alert-po-cancel" class="btn">ยกเลิก</button>
       <button id="alert-po-save" class="btn" style="background:var(--accent); color:white; border-color:var(--accent); font-weight:600;">💾 บันทึก</button>
+    </div>
+  </div>
+</div>
+
+<!-- Quote edit modal (ราคาเสนอ) -->
+<div id="quote-edit-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:10000; align-items:center; justify-content:center; padding:16px;">
+  <div style="background:white; border-radius:14px; max-width:520px; width:100%; max-height:90vh; overflow-y:auto; box-shadow:0 10px 40px rgba(0,0,0,0.3); padding:24px;">
+    <div style="font-size:18px; font-weight:700; margin-bottom:14px;" id="quote-modal-title">✏️ แก้ไขราคาเสนอ</div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
+      <div><label style="display:block;font-size:13px;font-weight:600;margin-bottom:4px;">Supplier</label>
+        <input type="text" id="q-supplier" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:14px;"></div>
+      <div><label style="display:block;font-size:13px;font-weight:600;margin-bottom:4px;">เกรด (ประเภท)</label>
+        <input type="text" id="q-grade" placeholder="เช่น CBS" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:14px;"></div>
+      <div><label style="display:block;font-size:13px;font-weight:600;margin-bottom:4px;">Product</label>
+        <select id="q-product" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:14px;">
+          <option value="Core">Core</option><option value="Liner">Liner</option><option value="V-Board">V-Board</option><option value="">—</option></select></div>
+      <div><label style="display:block;font-size:13px;font-weight:600;margin-bottom:4px;">Grams</label>
+        <input type="text" id="q-grams" placeholder="เช่น 350/450" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:14px;"></div>
+      <div><label style="display:block;font-size:13px;font-weight:600;margin-bottom:4px;">Project</label>
+        <input type="text" id="q-project" placeholder="เช่น FKT (เว้นว่างได้)" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:14px;"></div>
+      <div><label style="display:block;font-size:13px;font-weight:600;margin-bottom:4px;">สกุลที่เสนอ</label>
+        <select id="q-currency" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:14px;">
+          <option value="THB">THB/kg</option><option value="USD">USD/MT</option></select></div>
+    </div>
+
+    <div id="q-usd-block" style="display:none; background:#f8fafc; border-radius:8px; padding:10px 12px; margin-bottom:10px;">
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+        <div><label style="display:block;font-size:13px;font-weight:600;margin-bottom:4px;">ราคาใหม่ USD/MT</label>
+          <input type="number" id="q-usd-new" step="0.01" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:14px;"></div>
+        <div><label style="display:block;font-size:13px;font-weight:600;margin-bottom:4px;">Ex Rate (฿/USD)</label>
+          <input type="number" id="q-exrate" step="0.0001" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:14px;"></div>
+      </div>
+      <div style="font-size:13px;color:var(--text-dim);margin-top:8px;">→ THB/kg (คำนวณ): <b id="q-thb-preview" style="font-family:var(--mono);">—</b></div>
+    </div>
+
+    <div id="q-thb-block" style="margin-bottom:10px;">
+      <label style="display:block;font-size:13px;font-weight:600;margin-bottom:4px;">ราคาใหม่ THB/kg</label>
+      <input type="number" id="q-thb-new" step="0.01" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:14px;">
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px;">
+      <div><label style="display:block;font-size:13px;font-weight:600;margin-bottom:4px;">Rebate THB/kg (ถ้ามี)</label>
+        <input type="number" id="q-rebate-thb" step="0.01" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:14px;"></div>
+      <div><label style="display:block;font-size:13px;font-weight:600;margin-bottom:4px;">เดือน (Update)</label>
+        <input type="text" id="q-month" placeholder="เช่น Jul" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:14px;"></div>
+    </div>
+
+    <div style="margin-bottom:14px;">
+      <label style="display:block;font-size:13px;font-weight:600;margin-bottom:4px;">Group override (ถ้า auto-match ไม่ถูก)</label>
+      <input type="text" id="q-group-override" placeholder="เช่น Group9-GreyBoard (เว้นว่าง = ให้ระบบจับเอง)" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:14px;font-family:var(--mono);">
+    </div>
+
+    <div id="quote-modal-error" style="display:none; padding:8px 12px; background:#fee; border:1px solid #fcc; color:#c00; border-radius:6px; font-size:13px; margin-bottom:10px;"></div>
+
+    <div style="display:flex; gap:8px; justify-content:space-between;">
+      <button id="quote-modal-delete" class="btn" style="background:#fee; color:#c00; border-color:#fcc; display:none;">🗑️ ลบ</button>
+      <div style="flex:1;"></div>
+      <button id="quote-modal-cancel" class="btn">ยกเลิก</button>
+      <button id="quote-modal-save" class="btn" style="background:var(--accent); color:white; border-color:var(--accent); font-weight:600;">💾 บันทึก</button>
     </div>
   </div>
 </div>
@@ -3596,7 +3673,7 @@ async function loadTrend() {
 
 // ===== TAB 5: VALUE =====
 async function loadValueTab() {
-  await Promise.all([loadProjects(), loadSupplierValue(), loadPriceCompare()]);
+  await Promise.all([loadProjects(), loadSupplierValue(), loadPriceCompare(), loadQuoteCompare()]);
 }
 
 async function loadProjects() {
@@ -3986,6 +4063,358 @@ async function loadPriceCompare() {
   } catch (err) {
     wrap.innerHTML = `<div class="loading-state" style="color:var(--danger);">❌ ${escapeHtml(err.message)}</div>`;
     console.error(err);
+  }
+}
+
+// =================================================================
+// ===== ราคาเสนอ (Quotation) — เทียบ Supplier =====
+// =================================================================
+let _quoteEditMode = false;
+let _quoteEditing = null;   // row object เมื่อกำลังแก้ไข, null = เพิ่มใหม่
+let _quoteRows = [];        // cache แถวล่าสุด
+let _quoteMappings = [];    // paper_grade_equivalence (ใช้จับกลุ่มแบบเดียวกับ "รับเข้าจริง")
+
+function qNum(v) {
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(v);
+  return isNaN(n) ? null : n;
+}
+function qStr(v) { return v === null || v === undefined ? '' : String(v).trim(); }
+function quoteProductToCat(p) {
+  if (p === 'Core') return 'Core-Board';
+  if (p === 'Liner') return 'Liner';
+  if (p === 'V-Board') return 'Grey-Board';
+  return p || '—';
+}
+
+// สร้าง candidate paper_type จาก (เกรด + แกรม) เพื่อแมตช์กับ paper_grade_equivalence
+// เช่น grade "M400" grams "470" -> ["M400","M400-470","M400470"]
+function quoteCandidates(grade, grams) {
+  const set = new Set([grade]);
+  const nums = String(grams || '').match(/\d+/g) || [];
+  for (const n of nums) { set.add(grade + '-' + n); set.add(grade + n); }
+  return [...set];
+}
+// หา grade_group แบบเดียวกับการ์ดรับเข้าจริง (ใช้ pattern ชุดเดียวกัน)
+function findQuoteGroup(supplier, grade, grams) {
+  if (!_quoteMappings || !_quoteMappings.length) return null;
+  const cands = quoteCandidates(grade, grams);
+  for (const m of _quoteMappings) {
+    if (m.supplier !== supplier) continue;
+    const pat = m.paper_type_pattern;
+    for (const c of cands) {
+      if (pat.includes('%')) {
+        if (new RegExp('^' + pat.replace(/%/g, '.*') + '$').test(c)) return m.grade_group;
+      } else if (pat === c) return m.grade_group;
+    }
+  }
+  return null;
+}
+// กรองให้ตรงพฤติกรรมรับเข้าจริง: Core + SCG ที่ไม่ใช่ MF เทียบเฉพาะ FREE MKT (FKT/Fibrous)
+function isQuoteComparable(r) {
+  if (r.product === 'Core' && r.supplier === 'SCG') {
+    const isMF = /^MF/i.test(r.grade || '');
+    const proj = (r.project || '').toUpperCase();
+    if (!isMF && proj && !proj.startsWith('FKT') && !proj.includes('FIBROUS') && proj !== 'FREE MKT') return false;
+  }
+  return true;
+}
+
+async function loadQuoteCompare() {
+  const myToken = newRequestToken('quotecompare');
+  const wrap = $('#quoteCompareWrap');
+  wrap.innerHTML = '<div class="loading-state"><span class="loading"></span></div>';
+  try {
+    const [quotesRes, mapRes] = await Promise.all([
+      supabase.from('supplier_quotes').select('*'),
+      supabase.from('paper_grade_equivalence').select('grade_group, supplier, paper_type_pattern, category')
+    ]);
+    if (quotesRes.error) throw quotesRes.error;
+    if (!isRequestStillCurrent('quotecompare', myToken)) return;
+    _quoteRows = quotesRes.data || [];
+    _quoteMappings = mapRes.error ? [] : (mapRes.data || []);
+    renderQuoteCompare();
+  } catch (err) {
+    const msg = /relation .* does not exist|supplier_quotes/i.test(err.message || '')
+      ? 'ยังไม่มีตาราง supplier_quotes — รัน SQL setup ก่อน แล้วกด 📤 อัปโหลดราคาเสนอ'
+      : escapeHtml(err.message || String(err));
+    wrap.innerHTML = `<div class="empty-msg">${msg}</div>`;
+  }
+}
+
+function renderQuoteCompare() {
+  const wrap = $('#quoteCompareWrap');
+  const rows = (_quoteRows || []).filter(r => r.price_thb_new != null && isQuoteComparable(r));
+
+  // meta
+  const months = [...new Set(_quoteRows.map(r => r.update_month).filter(Boolean))];
+  const exRates = [...new Set(_quoteRows.map(r => r.ex_rate).filter(Boolean))];
+  $('#quote-meta').textContent = _quoteRows.length
+    ? `· ${_quoteRows.length} รายการ${months.length ? ' · เดือน ' + months.join('/') : ''}${exRates.length ? ' · ex ฿' + exRates[0] : ''}`
+    : '';
+
+  if (rows.length === 0) {
+    wrap.innerHTML = '<div class="empty-msg">ยังไม่มีราคาเสนอ — กด 📤 อัปโหลดราคาเสนอ เพื่อนำเข้าจากไฟล์ Excel</div>';
+    return;
+  }
+
+  // จับกลุ่มแบบเดียวกับการ์ดรับเข้าจริง: ใช้ grade_group (override > auto-match) ไม่งั้น fallback grade+product
+  const groups = new Map();
+  for (const r of rows) {
+    const gg = (r.grade_group_override && r.grade_group_override.trim())
+      || findQuoteGroup(r.supplier, r.grade, r.grams);
+    const key = gg || `${r.grade}__${r.product || ''}`;
+    if (!groups.has(key)) groups.set(key, { key, isMapped: !!gg, category: quoteProductToCat(r.product), rows: [] });
+    groups.get(key).rows.push(r);
+  }
+
+  // ในแต่ละ group: เก็บราคาต่ำสุดต่อ supplier (1 แถว/supplier เหมือนการ์ดรับเข้าจริง)
+  const multi = [], singles = [];
+  for (const g of groups.values()) {
+    const bySup = new Map();
+    for (const r of g.rows) {
+      const cur = bySup.get(r.supplier);
+      if (!cur || r.price_thb_new < cur.price_thb_new) bySup.set(r.supplier, r);
+    }
+    g.list = [...bySup.values()].sort((a, b) => a.price_thb_new - b.price_thb_new);
+    (g.list.length >= 2 ? multi : singles).push(g);
+  }
+
+  // sort การ์ดตามเลข Group เหมือนรับเข้าจริง
+  const groupNum = (k) => parseInt((String(k).match(/Group(\d+)/) || [])[1] || '999');
+  multi.sort((a, b) => (groupNum(a.key) - groupNum(b.key)) || a.key.localeCompare(b.key, 'en'));
+  singles.sort((a, b) => a.list[0].grade.localeCompare(b.list[0].grade, 'en'));
+
+  const editBtn = (r) => _quoteEditMode
+    ? `<button class="btn quote-edit-pencil" data-qid="${r.id}" style="padding:2px 8px;font-size:12px;margin-left:6px;">✏️</button>`
+    : '';
+
+  let html = '<div class="price-compare-grid">';
+  for (const g of multi) {
+    const cheapest = g.list[0].price_thb_new;
+    const catCls = (g.category || '').replace(/[^A-Za-z]/g, '-');
+    const title = g.isMapped ? g.key : `${g.list[0].grade} <span style="font-size:10px;color:var(--text-muted);font-weight:500;">· ${escapeHtml(g.list[0].product || '—')}</span>`;
+    html += `<div class="compare-card">
+      <div class="compare-card-header">
+        <div class="compare-card-title">${title}${g.isMapped ? ' <span style="font-size:10px;color:var(--text-muted);font-weight:500;">· เทียบเกรดเทียบเท่า</span>' : ''}</div>
+        <span class="compare-card-category compare-cat-${catCls}">${escapeHtml(g.category)}</span>
+      </div>`;
+    g.list.forEach((r, i) => {
+      const isCheap = i === 0;
+      const diff = r.price_thb_new - cheapest;
+      const diffPct = cheapest > 0 ? diff / cheapest * 100 : 0;
+      let diffLabel, diffCls;
+      if (isCheap) { diffLabel = '⭐ ถูกสุด'; diffCls = 'cheapest-tag'; }
+      else { diffCls = diffPct < 3 ? 'diff-low' : diffPct < 7 ? 'diff-mid' : 'diff-high'; diffLabel = `+${diffPct.toFixed(1)}% (+฿${diff.toFixed(2)})`; }
+      const typeLabel = [r.grade, r.project].filter(Boolean).join(' ');
+      const cur = r.currency === 'USD' ? ` <span style="font-size:10px;color:var(--accent);">USD ${r.price_usd_new ?? '-'}</span>` : '';
+      html += `<div class="compare-row${isCheap ? ' cheapest' : ''}">
+        <div><span class="compare-supplier-name">${escapeHtml(r.supplier)}</span> <span style="color:var(--text-muted);font-size:11px;">(${escapeHtml(typeLabel)})</span>${cur}${editBtn(r)}</div>
+        <div class="compare-price">${r.price_thb_new.toFixed(2)}</div>
+        <div class="compare-rolls" style="font-size:11px;">${escapeHtml(r.update_month || '')}</div>
+        <div class="compare-diff ${diffCls}">${diffLabel}</div>
+      </div>`;
+    });
+    html += '</div>';
+  }
+  html += '</div>';
+
+  // single-supplier table
+  if (singles.length) {
+    const singleRows = singles.flatMap(g => g.list).sort((a, b) =>
+      (a.product || '').localeCompare(b.product || '') || a.grade.localeCompare(b.grade) || a.price_thb_new - b.price_thb_new);
+    html += `<div style="margin-top:16px;">
+      <div style="font-size:13px;font-weight:600;color:var(--text-dim);margin-bottom:6px;">รายการ supplier เดียว (ยังไม่มีคู่เทียบ — ตั้ง Group override เพื่อจับคู่ได้)</div>
+      <div style="overflow-x:auto;"><table class="alert-table"><thead><tr>
+        <th>Supplier</th><th>เกรด</th><th>Product</th><th>Grams · Project</th><th class="right">THB/kg ใหม่</th><th>เดือน</th>${_quoteEditMode ? '<th></th>' : ''}
+      </tr></thead><tbody>`;
+    for (const r of singleRows) {
+      const detail = [r.grams, r.project].filter(Boolean).join(' · ');
+      html += `<tr>
+        <td>${escapeHtml(r.supplier)}</td><td>${escapeHtml(r.grade)}</td><td>${escapeHtml(r.product || '—')}</td>
+        <td>${escapeHtml(detail || '—')}</td>
+        <td class="right" style="font-family:var(--mono);font-weight:600;">${r.price_thb_new.toFixed(2)}${r.currency === 'USD' ? ` <span style="font-size:10px;color:var(--accent);">($${r.price_usd_new})</span>` : ''}</td>
+        <td>${escapeHtml(r.update_month || '')}</td>
+        ${_quoteEditMode ? `<td>${editBtn(r)}</td>` : ''}
+      </tr>`;
+    }
+    html += '</tbody></table></div></div>';
+  }
+
+  wrap.innerHTML = html;
+
+  if (_quoteEditMode) {
+    $$('.quote-edit-pencil').forEach(b => b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const r = _quoteRows.find(x => String(x.id) === b.dataset.qid);
+      if (r) openQuoteModal(r);
+    }));
+  }
+}
+
+// ---- Excel upload ----
+async function handleQuoteFile(file) {
+  if (!file) return;
+  if (typeof XLSX === 'undefined') { alert('ไลบรารี Excel ไม่พร้อม'); return; }
+  const btn = $('#quote-upload-btn');
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = '⏳ กำลังอ่านไฟล์...';
+  try {
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type: 'array' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
+    const rows = parseQuoteAoa(aoa, file.name);
+    if (!rows.length) { alert('ไม่พบรายการราคาในไฟล์ (ตรวจหัวคอลัมน์ให้ตรง template)'); return; }
+
+    btn.textContent = `⏳ บันทึก ${rows.length} รายการ...`;
+    const { error } = await supabase
+      .from('supplier_quotes')
+      .upsert(rows, { onConflict: 'supplier,grade,grams,project' });
+    if (error) throw error;
+    alert(`✅ อัปโหลดสำเร็จ ${rows.length} รายการ`);
+    await loadQuoteCompare();
+  } catch (err) {
+    alert('❌ อัปโหลดไม่สำเร็จ: ' + (err.message || err));
+    console.error('[Quote upload]', err);
+  } finally {
+    btn.disabled = false; btn.textContent = orig;
+    $('#quote-file-input').value = '';
+  }
+}
+
+// แปลง array-of-arrays จาก Excel → แถว supplier_quotes
+// คอลัมน์ (0-based): 0 supplier,1 grade,2 product,3 grams,4 project,
+//   5 usd_old,6 thb_old,7 usd_new,8 thb_new,9 pct,10 rebate_usd,11 rebate_thb,12 update, [14] ex_rate
+function parseQuoteAoa(aoa, fileName) {
+  if (!aoa || !aoa.length) return [];
+  const exRate = qNum(aoa[0] && aoa[0][14]);
+  const round4 = (n) => n == null ? null : Math.round(n * 10000) / 10000;
+  const out = [];
+  for (let i = 1; i < aoa.length; i++) {
+    const row = aoa[i];
+    if (!row) continue;
+    const supplier = qStr(row[0]), grade = qStr(row[1]);
+    if (!supplier || !grade) continue;
+
+    let usdNew = qNum(row[7]), thbNew = qNum(row[8]);
+    let usdOld = qNum(row[5]), thbOld = qNum(row[6]);
+    let rebUsd = qNum(row[10]), rebThb = qNum(row[11]);
+    const currency = usdNew != null ? 'USD' : 'THB';
+
+    if (thbNew == null && usdNew != null && exRate) thbNew = usdNew * exRate / 1000;
+    if (thbOld == null && usdOld != null && exRate) thbOld = usdOld * exRate / 1000;
+    if (rebThb == null && rebUsd != null && exRate) rebThb = rebUsd * exRate / 1000;
+
+    if (thbNew == null && thbOld == null) continue;  // ไม่มีราคาอะไรเลย ข้าม
+
+    out.push({
+      supplier, grade,
+      product: qStr(row[2]),
+      grams: qStr(row[3]),
+      project: qStr(row[4]),
+      currency,
+      price_usd_old: usdOld, price_thb_old: round4(thbOld),
+      price_usd_new: usdNew, price_thb_new: round4(thbNew),
+      rebate_usd: rebUsd, rebate_thb: round4(rebThb),
+      pct_change: qNum(row[9]),
+      ex_rate: exRate,
+      update_month: qStr(row[12]) || null,
+      source_file: fileName,
+      uploaded_by: currentUser?.username || null
+    });
+  }
+  return out;
+}
+
+// ---- Edit / Add modal ----
+function quoteSyncModalCurrency() {
+  const cur = $('#q-currency').value;
+  $('#q-usd-block').style.display = cur === 'USD' ? 'block' : 'none';
+  $('#q-thb-block').style.display = cur === 'USD' ? 'none' : 'block';
+  quoteUpdateThbPreview();
+}
+function quoteUpdateThbPreview() {
+  const usd = qNum($('#q-usd-new').value), ex = qNum($('#q-exrate').value);
+  const thb = (usd != null && ex) ? (usd * ex / 1000) : null;
+  $('#q-thb-preview').textContent = thb != null ? '฿' + thb.toFixed(2) : '—';
+}
+function openQuoteModal(row) {
+  _quoteEditing = row || null;
+  $('#quote-modal-title').textContent = row ? '✏️ แก้ไขราคาเสนอ' : '➕ เพิ่มราคาเสนอ';
+  $('#quote-modal-delete').style.display = row ? 'inline-block' : 'none';
+  $('#quote-modal-error').style.display = 'none';
+  $('#q-supplier').value = row?.supplier || '';
+  $('#q-grade').value = row?.grade || '';
+  $('#q-product').value = row?.product ?? 'Core';
+  $('#q-grams').value = row?.grams || '';
+  $('#q-project').value = row?.project || '';
+  $('#q-currency').value = row?.currency || 'THB';
+  $('#q-usd-new').value = row?.price_usd_new ?? '';
+  $('#q-exrate').value = row?.ex_rate ?? (_quoteRows.find(r => r.ex_rate)?.ex_rate ?? '');
+  $('#q-thb-new').value = row?.price_thb_new ?? '';
+  $('#q-rebate-thb').value = row?.rebate_thb ?? '';
+  $('#q-month').value = row?.update_month || '';
+  $('#q-group-override').value = row?.grade_group_override || '';
+  quoteSyncModalCurrency();
+  $('#quote-edit-modal').style.display = 'flex';
+}
+function closeQuoteModal() { $('#quote-edit-modal').style.display = 'none'; _quoteEditing = null; }
+
+async function saveQuote() {
+  const err = $('#quote-modal-error');
+  const supplier = $('#q-supplier').value.trim(), grade = $('#q-grade').value.trim();
+  if (!supplier || !grade) { err.textContent = 'กรอก Supplier และ เกรด'; err.style.display = 'block'; return; }
+  const currency = $('#q-currency').value;
+  let usdNew = null, thbNew = null, ex = qNum($('#q-exrate').value);
+  if (currency === 'USD') {
+    usdNew = qNum($('#q-usd-new').value);
+    if (usdNew == null || !ex) { err.textContent = 'กรอก USD/MT และ Ex Rate'; err.style.display = 'block'; return; }
+    thbNew = Math.round(usdNew * ex / 1000 * 10000) / 10000;
+  } else {
+    thbNew = qNum($('#q-thb-new').value);
+    if (thbNew == null) { err.textContent = 'กรอกราคาใหม่ THB/kg'; err.style.display = 'block'; return; }
+  }
+  const obj = {
+    supplier, grade,
+    product: $('#q-product').value,
+    grams: $('#q-grams').value.trim(),
+    project: $('#q-project').value.trim(),
+    currency,
+    price_usd_new: usdNew,
+    price_thb_new: thbNew,
+    rebate_thb: qNum($('#q-rebate-thb').value),
+    ex_rate: ex,
+    update_month: $('#q-month').value.trim() || null,
+    grade_group_override: $('#q-group-override').value.trim() || null,
+    uploaded_by: currentUser?.username || null
+  };
+  const saveBtn = $('#quote-modal-save');
+  saveBtn.disabled = true; saveBtn.textContent = '⏳...';
+  try {
+    let res;
+    if (_quoteEditing?.id) res = await supabase.from('supplier_quotes').update(obj).eq('id', _quoteEditing.id);
+    else res = await supabase.from('supplier_quotes').upsert(obj, { onConflict: 'supplier,grade,grams,project' });
+    if (res.error) throw res.error;
+    closeQuoteModal();
+    await loadQuoteCompare();
+  } catch (e) {
+    err.textContent = '❌ ' + (e.message || e); err.style.display = 'block';
+  } finally {
+    saveBtn.disabled = false; saveBtn.textContent = '💾 บันทึก';
+  }
+}
+async function deleteQuote() {
+  if (!_quoteEditing?.id) return;
+  if (!confirm('ลบราคาเสนอรายการนี้?')) return;
+  try {
+    const { error } = await supabase.from('supplier_quotes').delete().eq('id', _quoteEditing.id);
+    if (error) throw error;
+    closeQuoteModal();
+    await loadQuoteCompare();
+  } catch (e) {
+    $('#quote-modal-error').textContent = '❌ ' + (e.message || e);
+    $('#quote-modal-error').style.display = 'block';
   }
 }
 
@@ -5482,6 +5911,7 @@ const PRINT_CONFIG = {
     sections: [
       { id: 'projectTable', label: 'Stock แยกตามโครงการ', default: true },
       { id: 'supplierValueTable', label: 'มูลค่าแยกตาม Supplier', default: true },
+      { id: 'quoteCompareWrap', label: 'ราคาเสนอ (Quotation)', default: true },
       { id: 'priceCompareWrap', label: 'เปรียบเทียบราคา Supplier', default: true }
     ]
   },
@@ -5707,9 +6137,29 @@ if (_usageGran) _usageGran.addEventListener('change', () => {
   renderUsageTable();
 });
 
-// =============================================================
-// ===== ALERTS TAB =====
-// =============================================================
+// Quotation (ราคาเสนอ) tab listeners
+(function wireQuoteListeners() {
+  const upBtn = $('#quote-upload-btn'), fileInp = $('#quote-file-input');
+  const editTog = $('#quote-edit-toggle'), addBtn = $('#quote-add-btn');
+  if (upBtn) upBtn.addEventListener('click', () => fileInp.click());
+  if (fileInp) fileInp.addEventListener('change', e => { if (e.target.files[0]) handleQuoteFile(e.target.files[0]); });
+  if (editTog) editTog.addEventListener('click', () => {
+    _quoteEditMode = !_quoteEditMode;
+    editTog.textContent = _quoteEditMode ? '✅ เสร็จสิ้น' : '✏️ แก้ไข';
+    editTog.style.background = _quoteEditMode ? 'var(--accent)' : '';
+    editTog.style.color = _quoteEditMode ? 'white' : '';
+    addBtn.style.display = _quoteEditMode ? 'inline-block' : 'none';
+    renderQuoteCompare();
+  });
+  if (addBtn) addBtn.addEventListener('click', () => openQuoteModal(null));
+  const cur = $('#q-currency'); if (cur) cur.addEventListener('change', quoteSyncModalCurrency);
+  const usdN = $('#q-usd-new'); if (usdN) usdN.addEventListener('input', quoteUpdateThbPreview);
+  const exR = $('#q-exrate'); if (exR) exR.addEventListener('input', quoteUpdateThbPreview);
+  $('#quote-modal-save') && $('#quote-modal-save').addEventListener('click', saveQuote);
+  $('#quote-modal-delete') && $('#quote-modal-delete').addEventListener('click', deleteQuote);
+  $('#quote-modal-cancel') && $('#quote-modal-cancel').addEventListener('click', closeQuoteModal);
+  $('#quote-edit-modal') && $('#quote-edit-modal').addEventListener('click', e => { if (e.target.id === 'quote-edit-modal') closeQuoteModal(); });
+})();
 const alertsState = {
   loadedAt: null,
   data: null,
