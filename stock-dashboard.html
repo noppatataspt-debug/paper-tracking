@@ -1654,7 +1654,13 @@ body {
 
   <div class="tab-content" id="tab-trend">
     <div class="section">
-      <div class="section-title">📊 Trend รับเข้า-จ่ายออก (12 เดือนย้อนหลัง)</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+        <div class="section-title">📊 Trend รับเข้า-จ่ายออก (12 เดือนย้อนหลัง)</div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <label style="font-size:13px;color:var(--text-dim);">Supplier:</label>
+          <select id="trend-supplier" class="filter-select"><option value="all">ทุก Supplier</option></select>
+        </div>
+      </div>
       <div class="trend-chart-wrap"><canvas id="trendChart"></canvas></div>
     </div>
     <div class="section">
@@ -3588,14 +3594,16 @@ async function loadTrend() {
     }
     const start = startOfMonth(months[0]);
     const end = endOfMonth(months[months.length - 1]);
-    
+
+    const supFilter = $('#trend-supplier')?.value || 'all';
+
     const ins = await fetchAllRows(() => supabase
-      .from('paper_invoices').select('weight_kg, receive_date')
+      .from('paper_invoices').select('weight_kg, receive_date, supplier')
       .gte('receive_date', start).lte('receive_date', end));
     if (!isRequestStillCurrent('trend', myToken)) return;
     
     const outs = await fetchAllRows(() => supabase
-      .from('paper_outflows').select('weight_kg, outflow_date')
+      .from('paper_outflows').select('weight_kg, outflow_date, supplier_name')
       .gte('outflow_date', start).lte('outflow_date', end).eq('voided', false));
     if (!isRequestStillCurrent('trend', myToken)) return;
     
@@ -3603,19 +3611,37 @@ async function loadTrend() {
     // กราฟจะใช้สูตร: stock_end_of_M = stock_end_of_(M+1) − in_(M+1) + out_(M+1)
     // (ย้อนคำนวณจากสต๊อกจริงล่าสุด)
     const stockNow = await fetchAllRows(() => supabase
-      .from('current_stock_invoices').select('computed_remaining_kg')
+      .from('current_stock_invoices').select('computed_remaining_kg, supplier')
       .eq('computed_status', 'in_stock'));
     if (!isRequestStillCurrent('trend', myToken)) return;
-    
-    const currentStock = (stockNow || []).reduce((s, r) => s + parseFloat(r.computed_remaining_kg || 0), 0);
+
+    // เติม dropdown supplier (รวมจากทั้งรับเข้า/จ่ายออก) คงค่าที่เลือกไว้
+    const supSet = new Set();
+    (ins || []).forEach(r => { if (r.supplier) supSet.add(r.supplier); });
+    (outs || []).forEach(r => { if (r.supplier_name) supSet.add(r.supplier_name); });
+    const supSel = $('#trend-supplier');
+    if (supSel) {
+      const sorted = [...supSet].sort();
+      const cur = supSel.value;
+      supSel.innerHTML = '<option value="all">ทุก Supplier</option>' +
+        sorted.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
+      supSel.value = sorted.includes(cur) ? cur : 'all';
+    }
+
+    // filter ตาม supplier ที่เลือก
+    const insF   = supFilter === 'all' ? (ins || [])   : (ins || []).filter(r => r.supplier === supFilter);
+    const outsF  = supFilter === 'all' ? (outs || [])  : (outs || []).filter(r => r.supplier_name === supFilter);
+    const stockF = supFilter === 'all' ? (stockNow || []) : (stockNow || []).filter(r => r.supplier === supFilter);
+
+    const currentStock = stockF.reduce((s, r) => s + parseFloat(r.computed_remaining_kg || 0), 0);
     
     const monthMap = new Map();
     for (const m of months) monthMap.set(m, { in: 0, out: 0 });
-    for (const r of (ins || [])) {
+    for (const r of insF) {
       const m = (r.receive_date || '').slice(0, 7);
       if (monthMap.has(m)) monthMap.get(m).in += parseFloat(r.weight_kg || 0);
     }
-    for (const r of (outs || [])) {
+    for (const r of outsF) {
       const m = (r.outflow_date || '').slice(0, 7);
       if (monthMap.has(m)) monthMap.get(m).out += parseFloat(r.weight_kg || 0);
     }
@@ -6119,6 +6145,8 @@ $('#flt-paper-lots').addEventListener('keydown', e => {
 $('#usage-period').addEventListener('change', renderUsageTable);
 $('#usage-unit').addEventListener('change', renderUsageTable);
 $('#usage-export-csv').addEventListener('click', exportUsageCSV);
+const _trendSup = $('#trend-supplier');
+if (_trendSup) _trendSup.addEventListener('change', loadTrend);
 const _usageGran = $('#usage-granularity');
 if (_usageGran) _usageGran.addEventListener('change', () => {
   const sel = $('#usage-period');
@@ -6210,11 +6238,38 @@ async function fetchAndRenderAlerts() {
     // → mark fulfilled อัตโนมัติ
     await autoFulfillAlertPos(data.alerts || []);
 
+    await enrichAlertSuppliers(data.alerts || []);
+
     populateSupplierFilter();
     renderAlerts();
   } catch (e) {
     console.error('[Alerts] fetch error:', e);
     $('#alerts-kpi').innerHTML = `<div class="alert-empty-state"><div class="big">⚠️</div><div>โหลดข้อมูลไม่สำเร็จ</div><div style="font-size:13px; margin-top:6px; color:var(--danger);">${escapeHtml(e.message || String(e))}</div></div>`;
+  }
+}
+
+// ดึงชื่อ supplier ล่าสุดมาแสดง สำหรับ alert ที่ RPC หา supplier ไม่เจอ
+// (เช่น ชนิดที่มีหลาย supplier และ stock = 0 → RPC ไม่มีทั้ง supplier เดี่ยว/breakdown)
+async function enrichAlertSuppliers(alerts) {
+  const missing = alerts.filter(a => !a.supplier && !(a.stock_breakdown && a.stock_breakdown.length));
+  const types = [...new Set(missing.map(a => a.paper_type).filter(Boolean))];
+  if (!types.length) return;
+  try {
+    const { data } = await supabase
+      .from('paper_invoices')
+      .select('paper_type, supplier, receive_date')
+      .in('paper_type', types)
+      .order('receive_date', { ascending: false })
+      .limit(1000);
+    const map = {};
+    (data || []).forEach(r => {
+      if (!r.supplier) return;
+      (map[r.paper_type] = map[r.paper_type] || []);
+      if (!map[r.paper_type].includes(r.supplier)) map[r.paper_type].push(r.supplier);
+    });
+    missing.forEach(a => { a.supplier_fallback = map[a.paper_type] || []; });
+  } catch (e) {
+    console.warn('[Alerts] enrich supplier fallback failed:', e);
   }
 }
 
@@ -6328,10 +6383,19 @@ function renderAlertSection(severity, rows) {
   const allAlerts = alertsState.data.alerts;
   const trBody = rows.map(a => {
     const idx = allAlerts.indexOf(a);
-    const supplier = a.supplier || (a.stock_breakdown ? `${a.stock_breakdown.length} suppliers` : '—');
-    const supplierLabel = a.supplier
-      ? `${escapeHtml(a.supplier)} <span class="alert-cat-pill">${escapeHtml(a.paper_category || '—')}</span>`
-      : `<span style="color:var(--accent); font-weight:600;">${escapeHtml(supplier)}</span> <span class="alert-cat-pill">${escapeHtml(a.paper_category || '—')}</span>`;
+    const pill = `<span class="alert-cat-pill">${escapeHtml(a.paper_category || '—')}</span>`;
+    const fb = a.supplier_fallback || [];
+    let supplierLabel;
+    if (a.supplier) {
+      supplierLabel = `${escapeHtml(a.supplier)} ${pill}`;
+    } else if (a.stock_breakdown && a.stock_breakdown.length) {
+      supplierLabel = `<span style="color:var(--accent); font-weight:600;">${a.stock_breakdown.length} suppliers</span> ${pill}`;
+    } else if (fb.length) {
+      const names = fb.slice(0, 3).join(' / ') + (fb.length > 3 ? '…' : '');
+      supplierLabel = `${escapeHtml(names)} <span style="font-size:10px;color:var(--text-muted);">(ล่าสุด)</span> ${pill}`;
+    } else {
+      supplierLabel = `<span style="color:var(--text-muted);">—</span> ${pill}`;
+    }
     const stockTons = (a.current_stock_tons ?? 0).toFixed(2);
     const useTons = (a.avg_daily_tons ?? a.avg_daily_usage_tons ?? 0).toFixed(3);
     const days = a.days_remaining === null || a.days_remaining === undefined ? '—' : `${a.days_remaining} วัน`;
