@@ -3381,6 +3381,13 @@ function addInvoiceCard(result) {
   const d = result.data;
   const totalWeight = d.rolls.reduce((s, r) => s + (r.weight_kg || 0), 0);
   const uniqueTypes = [...new Set(d.rolls.map(r => r.paper_type))];
+
+  // หา lot ที่ซ้ำกันภายในไฟล์ (เช่น supplier ส่งไฟล์ผิด) เพื่อ highlight แถบแดง
+  const _lotKey = (r) => r.paper_lot_normalized || normalizeLot(r.paper_lot);
+  const _lotCounts = {};
+  d.rolls.forEach(r => { const k = _lotKey(r); _lotCounts[k] = (_lotCounts[k] || 0) + 1; });
+  const dupLotSet = new Set(Object.keys(_lotCounts).filter(k => _lotCounts[k] > 1));
+  const dupRollCount = d.rolls.filter(r => dupLotSet.has(_lotKey(r))).length;
   
   const idx = state.parsedInvoices.length - 1;
   
@@ -3478,6 +3485,7 @@ function addInvoiceCard(result) {
     ${coaValuesHtml}
     <div class="inv-rolls-summary">
       <div>📦 <strong>${d.rolls.length}</strong> ม้วน · <strong>${uniqueTypes.length}</strong> ประเภท (${escapeHtml(uniqueTypes.join(', '))})</div>
+      ${dupLotSet.size ? `<div style="margin-top:6px;padding:6px 10px;background:#fdecea;border-left:3px solid #e74c3c;border-radius:4px;color:#c0392b;font-weight:600;font-size:13px;">⚠️ พบ lot ซ้ำกันในไฟล์ ${dupRollCount} ม้วน (${dupLotSet.size} เลข) — แถบสีแดงคือม้วนที่ซ้ำ ควรแก้ไฟล์ supplier ก่อนบันทึก</div>` : ''}
     </div>
     <div class="inv-rolls-table">
       <table>
@@ -3490,14 +3498,17 @@ function addInvoiceCard(result) {
           </tr>
         </thead>
         <tbody>
-          ${d.rolls.map(r => `
-            <tr>
-              <td class="mono">${escapeHtml(r.paper_lot)}</td>
+          ${d.rolls.map(r => {
+            const isDup = dupLotSet.has(_lotKey(r));
+            return `
+            <tr style="${isDup ? 'background:#fdecea;box-shadow:inset 3px 0 0 #e74c3c;' : ''}">
+              <td class="mono">${escapeHtml(r.paper_lot)}${isDup ? ' <span style="background:#e74c3c;color:#fff;font-size:10px;padding:1px 5px;border-radius:4px;font-weight:600;">ซ้ำ</span>' : ''}</td>
               <td class="mono">${escapeHtml(r.paper_type)}</td>
               <td class="mono">${r.width_mm || '—'}</td>
               <td class="mono manager-only-cell">${formatNumber(r.weight_kg)}</td>
             </tr>
-          `).join('')}
+          `;
+          }).join('')}
         </tbody>
       </table>
     </div>
@@ -3518,6 +3529,14 @@ function addInvoiceCard(result) {
     const receiveDate = div.querySelector('.receive-date').value;
     saveInvoice(idx, receiveDate, result.filename);
   });
+  // ถ้ามี lot ซ้ำในไฟล์ → ห้ามบันทึก (ปิดปุ่มไว้เลย)
+  if (dupLotSet.size) {
+    const sb = div.querySelector('.save-btn');
+    sb.disabled = true;
+    sb.style.opacity = '0.45';
+    sb.style.cursor = 'not-allowed';
+    sb.title = 'มี lot ซ้ำในไฟล์ — แก้ไฟล์ supplier แล้วอัปโหลดใหม่ก่อน';
+  }
   div.querySelector('.remove-btn').addEventListener('click', () => {
     div.remove();
     state.parsedInvoices[idx] = null;
@@ -3557,40 +3576,65 @@ async function saveInvoice(idx, receiveDate, sourceFile) {
       remaining_weight_kg: r.weight_kg,
     }));
     
-    // ตรวจ lot ซ้ำ
-    const lots = rollsToInsert.map(r => r.paper_lot_normalized);
-    const { data: existing } = await supabase
-      .from('paper_invoices')
-      .select('paper_lot_normalized')
-      .in('paper_lot_normalized', lots);
-    
-    const existingSet = new Set((existing || []).map(e => e.paper_lot_normalized));
-    const duplicates = rollsToInsert.filter(r => existingSet.has(r.paper_lot_normalized));
-    
-    if (duplicates.length) {
+    // ── ห้ามบันทึกถ้ามี lot ซ้ำกันเองภายในไฟล์ (supplier ส่งไฟล์ผิด) — ต้องแก้ไฟล์ก่อน ──
+    const fileKeyCount = {};
+    rollsToInsert.forEach(r => { const k = r.paper_lot_normalized || normalizeLot(r.paper_lot); fileKeyCount[k] = (fileKeyCount[k] || 0) + 1; });
+    const fileDupLots = [...new Set(rollsToInsert
+      .filter(r => fileKeyCount[r.paper_lot_normalized || normalizeLot(r.paper_lot)] > 1)
+      .map(r => r.paper_lot))];
+    if (fileDupLots.length) {
       hideLoading();
-      const dupList = duplicates.slice(0, 5).map(r => r.paper_lot).join(', ');
-      const more = duplicates.length > 5 ? ` (และอีก ${duplicates.length - 5} ม้วน)` : '';
-      if (!confirm(`พบ lot ซ้ำ ${duplicates.length} ม้วน:\n${dupList}${more}\n\nข้าม ${duplicates.length} ม้วนนี้และบันทึก ${rollsToInsert.length - duplicates.length} ม้วนที่เหลือ?`)) {
-        return;
-      }
-      showLoading('กำลังบันทึก...');
-    }
-    
-    const newRolls = rollsToInsert.filter(r => !existingSet.has(r.paper_lot_normalized));
-    if (!newRolls.length) {
-      hideLoading();
-      showToast('ไม่มีม้วนใหม่ให้บันทึก (ซ้ำทั้งหมด)', 'warning');
+      const show = fileDupLots.slice(0, 8).join(', ');
+      const more = fileDupLots.length > 8 ? ` (และอีก ${fileDupLots.length - 8})` : '';
+      showToast(`บันทึกไม่ได้: มี lot ซ้ำกันในไฟล์ ${fileDupLots.length} เลข (${show}${more}) — กรุณาแก้ไฟล์ supplier แล้วอัปโหลดใหม่`, 'error');
       return;
     }
-    
+
+    // ตรวจ lot ซ้ำ — เทียบทั้ง paper_lot (ดิบ ตรงกับ unique constraint uq_invoices_paper_lot)
+    // และ paper_lot_normalized เพราะแถวเก่าบางแถวอาจมี normalized = null จะหลุดการตรวจ
+    const lotsRaw  = [...new Set(rollsToInsert.map(r => r.paper_lot).filter(Boolean))];
+    const lotsNorm = [...new Set(rollsToInsert.map(r => r.paper_lot_normalized).filter(Boolean))];
+    const [exRaw, exNorm] = await Promise.all([
+      lotsRaw.length  ? supabase.from('paper_invoices').select('paper_lot, paper_lot_normalized').in('paper_lot', lotsRaw)            : Promise.resolve({ data: [] }),
+      lotsNorm.length ? supabase.from('paper_invoices').select('paper_lot, paper_lot_normalized').in('paper_lot_normalized', lotsNorm) : Promise.resolve({ data: [] }),
+    ]);
+    const existRows   = [...(exRaw.data || []), ...(exNorm.data || [])];
+    const existingRaw  = new Set(existRows.map(e => e.paper_lot).filter(Boolean));
+    const existingNorm = new Set(existRows.map(e => e.paper_lot_normalized).filter(Boolean));
+    const isDbDup = (r) => existingRaw.has(r.paper_lot) || (r.paper_lot_normalized && existingNorm.has(r.paper_lot_normalized));
+
+    const duplicates = rollsToInsert.filter(isDbDup);
+
+    if (duplicates.length) {
+      hideLoading();
+      const dupLots = [...new Set(duplicates.map(r => r.paper_lot))];
+      const show = dupLots.slice(0, 8).join(', ');
+      const more = dupLots.length > 8 ? ` (และอีก ${dupLots.length - 8})` : '';
+      showToast(`บันทึกไม่ได้: lot ต่อไปนี้มีอยู่ในระบบแล้ว ${dupLots.length} เลข (${show}${more}) — อาจเคย import ไปแล้ว หรือ supplier ใช้ lot ซ้ำ กรุณาตรวจสอบ/แก้ไฟล์ก่อน`, 'error');
+      return;
+    }
+
+    const newRolls = rollsToInsert;  // ไม่มี lot ซ้ำเหลือแล้ว (กันทั้งซ้ำในไฟล์ + ซ้ำกับ DB ด้านบน)
+    if (!newRolls.length) {
+      hideLoading();
+      showToast('ไม่มีม้วนให้บันทึก', 'warning');
+      return;
+    }
+
     // Insert into paper_invoices
     const { data: inserted, error: insErr } = await supabase
       .from('paper_invoices')
       .insert(newRolls)
       .select('id, paper_lot_normalized');
-    
-    if (insErr) throw insErr;
+
+    if (insErr) {
+      if (insErr.code === '23505' || /uq_invoices_paper_lot|duplicate key/i.test(insErr.message || '')) {
+        hideLoading();
+        showToast('มี lot ซ้ำกับในระบบ (อาจเพิ่งถูกบันทึกไปก่อนหน้า) — กดบันทึกอีกครั้ง ระบบจะข้ามม้วนซ้ำให้', 'error');
+        return;
+      }
+      throw insErr;
+    }
     
     // ถ้ามี COA → บันทึกใน quality_tests
     // 2 cases: 
