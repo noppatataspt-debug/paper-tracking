@@ -5330,6 +5330,7 @@ function renderUsageTable() {
   const _chartTitle = $('#usage-chart-title');
   if (_chartTitle) _chartTitle.textContent = isWeek ? '📊 กราฟเปรียบเทียบรายสัปดาห์' : '📊 กราฟเปรียบเทียบเดือน';
   renderUsageChart(monthLabels, grandMonths, unit);
+}
 
 function renderUsageChart(labels, values, unit) {
   const ctx = $('#usageChart');
