@@ -1786,6 +1786,13 @@ body {
       
       <div class="usage-toolbar">
         <div class="filter-group">
+          <label>มุมมอง:</label>
+          <select id="usage-granularity" class="filter-select">
+            <option value="month">รายเดือน</option>
+            <option value="week">รายสัปดาห์</option>
+          </select>
+        </div>
+        <div class="filter-group">
           <label>ช่วงเวลา:</label>
           <select id="usage-period" class="filter-select">
             <option value="6">6 เดือนล่าสุด</option>
@@ -1819,7 +1826,7 @@ body {
     </div>
     
     <div class="section">
-      <div class="section-title">📊 กราฟเปรียบเทียบเดือน</div>
+      <div class="section-title" id="usage-chart-title">📊 กราฟเปรียบเทียบเดือน</div>
       <div class="trend-chart-wrap"><canvas id="usageChart"></canvas></div>
     </div>
   </div>
@@ -5005,26 +5012,84 @@ function heatTextColor(intensity) {
   return intensity > 0.65 ? '#042f2e' : '#134e4a';
 }
 
+// ===== Helpers สำหรับมุมมองรายสัปดาห์ =====
+// parse 'YYYY-MM-DD...' เป็น Date เวลาเที่ยงคืนตาม local (เลี่ยงปัญหา timezone)
+function _parseLocalDate(dstr) {
+  const s = String(dstr).slice(0, 10);
+  const [y, m, d] = s.split('-').map(Number);
+  return new Date(y, (m || 1) - 1, d || 1);
+}
+// คืนวันจันทร์ของสัปดาห์ที่วันที่นั้นอยู่
+function _getMonday(dt) {
+  const d = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
+  const day = d.getDay();              // 0=อา ... 6=ส
+  const diff = (day === 0 ? -6 : 1 - day);
+  d.setDate(d.getDate() + diff);
+  return d;
+}
+function _toISODate(d) {
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+// ป้ายสัปดาห์ เช่น "2-8 มิ.ย." หรือข้ามเดือน "30 พ.ค.-5 มิ.ย."
+function _weekLabelTh(monday) {
+  const thMon = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const end = new Date(monday);
+  end.setDate(end.getDate() + 6);
+  if (monday.getMonth() === end.getMonth()) {
+    return `${monday.getDate()}-${end.getDate()} ${thMon[end.getMonth()]}`;
+  }
+  return `${monday.getDate()} ${thMon[monday.getMonth()]}-${end.getDate()} ${thMon[end.getMonth()]}`;
+}
+
 function renderUsageTable() {
   const period = $('#usage-period').value;
   const unit = $('#usage-unit').value;
+  const granularity = ($('#usage-granularity') ? $('#usage-granularity').value : 'month');
+  const isWeek = granularity === 'week';
   
-  // คำนวณ months
+  // ===== คำนวณ buckets (เดือน หรือ สัปดาห์) =====
+  // months = array ของ "bucket key", monthLabels = ป้ายที่แสดง,
+  // bucketKeyOf(dateStr) = map วันที่จ่ายออก -> bucket key, currentKey = bucket ปัจจุบัน
   const today = new Date();
   const months = [];
-  let n = period === '6' ? 6 : period === '12' ? 12 : -1;
+  const monthLabels = [];
+  let bucketKeyOf;
+  let currentKey;
   
-  if (n === -1) {
-    const startMo = 1;
-    const endMo = today.getMonth() + 1;
-    for (let m = startMo; m <= endMo; m++) {
-      months.push(today.getFullYear() + '-' + String(m).padStart(2, '0'));
-    }
-  } else {
+  if (isWeek) {
+    // ---- รายสัปดาห์ (สัปดาห์เริ่มวันจันทร์) ----
+    const n = parseInt(period) || 8;
+    const thisMonday = _getMonday(today);
     for (let i = n - 1; i >= 0; i--) {
-      const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
-      months.push(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'));
+      const start = new Date(thisMonday);
+      start.setDate(start.getDate() - i * 7);
+      months.push(_toISODate(start));
+      monthLabels.push(_weekLabelTh(start));
     }
+    currentKey = _toISODate(thisMonday);
+    bucketKeyOf = (dstr) => _toISODate(_getMonday(_parseLocalDate(dstr)));
+  } else {
+    // ---- รายเดือน (ตามเดิม) ----
+    let n = period === '6' ? 6 : period === '12' ? 12 : -1;
+    if (n === -1) {
+      const startMo = 1;
+      const endMo = today.getMonth() + 1;
+      for (let m = startMo; m <= endMo; m++) {
+        months.push(today.getFullYear() + '-' + String(m).padStart(2, '0'));
+      }
+    } else {
+      for (let i = n - 1; i >= 0; i--) {
+        const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+        months.push(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'));
+      }
+    }
+    const thMon = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+    for (const m of months) {
+      const [y, mo] = m.split('-');
+      monthLabels.push(`${thMon[parseInt(mo)-1]}-${String(parseInt(y) + 543).slice(2)}`);
+    }
+    currentKey = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0');
+    bucketKeyOf = (dstr) => dstr.slice(0, 7);
   }
   
   // กรอง supplier
@@ -5034,7 +5099,7 @@ function renderUsageTable() {
   // pivot — supplier × type × width × month
   const pivot = new Map();
   for (const o of filteredData) {
-    const m = o.outflow_date.slice(0, 7);
+    const m = bucketKeyOf(o.outflow_date);
     if (!months.includes(m)) continue;
     
     const sup = o.supplier_name || '(ไม่ระบุ)';
@@ -5085,14 +5150,8 @@ function renderUsageTable() {
     }
   }
   
-  // build month labels
-  const currentMonth = new Date().getFullYear() + '-' + String(new Date().getMonth() + 1).padStart(2, '0');
-  const monthLabels = months.map(m => {
-    const [y, mo] = m.split('-');
-    const monName = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'][parseInt(mo)-1];
-    return `${monName}-${String(parseInt(y) + 543).slice(2)}`;
-  });
-  const currentMonthIdx = months.indexOf(currentMonth);
+  // labels (monthLabels) + currentKey ถูกคำนวณไว้แล้วด้านบน
+  const currentMonthIdx = months.indexOf(currentKey);
   
   let html = '<div style="overflow-x:auto;"><table class="heatmap-table">';
   html += '<thead><tr><th style="min-width:90px;">Supplier</th><th style="min-width:140px;">ประเภท / หน้ากว้าง</th>';
@@ -5202,10 +5261,10 @@ function renderUsageTable() {
   
   // legend
   html += `<div class="heatmap-legend">
-    <span>💡 Heatmap แต่ละแถว (เทียบเดือนภายในประเภทเดียวกัน):</span>
-    <span>เดือนที่ใช้น้อย</span>
+    <span>💡 Heatmap แต่ละแถว (เทียบ${isWeek ? 'สัปดาห์' : 'เดือน'}ภายในประเภทเดียวกัน):</span>
+    <span>${isWeek ? 'สัปดาห์' : 'เดือน'}ที่ใช้น้อย</span>
     <span class="heatmap-legend-bar"></span>
-    <span>เดือนที่ใช้มาก</span>
+    <span>${isWeek ? 'สัปดาห์' : 'เดือน'}ที่ใช้มาก</span>
   </div>`;
   
   $('#usage-table-wrap').innerHTML = html;
@@ -5268,8 +5327,9 @@ function renderUsageTable() {
     $$('.usage-row-width').forEach(w => w.style.display = 'none');
   };
   
+  const _chartTitle = $('#usage-chart-title');
+  if (_chartTitle) _chartTitle.textContent = isWeek ? '📊 กราฟเปรียบเทียบรายสัปดาห์' : '📊 กราฟเปรียบเทียบเดือน';
   renderUsageChart(monthLabels, grandMonths, unit);
-}
 
 function renderUsageChart(labels, values, unit) {
   const ctx = $('#usageChart');
@@ -5353,6 +5413,8 @@ function exportUsageCSV() {
   
   const period = $('#usage-period').value;
   const unit = $('#usage-unit').value;
+  const gran = ($('#usage-granularity') ? $('#usage-granularity').value : 'month');
+  const granTxt = gran === 'week' ? 'w' : 'm';
   
   // re-compute to ensure latest data
   const table = $('#usage-table-wrap table');
@@ -5369,7 +5431,7 @@ function exportUsageCSV() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `usage_${period}m_${unit}.csv`;
+  a.download = `usage_${period}${granTxt}_${unit}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -5626,6 +5688,23 @@ $('#flt-paper-lots').addEventListener('keydown', e => {
 $('#usage-period').addEventListener('change', renderUsageTable);
 $('#usage-unit').addEventListener('change', renderUsageTable);
 $('#usage-export-csv').addEventListener('click', exportUsageCSV);
+const _usageGran = $('#usage-granularity');
+if (_usageGran) _usageGran.addEventListener('change', () => {
+  const sel = $('#usage-period');
+  if (_usageGran.value === 'week') {
+    sel.innerHTML = `
+      <option value="4">4 สัปดาห์ล่าสุด</option>
+      <option value="8" selected>8 สัปดาห์ล่าสุด</option>
+      <option value="12">12 สัปดาห์ล่าสุด</option>
+      <option value="16">16 สัปดาห์ล่าสุด</option>`;
+  } else {
+    sel.innerHTML = `
+      <option value="6">6 เดือนล่าสุด</option>
+      <option value="12">12 เดือนล่าสุด</option>
+      <option value="ytd">ตั้งแต่ต้นปี (YTD)</option>`;
+  }
+  renderUsageTable();
+});
 
 // =============================================================
 // ===== ALERTS TAB =====
