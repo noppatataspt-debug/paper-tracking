@@ -1905,6 +1905,9 @@ function renderList() {
     if (k && lotCount[k] > 1) dupIds.add(o.id);
   });
 
+  // วันนี้ (อิงรูปแบบเดียวกับทั้งแอป) — staff กด Undo ได้เฉพาะรายการของวันนี้
+  const todayStr = new Date().toISOString().split('T')[0];
+
   list.innerHTML = sortedDates.map(date => {
     const machines = byDate[date];
     const allRows = Object.values(machines).flat();
@@ -1963,7 +1966,9 @@ function renderList() {
                   <div>
                     ${o.voided 
                       ? `<span style="color:var(--text-muted);font-size:11px;">VOIDED</span>` 
-                      : `<button class="outflow-undo" onclick="window.voidOutflow('${o.id}', '${escapeHtml(o.paper_lot)}')">↩ Undo</button>`}
+                      : ((currentAdmin || o.outflow_date === todayStr)
+                          ? `<button class="outflow-undo" onclick="window.voidOutflow('${o.id}', '${escapeHtml(o.paper_lot)}')">↩ Undo</button>`
+                          : '')}
                     ${currentAdmin ? `
                       <button class="outflow-edit" onclick="window.openEditModal('${o.id}')" title="แก้ไข">✏️</button>
                       <button class="outflow-delete" onclick="window.openDeleteModal('${o.id}', '${escapeHtml(o.paper_lot)}')" title="ลบถาวร">🗑️</button>
@@ -2050,19 +2055,26 @@ window.voidOutflow = async function(id, lot) {
   if (!confirm(`ยืนยันยกเลิกการตัดออกของ ${lot}?\n\nระบบจะคืน status เป็น in_stock อัตโนมัติ`)) return;
   
   try {
-    await callAdminRPC('admin_update_outflow', {
-      p_outflow_id: id,
-      p_updates: { 
-        voided: true, 
-        voided_at: new Date().toISOString(), 
-        voided_reason: 'แก้ไขข้อมูลผิด'
-      }
-    });
+    if (currentAdmin && currentAdmin.session_token) {
+      // Manager: ยกเลิกได้ทุกรายการ (ผ่าน admin RPC เดิม)
+      await callAdminRPC('admin_update_outflow', {
+        p_outflow_id: id,
+        p_updates: { 
+          voided: true, 
+          voided_at: new Date().toISOString(), 
+          voided_reason: 'แก้ไขข้อมูลผิด'
+        }
+      });
+    } else {
+      // Staff: ยกเลิกได้เฉพาะรายการของวันนี้ (ผ่าน staff_void_outflow — void อย่างเดียว)
+      const { error } = await supabase.rpc('staff_void_outflow', { p_outflow_id: id });
+      if (error) throw error;
+    }
     showToast('✓ ยกเลิกสำเร็จ — lot กลับเป็น in_stock', 'success');
     loadOutflows();
     loadTabBadge();
   } catch (err) {
-    showToast('❌ ' + err.message, 'error');
+    showToast('❌ ' + (err.message || 'ยกเลิกไม่สำเร็จ'), 'error');
   }
 };
 
