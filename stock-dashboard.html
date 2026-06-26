@@ -2443,27 +2443,46 @@ async function loadMovement() {
   try {
     const monthStart = startOfMonth(currentMonth);
     const monthEnd = endOfMonth(currentMonth);
-    
-    const ins = await fetchAllRows(() => supabase
-      .from('paper_invoices')
-      .select('weight_kg, price_per_kg')
-      .gte('receive_date', monthStart).lte('receive_date', monthEnd));
-    
+
+    // cap วันนี้สำหรับเดือนปัจจุบัน + effDate (SCG=invoice_date) ให้ตรงกับตาราง Pivot
+    const today = new Date().toISOString().slice(0, 10);
+    const isCurrentMonth = currentMonth === today.slice(0, 7);
+    const receiveCap = (isCurrentMonth && today < monthEnd) ? today : monthEnd;
+    const inCap = isCurrentMonth ? receiveCap : monthEnd;
+
+    // รับเข้า: ดึงทั้ง receive_date ในเดือน และ SCG ที่ invoice_date ในเดือน → merge → bucket ด้วย effDate
+    const [inMain, inScg] = await Promise.all([
+      fetchAllRows(() => supabase.from('paper_invoices')
+        .select('id, supplier, weight_kg, price_per_kg, receive_date, invoice_date')
+        .gte('receive_date', monthStart).lte('receive_date', monthEnd)),
+      fetchAllRows(() => supabase.from('paper_invoices')
+        .select('id, supplier, weight_kg, price_per_kg, receive_date, invoice_date')
+        .eq('supplier', 'SCG').gte('invoice_date', monthStart).lte('invoice_date', monthEnd))
+    ]);
     if (!isRequestStillCurrent('movement', myToken)) return;
-    
-    const outs = await fetchAllRows(() => supabase
+    const _seenMov = new Set();
+    const ins = [];
+    for (const r of [...(inMain || []), ...(inScg || [])]) {
+      if (_seenMov.has(r.id)) continue;
+      _seenMov.add(r.id);
+      const effDate = (r.supplier === 'SCG' && r.invoice_date) ? r.invoice_date : (r.receive_date || '');
+      if (effDate >= monthStart && effDate <= inCap) ins.push(r);   // รับเข้าเดือนนี้
+    }
+
+    // จ่ายออก: นับเฉพาะม้วนที่ผูก invoice (ข้าม pre_stock) เหมือน Pivot
+    let outs = await fetchAllRows(() => supabase
       .from('paper_outflows')
       .select('weight_kg, paper_invoice_id')
       .gte('outflow_date', monthStart).lte('outflow_date', monthEnd)
       .eq('voided', false));
-    
     if (!isRequestStillCurrent('movement', myToken)) return;
+    outs = (outs || []).filter(o => o.paper_invoice_id);
     
-    const inRolls = (ins || []).length;
-    const inKg = (ins || []).reduce((s, r) => s + parseFloat(r.weight_kg || 0), 0);
-    const inValue = (ins || []).reduce((s, r) => s + parseFloat(r.weight_kg || 0) * parseFloat(r.price_per_kg || 0), 0);
-    const outRolls = (outs || []).length;
-    const outKg = (outs || []).reduce((s, r) => s + parseFloat(r.weight_kg || 0), 0);
+    const inRolls = ins.length;
+    const inKg = ins.reduce((s, r) => s + parseFloat(r.weight_kg || 0), 0);
+    const inValue = ins.reduce((s, r) => s + parseFloat(r.weight_kg || 0) * parseFloat(r.price_per_kg || 0), 0);
+    const outRolls = outs.length;
+    const outKg = outs.reduce((s, r) => s + parseFloat(r.weight_kg || 0), 0);
     
     let outValue = 0;
     if (isManager() && outs && outs.length > 0) {
@@ -3597,13 +3616,30 @@ async function loadTrend() {
 
     const supFilter = $('#trend-supplier')?.value || 'all';
 
-    const ins = await fetchAllRows(() => supabase
-      .from('paper_invoices').select('weight_kg, receive_date, supplier')
-      .gte('receive_date', start).lte('receive_date', end));
+    const today = new Date().toISOString().slice(0, 10);
+
+    // รับเข้า: ใช้ effDate แบบเดียวกับตาราง Pivot (SCG = invoice_date, เจ้าอื่น = receive_date)
+    // จึงต้องดึงทั้ง (receive_date ในช่วง) และ (SCG ที่ invoice_date ในช่วง) แล้ว merge
+    const [insMain, insScg] = await Promise.all([
+      fetchAllRows(() => supabase.from('paper_invoices')
+        .select('id, weight_kg, receive_date, invoice_date, supplier')
+        .gte('receive_date', start).lte('receive_date', end)),
+      fetchAllRows(() => supabase.from('paper_invoices')
+        .select('id, weight_kg, receive_date, invoice_date, supplier')
+        .eq('supplier', 'SCG').gte('invoice_date', start).lte('invoice_date', end))
+    ]);
     if (!isRequestStillCurrent('trend', myToken)) return;
-    
+    const _seenInv = new Set();
+    const ins = [];
+    for (const r of [...(insMain || []), ...(insScg || [])]) {
+      if (_seenInv.has(r.id)) continue;
+      _seenInv.add(r.id);
+      ins.push(r);
+    }
+
+    // จ่ายออก: ดึง paper_invoice_id มาด้วย เพื่อนับเฉพาะม้วนที่ผูก invoice (เหมือน Pivot)
     const outs = await fetchAllRows(() => supabase
-      .from('paper_outflows').select('weight_kg, outflow_date, supplier_name')
+      .from('paper_outflows').select('weight_kg, outflow_date, supplier_name, paper_invoice_id')
       .gte('outflow_date', start).lte('outflow_date', end).eq('voided', false));
     if (!isRequestStillCurrent('trend', myToken)) return;
     
@@ -3637,11 +3673,16 @@ async function loadTrend() {
     
     const monthMap = new Map();
     for (const m of months) monthMap.set(m, { in: 0, out: 0 });
+    // รับเข้า: bucket ด้วย effDate (SCG=invoice_date, อื่น=receive_date) + ไม่นับบิลล่วงหน้า (cap วันนี้)
     for (const r of insF) {
-      const m = (r.receive_date || '').slice(0, 7);
+      const effDate = (r.supplier === 'SCG' && r.invoice_date) ? r.invoice_date : (r.receive_date || '');
+      if (!effDate || effDate > today) continue;
+      const m = effDate.slice(0, 7);
       if (monthMap.has(m)) monthMap.get(m).in += parseFloat(r.weight_kg || 0);
     }
+    // จ่ายออก: นับเฉพาะม้วนที่ผูก invoice (ข้าม pre_stock/ไม่ผูก invoice) เหมือน Pivot
     for (const r of outsF) {
+      if (!r.paper_invoice_id) continue;
       const m = (r.outflow_date || '').slice(0, 7);
       if (monthMap.has(m)) monthMap.get(m).out += parseFloat(r.weight_kg || 0);
     }
