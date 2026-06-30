@@ -1066,11 +1066,11 @@ const MACHINE_LABELS = {
 };
 
 // ====== Supplier patterns (จาก qr_printer.py) ======
-const SCG_PATTERN = /^[0-9A-Z]{2}-\d-A\d{4}-[0-9A-Z][A-Z]$/;
+const SCG_PATTERN = /^[0-9A-Z]{2}-\d-A\d{4}-[0-9A-Z]{2}$/;
 const MUDA_PATTERN = /^\d{11}[A-Z]$/;
 
 const SUPPLIER_HINTS = {
-  'SCG': '💡 SCG: XX-#-A####-XX (ตัวท้ายเป็นอักษร) เช่น 11-6-A2181-AA',
+  'SCG': '💡 SCG: XX-#-A####-XX (2 ตัวท้ายเป็นเลข/อักษรก็ได้) เช่น 11-6-A2181-AA',
   'Muda': '💡 Muda: 11 ตัวเลข + ตัวอักษร 1 ตัว เช่น 05630602351I',
   'MPK': '💡 MPK: รหัสอิสระ',
   'UTP': '💡 UTP: รหัสอิสระ',
@@ -1090,7 +1090,7 @@ function validateLot(lot, supplier) {
   
   if (supplier === 'SCG') {
     if (!SCG_PATTERN.test(lot)) {
-      return { ok: false, msg: '❌ SCG ต้องเป็น XX-#-A####-XX (ตัวท้ายเป็นอักษร)' };
+      return { ok: false, msg: '❌ SCG ต้องเป็น XX-#-A####-XX' };
     }
     return { ok: true, msg: '✓ SCG format ถูกต้อง' };
   }
@@ -1319,12 +1319,12 @@ function parseScgLot(raw) {
   // s1 รองรับ alphanumeric 2 ตัว (เช่น "A0", "B1", "77") ตรงกับ SCG_PATTERN
   const compact = cleaned.replace(/[^A-Z0-9]/g, '');
   // Pattern A: XX#A####XX  (10 ตัว, มี A ที่ position 3)
-  let m = compact.match(/^([0-9A-Z]{2})([0-9])A([0-9]{4})([0-9A-Z][A-Z])$/);
+  let m = compact.match(/^([0-9A-Z]{2})([0-9])A([0-9]{4})([0-9A-Z]{2})$/);
   if (m) {
     return { s1: m[1], s2: m[2], s3: m[3], s4: m[4] };
   }
   // Pattern B: XX#####XX  (9 ตัว, ไม่มี A หน้าเลข 4 ตัว)
-  m = compact.match(/^([0-9A-Z]{2})([0-9])([0-9]{4})([0-9A-Z][A-Z])$/);
+  m = compact.match(/^([0-9A-Z]{2})([0-9])([0-9]{4})([0-9A-Z]{2})$/);
   if (m) {
     return { s1: m[1], s2: m[2], s3: m[3], s4: m[4] };
   }
