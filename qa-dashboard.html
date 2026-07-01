@@ -1510,6 +1510,7 @@ const state = {
   paperTypes: [],
   cachedSupplierTypes: {}, // supplier -> [paper_types]
   charts: {},
+  monitorCharts: [],       // เก็บ chart ของ Monitor ไว้ destroy ก่อนวาดใหม่
   currentLot: null,        // lot info for issue form auto-fill
   // --- material (กาว/แคลเซียม) ---
   pageMat: 'paper',
@@ -1661,6 +1662,9 @@ $('#m-reset').addEventListener('click', () => {
 });
 
 async function loadMonitor() {
+  // ทำลายกราฟรอบก่อน กัน memory leak / หน้าอืดเมื่อใช้นานๆ
+  (state.monitorCharts || []).forEach(c => { try { c.destroy(); } catch {} });
+  state.monitorCharts = [];
   const supplier  = $('#m-supplier').value;
   const type      = $('#m-type').value;
   const from      = $('#m-from').value;
@@ -2038,11 +2042,12 @@ function renderSmallMultiples(containerId, rows, dateField, activeParams, specs,
     const yMinFinal = yMin - pad;
     const yMaxFinal = yMax + pad;
 
-    new Chart(canvas.getContext('2d'), {
+    const _mch = new Chart(canvas.getContext('2d'), {
       type: 'line',
       data: { datasets },
       options: {
         responsive: true, maintainAspectRatio: false,
+        animation: false,   // ปิด animation — กราฟเยอะ (100+) จะได้ไม่หน่วง
         interaction: { mode: 'nearest', axis: 'x', intersect: false },
         scales: {
           x: getTimeAxisConfig(aggPoints),
@@ -2077,6 +2082,7 @@ function renderSmallMultiples(containerId, rows, dateField, activeParams, specs,
         }
       }
     });
+    state.monitorCharts.push(_mch);
   }
 }
 
