@@ -1427,11 +1427,8 @@ tr.just-saved-row > td { animation: justSavedRow 2.6s ease-out; }
           <option value="partial">partial</option>
           <option value="damaged">damaged</option>
         </select>
-        <select class="filter-select" id="l-filter-category">
-          <option value="">ทุกชนิด</option>
-          <option value="Liner">Liner</option>
-          <option value="Grey-Board">Grey-Board</option>
-          <option value="Core-Board">Core-Board</option>
+        <select class="filter-select" id="l-filter-type">
+          <option value="">ทุกประเภท</option>
         </select>
         <select class="filter-select" id="l-filter-project">
           <option value="">ทุกโครงการ</option>
@@ -2935,6 +2932,11 @@ async function loadMasterData() {
     filterSupp.innerHTML = '<option value="">ทุก Supplier</option>' +
       state.suppliers.map(s => `<option value="${escapeHtml(s.code)}">${escapeHtml(s.name)}</option>`).join('');
 
+    // ประเภทกระดาษ filter (เช่น CBS350, CPS450, M400-470) — populate จาก master paper_types
+    const filterType = $('#l-filter-type');
+    if (filterType) filterType.innerHTML = '<option value="">ทุกประเภท</option>' +
+      state.paperTypes.map(pt => `<option value="${escapeHtml(pt.paper_type)}">${escapeHtml(pt.paper_type)}</option>`).join('');
+
     setConnStatus(true);
   } catch (e) {
     console.error(e);
@@ -4119,7 +4121,7 @@ async function loadList(focusDate = null) {
     const search = $('#l-search').value.trim();
     const filterSupp = $('#l-filter-supplier').value;
     const filterStatus = $('#l-filter-status').value;
-    const filterCategory = $('#l-filter-category')?.value || '';
+    const filterType = $('#l-filter-type')?.value || '';
     const filterProject = $('#l-filter-project')?.value || '';
 
     // Step 1: ดึง distinct invoice_dates ที่ตรงกับ filter (เรียงจากใหม่ → เก่า)
@@ -4129,7 +4131,7 @@ async function loadList(focusDate = null) {
       .order('invoice_date', { ascending: false, nullsFirst: false });
     if (filterSupp)     dq = dq.eq('supplier', filterSupp);
     if (filterStatus)   dq = dq.eq('status', filterStatus);
-    if (filterCategory) dq = dq.eq('paper_category', filterCategory);
+    if (filterType) dq = dq.eq('paper_type', filterType);
     if (filterProject)  dq = dq.eq('project_code', filterProject);
     if (search) {
       dq = dq.or(`paper_lot.ilike.%${search}%,paper_lot_normalized.ilike.%${search.replace(/-/g,'').toUpperCase()}%,invoice_no.ilike.%${search}%,supplier.ilike.%${search}%`);
@@ -4167,7 +4169,7 @@ async function loadList(focusDate = null) {
         .order('paper_lot',    { ascending: true });
       if (filterSupp)     q = q.eq('supplier', filterSupp);
       if (filterStatus)   q = q.eq('status', filterStatus);
-      if (filterCategory) q = q.eq('paper_category', filterCategory);
+      if (filterType) q = q.eq('paper_type', filterType);
       if (filterProject)  q = q.eq('project_code', filterProject);
       if (search) {
         q = q.or(`paper_lot.ilike.%${search}%,paper_lot_normalized.ilike.%${search.replace(/-/g,'').toUpperCase()}%,invoice_no.ilike.%${search}%,supplier.ilike.%${search}%`);
@@ -4542,8 +4544,8 @@ function setupListFilters() {
     state.listDatePage = 1;
     loadList();
   });
-  const catFilter = $('#l-filter-category');
-  if (catFilter) catFilter.addEventListener('change', () => {
+  const typeFilter = $('#l-filter-type');
+  if (typeFilter) typeFilter.addEventListener('change', () => {
     state.listDatePage = 1;
     loadList();
   });
