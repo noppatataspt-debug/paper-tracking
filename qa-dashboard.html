@@ -1523,11 +1523,10 @@ const state = {
 };
 
 async function init() {
-  // ขั้น 1: load suppliers (ใช้ count = small) — แสดง UI ก่อน
-  let distinct;
+  // ขั้น 1: load suppliers + type counts (server-side aggregate — เร็ว ไม่ดึงทุกแถว)
+  let agg;
   try {
-    // ใช้ qa_list_quality_tests RPC แทน direct query
-    distinct = await callRPCList('qa_list_quality_tests', { p_limit: 50000 });
+    agg = await callRPC('qa_supplier_type_counts');
   } catch (error) {
     console.error('init load failed:', error);
     if (error.message !== 'NOT_LOGGED_IN' && error.message !== 'SESSION_EXPIRED') {
@@ -1535,55 +1534,12 @@ async function init() {
     }
     return;
   }
-
-
-  // get unique suppliers
-  const supSet = new Set(distinct.map(d => d.supplier).filter(Boolean));
-  state.suppliers = [...supSet].sort();
-
-  // build supplier → paper_types map (จาก qt.paper_type ก่อน — ไม่ต้อง join paper_invoices แล้ว
-  // เพราะ data ที่ import มามี qt.paper_type ตรงๆ)
-  const supplierTypeCount = {};
-  const allTypeCount = {};
-  for (const d of distinct) {
-    const sup = d.supplier;
-    const pt = d.paper_type;
-    if (!pt) continue;
-    supplierTypeCount[sup] = supplierTypeCount[sup] || {};
-    supplierTypeCount[sup][pt] = (supplierTypeCount[sup][pt] || 0) + 1;
-    allTypeCount[pt] = (allTypeCount[pt] || 0) + 1;
-  }
-
-  // backup: ถ้า paper_type ใน qt ว่าง — fallback ไปดูจาก paper_invoices
-  // (only do this if some rows ไม่มี paper_type)
-  const orphanRows = distinct.filter(d => !d.paper_type && d.paper_invoice_id);
-  if (orphanRows.length) {
-
-    const invIds = [...new Set(orphanRows.map(r => r.paper_invoice_id))];
-    const invMap = {};
-    for (let i = 0; i < invIds.length; i += 500) {
-      const slice = invIds.slice(i, i + 500);
-      const { data: invs } = await supabase
-        .from('paper_invoices')
-        .select('id, paper_type, supplier')
-        .in('id', slice);
-      for (const inv of (invs || [])) invMap[inv.id] = inv;
-    }
-    for (const r of orphanRows) {
-      const inv = invMap[r.paper_invoice_id];
-      if (!inv?.paper_type) continue;
-      const sup = inv.supplier || r.supplier;
-      const pt = inv.paper_type;
-      if (!sup) continue;
-      supplierTypeCount[sup] = supplierTypeCount[sup] || {};
-      supplierTypeCount[sup][pt] = (supplierTypeCount[sup][pt] || 0) + 1;
-      allTypeCount[pt] = (allTypeCount[pt] || 0) + 1;
-    }
-  }
-
-  state.cachedSupplierTypes = supplierTypeCount;
-  state.allTypeCount = allTypeCount;
-  state.paperTypes = Object.keys(allTypeCount).sort();
+  agg = agg || {};
+  state.suppliers = (agg.suppliers || []).slice().sort();
+  state.cachedSupplierTypes = agg.supplier_types || {};
+  state.allTypeCount = agg.all_types || {};
+  state.paperTypes = Object.keys(state.allTypeCount).sort();
+  state._coaTotal = agg.total || 0;
 
   // populate selects
   populateSupplierSelects();
@@ -1592,7 +1548,7 @@ async function init() {
   // default issue date = today
   $('#i-date').value = new Date().toISOString().slice(0,10);
 
-  showToast(`โหลดข้อมูลเสร็จ ${distinct.length.toLocaleString()} COA, ${state.suppliers.length} suppliers, ${state.paperTypes.length} types`, 'success');
+  showToast(`โหลดข้อมูลเสร็จ ${(state._coaTotal||0).toLocaleString()} COA, ${state.suppliers.length} suppliers, ${state.paperTypes.length} types`, 'success');
 }
 
 function populateSupplierSelects() {
