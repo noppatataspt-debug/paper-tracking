@@ -4235,13 +4235,15 @@ function renderQuoteCompare() {
     groups.get(key).rows.push(r);
   }
 
-  // ในแต่ละ group: เก็บราคาต่ำสุดต่อ supplier (1 แถว/supplier เหมือนการ์ดรับเข้าจริง)
+  // ในแต่ละ group: เก็บราคาต่ำสุดต่อ (supplier + เกรด)
+  // (เดิมตัดเหลือ 1/supplier → เกรดหลายตัวของเจ้าเดียวกันหาย เช่น CBE/CB-LP ของ NTPM)
   const multi = [], singles = [];
   for (const g of groups.values()) {
     const bySup = new Map();
     for (const r of g.rows) {
-      const cur = bySup.get(r.supplier);
-      if (!cur || r.price_thb_new < cur.price_thb_new) bySup.set(r.supplier, r);
+      const k = (r.supplier || '') + '|' + (r.grade || '');
+      const cur = bySup.get(k);
+      if (!cur || r.price_thb_new < cur.price_thb_new) bySup.set(k, r);
     }
     g.list = [...bySup.values()].sort((a, b) => a.price_thb_new - b.price_thb_new);
     (g.list.length >= 2 ? multi : singles).push(g);
