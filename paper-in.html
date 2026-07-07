@@ -1424,8 +1424,6 @@ tr.just-saved-row > td { animation: justSavedRow 2.6s ease-out; }
           <option value="">ทุก Status</option>
           <option value="in_stock">in_stock</option>
           <option value="used">used</option>
-          <option value="partial">partial</option>
-          <option value="damaged">damaged</option>
         </select>
         <select class="filter-select" id="l-filter-type">
           <option value="">ทุกประเภท</option>
@@ -4126,11 +4124,11 @@ async function loadList(focusDate = null) {
 
     // Step 1: ดึง distinct invoice_dates ที่ตรงกับ filter (เรียงจากใหม่ → เก่า)
     // ใช้สำหรับ pagination — หน้าละ listDatesPerPage วัน
-    let dq = supabase.from('paper_invoices')
+    let dq = supabase.from('current_stock_invoices')
       .select('invoice_date')
       .order('invoice_date', { ascending: false, nullsFirst: false });
     if (filterSupp)     dq = dq.eq('supplier', filterSupp);
-    if (filterStatus)   dq = dq.eq('status', filterStatus);
+    if (filterStatus)   dq = dq.eq('computed_status', filterStatus);
     if (filterType) dq = dq.eq('paper_type', filterType);
     if (filterProject)  dq = dq.eq('project_code', filterProject);
     if (search) {
@@ -4160,7 +4158,7 @@ async function loadList(focusDate = null) {
     let totalCount = 0;
     if (pageDates.length > 0) {
       const realDates = pageDates.filter(d => d !== '(ไม่ระบุ)');
-      let q = supabase.from('paper_invoices')
+      let q = supabase.from('current_stock_invoices')
         .select('*', { count: 'exact' })
         .in('invoice_date', realDates.length ? realDates : ['__none__'])
         .order('invoice_date', { ascending: false, nullsFirst: false })
@@ -4168,7 +4166,7 @@ async function loadList(focusDate = null) {
         .order('invoice_no',   { ascending: true })
         .order('paper_lot',    { ascending: true });
       if (filterSupp)     q = q.eq('supplier', filterSupp);
-      if (filterStatus)   q = q.eq('status', filterStatus);
+      if (filterStatus)   q = q.eq('computed_status', filterStatus);
       if (filterType) q = q.eq('paper_type', filterType);
       if (filterProject)  q = q.eq('project_code', filterProject);
       if (search) {
@@ -4224,7 +4222,7 @@ function calcSubtotal(rolls) {
   let weight = 0, remaining = 0, value = 0, hasPrice = 0;
   for (const r of rolls) {
     weight += parseFloat(r.weight_kg || 0);
-    remaining += parseFloat(r.remaining_weight_kg || 0);
+    remaining += parseFloat(r.computed_remaining_kg ?? r.remaining_weight_kg ?? 0);
     if (r.price_per_kg) {
       value += parseFloat(r.weight_kg || 0) * parseFloat(r.price_per_kg);
       hasPrice++;
@@ -4426,10 +4424,10 @@ function renderGroupedList(rows, totalDates, totalPages) {
                       <td>${renderProjectBadge(r.project_code)}</td>
                       <td class="td-mono td-right">${r.width_mm || '—'}</td>
                       <td class="td-mono td-right manager-only-cell">${formatNumber(r.weight_kg)}</td>
-                      <td class="td-mono td-right manager-only-cell">${formatNumber(r.remaining_weight_kg)}</td>
+                      <td class="td-mono td-right manager-only-cell">${formatNumber(r.computed_remaining_kg ?? r.remaining_weight_kg)}</td>
                       <td class="td-right price-cell manager-only-cell ${r.price_per_kg ? '' : 'no-price'}">${r.price_per_kg ? formatPrice(r.price_per_kg) : '—'}</td>
                       <td class="td-right manager-only-cell" style="color:#059669;font-weight:500;">${rollValue ? formatPrice(rollValue) : '—'}</td>
-                      <td><span class="status-badge status-${r.status || 'in_stock'}">${escapeHtml(r.status || 'in_stock')}</span></td>
+                      <td><span class="status-badge status-${r.computed_status || 'in_stock'}">${escapeHtml(r.computed_status || 'in_stock')}</span></td>
                       ${currentAdmin ? `
                         <td>
                           <div class="row-actions">
@@ -5250,7 +5248,7 @@ window.openDeleteBatch = async function(supplier, invoice_no, date) {
   
   try {
     // 1. เช็ค status — มีม้วนไหน status != in_stock ไหม
-    const usedRolls = rolls.filter(r => r.status && r.status !== 'in_stock');
+    const usedRolls = rolls.filter(r => r.computed_status && r.computed_status !== 'in_stock');
     
     // 2. เช็ค paper_outflows — มี outflow ของ lot ใน batch ไหม
     let hasOutflow = false;
@@ -5399,8 +5397,8 @@ window.openEditBatch = async function(supplier, invoice_no, date) {
   if (!rolls.length) return alert('ไม่พบม้วนใน batch นี้');
   
   // กรองเฉพาะม้วน in_stock เพื่อความปลอดภัย
-  const inStockRolls = rolls.filter(r => r.status === 'in_stock');
-  const usedRolls = rolls.filter(r => r.status !== 'in_stock');
+  const inStockRolls = rolls.filter(r => r.computed_status === 'in_stock');
+  const usedRolls = rolls.filter(r => r.computed_status !== 'in_stock');
   
   editBatchContext = { supplier, invoice_no, date, rolls, inStockRolls };
   
