@@ -1586,6 +1586,23 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// ⚠️ Supabase/PostgREST default จำกัดผลลัพธ์ไว้ที่ 1000 แถวต่อ request
+// buildQuery ต้อง "ไม่" ใส่ .range() มาเอง — ฟังก์ชันนี้จะ paginate ให้เอง
+// และต้องมี .order('id', { ascending: true }) (หรือ column ที่ unique) เป็น tie-breaker
+// เสมอ ไม่งั้น pagination อาจข้าม/ซ้ำแถวได้ถ้าลำดับไม่คงที่ระหว่างหน้า
+async function fetchAllRows(buildQuery, pageSize = 1000) {
+  let all = [];
+  let from = 0;
+  while (true) {
+    const { data, error } = await buildQuery().range(from, from + pageSize - 1);
+    if (error) throw error;
+    all = all.concat(data || []);
+    if (!data || data.length < pageSize) break;
+    from += pageSize;
+  }
+  return all;
+}
+
 // ==================== ADMIN AUTH (Phase C Hybrid) ====================
 let currentAdmin = null;
 const savedAdmin = sessionStorage.getItem('paper_admin');
@@ -2667,20 +2684,22 @@ async function runTrace() {
   container.innerHTML = '<div class="loading"><div class="spinner-small"></div><div style="margin-top:10px;">กำลังค้นหา...</div></div>';
 
   try {
-    let query = supabase
-      .from('v_scan_details')
-      .select('*')
-      .gte('production_date', from)
-      .lte('production_date', to)
-      .order('production_date', { ascending: false });
-
-    if (machineId) query = query.eq('machine_id', parseInt(machineId));
+    let query = () => {
+      let q = supabase
+        .from('v_scan_details')
+        .select('*')
+        .gte('production_date', from)
+        .lte('production_date', to)
+        .order('production_date', { ascending: false })
+        .order('id', { ascending: true });
+      if (machineId) q = q.eq('machine_id', parseInt(machineId));
+      return q;
+    };
     // ⚠️ ไม่ใช้ .eq('product_name', product) ตรงนี้ — เพราะข้อมูลเก่ามี combo
     //    เช่น "SKIC6750-SKIC5370-SKIC4400" ที่ผู้ใช้ค้น "SKIC-4400" ก็ควรเจอ
     //    เลย filter ฝั่ง client โดย split combo + normalize ก่อนเทียบ
 
-    const { data, error } = await query;
-    if (error) throw error;
+    const data = await fetchAllRows(query);
 
     // Client-side product filter: รองรับทั้งสินค้าเดี่ยวและ combo เก่า
     let filtered = data || [];
@@ -3934,11 +3953,13 @@ async function loadHistory() {
 
     // Get scan counts per batch
     const batchIds = batches.map(b => b.id);
-    const { data: scans, error: sErr } = await supabase
-      .from('paper_scans')
-      .select('batch_id, jumbo_lot')
-      .in('batch_id', batchIds);
-    if (sErr) throw sErr;
+    const scans = await fetchAllRows(() =>
+      supabase
+        .from('paper_scans')
+        .select('id, batch_id, jumbo_lot')
+        .in('batch_id', batchIds)
+        .order('id', { ascending: true })
+    );
 
     const countsByBatch = {};
     const lotsByBatch = {};
@@ -4109,13 +4130,17 @@ async function loadHistory() {
       btn.innerHTML = '⏳ กำลังโหลด...';
       try {
         const batchIds = batches.map(b => b.id);
-        const { data: details, error } = await supabase
-          .from('v_scan_details')
-          .select('*')
-          .in('batch_id', batchIds)
-          .order('production_date', { ascending: false })
-          .order('scanned_at', { ascending: true });
-        if (error) throw error;
+        const details = await fetchAllRows(() =>
+          supabase
+            .from('v_scan_details')
+            .select('*')
+            .in('batch_id', batchIds)
+            .order('id', { ascending: true })
+        );
+        details.sort((a, b) => {
+          if (a.production_date !== b.production_date) return b.production_date.localeCompare(a.production_date);
+          return (a.scanned_at || '').localeCompare(b.scanned_at || '');
+        });
 
         const rows = details.map(scanToRow);
         const csv = rowsToCSV(SCAN_CSV_HEADERS, rows);
@@ -5267,13 +5292,15 @@ async function loadStats() {
 
   try {
     // Load all scans in date range (via v_scan_details view — voided excluded)
-    const { data: scans, error } = await supabase
-      .from('v_scan_details')
-      .select('id, barcode_raw, slitter, barcode_valid, barcode_warnings, production_date, machine_name, jumbo_lot, paper_type, scanned_at, batch_id')
-      .gte('production_date', from)
-      .lte('production_date', to)
-      .order('scanned_at', { ascending: false });
-    if (error) throw error;
+    const scans = await fetchAllRows(() =>
+      supabase
+        .from('v_scan_details')
+        .select('id, barcode_raw, slitter, barcode_valid, barcode_warnings, production_date, machine_name, jumbo_lot, paper_type, scanned_at, batch_id')
+        .gte('production_date', from)
+        .lte('production_date', to)
+        .order('id', { ascending: true })
+    );
+    scans.sort((a, b) => new Date(b.scanned_at) - new Date(a.scanned_at));
 
     if (!scans || scans.length === 0) {
       container.innerHTML = '<div class="empty"><span class="emoji">📭</span><div class="empty-title">ไม่พบข้อมูลในช่วงเวลานี้</div></div>';
