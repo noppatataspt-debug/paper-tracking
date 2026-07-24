@@ -5160,7 +5160,7 @@ function showFilterResult() {
     <col class="col-wid">
     <col class="col-rolls">
     <col class="col-kg">
-    ${showMoney ? '<col class="col-avgprice"><col class="col-value">' : ''}
+    ${showMoney ? '<col class="col-avgprice">' : ''}
   </colgroup>`;
   html += `<thead><tr>
     <th class="center">ลำดับ</th>
@@ -5169,7 +5169,7 @@ function showFilterResult() {
     <th class="right">หน้ากว้าง (mm)</th>
     <th class="right">จำนวนม้วน</th>
     <th class="right">น้ำหนัก (kg)</th>
-    ${showMoney ? '<th class="right">฿/kg เฉลี่ย</th><th class="right">มูลค่า (฿)</th>' : ''}
+    ${showMoney ? '<th class="right">฿/kg เฉลี่ย</th>' : ''}
   </tr></thead><tbody>`;
   
   const supKeys = [...grouped.keys()].sort();
@@ -5198,7 +5198,7 @@ function showFilterResult() {
           <td class="right">${fmtNum(wid)}</td>
           <td class="right">${fmtNum(cell.rolls)}</td>
           <td class="right">${fmtKgFull(cell.kg)}</td>
-          ${showMoney ? `<td class="right">${avgPrice > 0 ? avgPrice.toFixed(2) : '—'}</td><td class="right">${fmtMoneyFull(cell.value)}</td>` : ''}
+          ${showMoney ? `<td class="right">${avgPrice > 0 ? avgPrice.toFixed(2) : '—'}</td>` : ''}
         </tr>`;
         firstSupRow = false;
         firstTypRow = false;
@@ -5210,7 +5210,7 @@ function showFilterResult() {
       <td colspan="2" class="thai-text">${escapeHtml(sup)} Total</td>
       <td colspan="3" class="right">${fmtNum(supRolls)} ม้วน</td>
       <td class="right">${fmtKgFull(supKg)}</td>
-      ${showMoney ? `<td class="right">${supAvgPrice > 0 ? supAvgPrice.toFixed(2) : '—'}</td><td class="right">${fmtMoneyFull(supValue)}</td>` : ''}
+      ${showMoney ? `<td class="right">${supAvgPrice > 0 ? supAvgPrice.toFixed(2) : '—'}</td>` : ''}
     </tr>`;
     
     grandRolls += supRolls;
@@ -5223,7 +5223,7 @@ function showFilterResult() {
     <td colspan="4" class="thai-text">รวมทั้งหมด</td>
     <td class="right">${fmtNum(grandRolls)} ม้วน</td>
     <td class="right">${fmtKgFull(grandKg)} kg</td>
-    ${showMoney ? `<td class="right">${grandAvgPrice > 0 ? grandAvgPrice.toFixed(2) : '—'}</td><td class="right">${fmtMoneyFull(grandValue)}</td>` : ''}
+    ${showMoney ? `<td class="right">${grandAvgPrice > 0 ? grandAvgPrice.toFixed(2) : '—'}</td>` : ''}
   </tr>`;
   
   html += '</tbody></table></div></div>';
