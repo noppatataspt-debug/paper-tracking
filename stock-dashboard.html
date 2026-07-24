@@ -977,6 +977,14 @@ body {
 .flt-result-table col.col-wid { width: 110px; }
 .flt-result-table col.col-rolls { width: 110px; }
 .flt-result-table col.col-kg { width: 130px; }
+.flt-result-table col.col-avgprice { width: 100px; }
+
+.flt-result-table .flt-avgprice-col {
+  border-left: 2px solid var(--border-strong);
+}
+.flt-result-table tr.grand-total-row td.flt-avgprice-col {
+  border-left: 2px solid rgba(255,255,255,0.5);
+}
 
 .flt-result-table th {
   background: var(--panel-2); padding: 11px 10px; text-align: left;
@@ -5169,7 +5177,7 @@ function showFilterResult() {
     <th class="right">หน้ากว้าง (mm)</th>
     <th class="right">จำนวนม้วน</th>
     <th class="right">น้ำหนัก (kg)</th>
-    ${showMoney ? '<th class="right">฿/kg เฉลี่ย</th>' : ''}
+    ${showMoney ? '<th class="right flt-avgprice-col">฿/kg เฉลี่ย</th>' : ''}
   </tr></thead><tbody>`;
   
   const supKeys = [...grouped.keys()].sort();
@@ -5198,7 +5206,7 @@ function showFilterResult() {
           <td class="right">${fmtNum(wid)}</td>
           <td class="right">${fmtNum(cell.rolls)}</td>
           <td class="right">${fmtKgFull(cell.kg)}</td>
-          ${showMoney ? `<td class="right">${avgPrice > 0 ? avgPrice.toFixed(2) : '—'}</td>` : ''}
+          ${showMoney ? `<td class="right flt-avgprice-col">${avgPrice > 0 ? avgPrice.toFixed(2) : '—'}</td>` : ''}
         </tr>`;
         firstSupRow = false;
         firstTypRow = false;
@@ -5210,7 +5218,7 @@ function showFilterResult() {
       <td colspan="2" class="thai-text">${escapeHtml(sup)} Total</td>
       <td colspan="3" class="right">${fmtNum(supRolls)} ม้วน</td>
       <td class="right">${fmtKgFull(supKg)}</td>
-      ${showMoney ? `<td class="right">${supAvgPrice > 0 ? supAvgPrice.toFixed(2) : '—'}</td>` : ''}
+      ${showMoney ? `<td class="right flt-avgprice-col">${supAvgPrice > 0 ? supAvgPrice.toFixed(2) : '—'}</td>` : ''}
     </tr>`;
     
     grandRolls += supRolls;
@@ -5223,7 +5231,7 @@ function showFilterResult() {
     <td colspan="4" class="thai-text">รวมทั้งหมด</td>
     <td class="right">${fmtNum(grandRolls)} ม้วน</td>
     <td class="right">${fmtKgFull(grandKg)} kg</td>
-    ${showMoney ? `<td class="right">${grandAvgPrice > 0 ? grandAvgPrice.toFixed(2) : '—'}</td>` : ''}
+    ${showMoney ? `<td class="right flt-avgprice-col">${grandAvgPrice > 0 ? grandAvgPrice.toFixed(2) : '—'}</td>` : ''}
   </tr>`;
   
   html += '</tbody></table></div></div>';
