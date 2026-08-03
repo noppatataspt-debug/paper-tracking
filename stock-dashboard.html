@@ -4903,10 +4903,15 @@ async function fetchStockAsOf(monthKey) {
   }
 
   // เหลือเฉพาะม้วนที่ยังอยู่ในคลัง ณ สิ้นเดือนนั้น
+  // effDate = วันที่ถือว่า "เข้าคลัง" — SCG ใช้วันที่บิล, เจ้าอื่นใช้วันรับเข้าจริง
   // (มี outflow = ออกจากคลัง — กติกาเดียวกับ tab รายละเอียด Stock)
   const rows = [];
   for (const inv of invoices) {
     if (outKg.has(inv.id)) continue;
+    const effDate = (inv.supplier === 'SCG' && inv.invoice_date)
+      ? inv.invoice_date
+      : (inv.receive_date || '');
+    if (!effDate || effDate > cap) continue;   // ยังไม่เข้าคลัง ณ วันที่อ้างอิง
     rows.push(Object.assign({}, inv, {
       computed_status: 'in_stock',
       computed_remaining_kg: parseFloat(inv.weight_kg) || 0
