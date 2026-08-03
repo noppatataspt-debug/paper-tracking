@@ -1769,7 +1769,8 @@ async function loadOutflows() {
   let query = supabase
     .from('paper_outflows')
     .select('*')
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false });   // tie-breaker — กัน pagination เหลื่อม/ซ้ำ
   
   const now = new Date();
   const ymd = d => d.toISOString().split('T')[0];
@@ -1793,13 +1794,30 @@ async function loadOutflows() {
   }
   // period === 'all' → ไม่กรองวันที่
   
-  const { data, error } = await query;
-  if (error) {
-    list.innerHTML = `<div class="empty-state">❌ ${escapeHtml(error.message)}</div>`;
+  // ดึงแบบแบ่งหน้า — PostgREST คืนสูงสุด 1000 แถว/ครั้ง
+  // ถ้าไม่วน .range() จะได้แค่ 1000 แถวใหม่สุดแบบเงียบ ๆ (ไม่มี error)
+  const all = [];
+  const PAGE = 1000;
+  let offset = 0;
+  try {
+    while (true) {
+      const { data, error } = await query.range(offset, offset + PAGE - 1);
+      if (error) throw error;
+      if (!data || data.length === 0) break;
+      all.push(...data);
+      if (data.length < PAGE) break;
+      offset += PAGE;
+      if (offset >= 60000) {          // กันลูปไม่รู้จบ
+        console.warn('loadOutflows: หยุดที่ 60,000 แถว');
+        break;
+      }
+    }
+  } catch (err) {
+    list.innerHTML = `<div class="empty-state">❌ ${escapeHtml(err.message)}</div>`;
     return;
   }
   
-  allOutflows = data || [];
+  allOutflows = all;
   populateFilterDropdowns();
   renderList();
   renderStats();
@@ -2960,8 +2978,15 @@ async function setupIsoForm() {
 
   const suppSel = document.getElementById('iso-supplier');
   try {
-    const { data } = await supabase.from('paper_outflows').select('supplier_name').limit(5000);
+    // เดิมใช้ .limit(5000) กับ paper_outflows — ใช้ไม่ได้ผล เพราะ PostgREST ตัดที่ 1000 แถว
+    // supplier ที่เลิกใช้ไปนานจะหายจาก dropdown → เปลี่ยนมาใช้รายชื่อจาก dropdown หลัก
+    // แล้วเสริมด้วยชื่อที่พบจริงใน outflow 1000 แถวล่าสุด (เผื่อมีชื่อนอกรายการ)
     const set = new Set();
+    Array.from(document.getElementById('supplierSelect').options)
+      .map(o => o.value)
+      .filter(v => v && v !== 'อื่นๆ')
+      .forEach(v => set.add(v));
+    const { data } = await supabase.from('paper_outflows').select('supplier_name');
     (data || []).forEach(r => { if (r.supplier_name) set.add(r.supplier_name); });
     [...set].sort().forEach(s => {
       const opt = document.createElement('option');
