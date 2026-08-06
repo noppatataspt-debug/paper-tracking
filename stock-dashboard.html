@@ -1543,6 +1543,7 @@ body {
     <div class="toolbar-left">
       <span style="font-size:13px;color:var(--text-dim);font-weight:600;">เดือน:</span>
       <input type="month" class="month-picker" id="monthPicker">
+      <span id="globalAsOf" style="font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px;"></span>
       <span id="userBadge"></span>
     </div>
     <div class="toolbar-right">
@@ -1877,6 +1878,7 @@ body {
       <div>
         <div style="font-size:18px; font-weight:700; margin-bottom:4px;">🚨 แจ้งเตือนสต็อกใกล้หมด</div>
         <div style="font-size:14px; color:var(--text-dim);" id="alerts-meta">คำนวณจากค่าเฉลี่ยการใช้และ lead time ของแต่ละ supplier</div>
+        <div style="font-size:12px; color:#92400e; margin-top:4px;">⚠️ แท็บนี้ใช้สต็อก ณ ปัจจุบันเสมอ ไม่อิงเดือนที่เลือก (เป็นการเตือนเพื่อสั่งซื้อ)</div>
       </div>
       <div style="display:flex; gap:8px; flex-wrap:wrap;">
         <button class="btn" id="alerts-refresh">🔄 รีเฟรช</button>
@@ -2381,6 +2383,7 @@ function switchTab(tabName) {
 }
 
 function loadActiveTab() {
+  renderGlobalAsOf();
   switch(activeTab) {
     case 'overview': loadOverview(); break;
     case 'detail': loadDetailPivot(); break;
@@ -2405,10 +2408,8 @@ async function loadKPI() {
   const grid = $('#kpiGrid');
   grid.innerHTML = '<div class="loading-state"><span class="loading"></span> โหลด...</div>';
   try {
-    const data = await fetchAllRows(() => supabase
-      .from('current_stock_invoices')
-      .select('id, weight_kg, computed_remaining_kg, price_per_kg, receive_date')
-      .eq('computed_status', 'in_stock'));
+    const data = await fetchStockAsOf(currentMonth);
+    const asOfDate = asOfInfo(currentMonth).cap;
     if (!isRequestStillCurrent('kpi', myToken)) return;
     
     if (!isRequestStillCurrent('kpi', myToken)) return;
@@ -2417,13 +2418,13 @@ async function loadKPI() {
     const totalKg = data.reduce((s, r) => s + parseFloat(r.computed_remaining_kg || 0), 0);
     const totalValue = data.reduce((s, r) => s + parseFloat(r.computed_remaining_kg || 0) * parseFloat(r.price_per_kg || 0), 0);
     const avgPrice = totalKg > 0 ? totalValue / totalKg : 0;
-    const oldRolls = data.filter(r => { const d = daysSince(r.receive_date); return d !== null && d > 90; }).length;
+    const oldRolls = data.filter(r => { const d = daysSinceAsOf(r.receive_date, asOfDate); return d !== null && d > 90; }).length;
     
     let html = `
       <div class="kpi-card">
         <div class="kpi-label">ม้วนคงเหลือ</div>
         <div class="kpi-value">${fmtNum(totalRolls)}</div>
-        <div class="kpi-sub">in_stock ทั้งหมด</div>
+        <div class="kpi-sub">ณ ${formatDateTH(asOfDate)}</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-label">น้ำหนักคงเหลือ</div>
@@ -2551,11 +2552,8 @@ async function loadSupplierCategory() {
   const wrap = $('#supplierCategoryWrap');
   wrap.innerHTML = '<div class="loading-state"><span class="loading"></span></div>';
   try {
-    const data = await fetchAllRows(() => supabase
-      .from('current_stock_invoices')
-      .select('supplier, paper_category, weight_kg, computed_remaining_kg, price_per_kg')
-      .eq('computed_status', 'in_stock')
-      .not('paper_category', 'is', null));
+    const all = await fetchStockAsOf(currentMonth);
+    const data = all.filter(r => r.paper_category != null);
     if (!isRequestStillCurrent('supplierCategory', myToken)) return;
     
     // Aggregate by supplier (รวม ไม่แยกประเภท)
@@ -2606,10 +2604,8 @@ async function loadCategory() {
   const grid = $('#categoryGrid');
   grid.innerHTML = '<div class="loading-state"><span class="loading"></span></div>';
   try {
-    const data = await fetchAllRows(() => supabase
-      .from('current_stock_invoices')
-      .select('paper_category, weight_kg, computed_remaining_kg, price_per_kg')
-      .eq('computed_status', 'in_stock').not('paper_category', 'is', null));
+    const all = await fetchStockAsOf(currentMonth);
+    const data = all.filter(r => r.paper_category != null);
     if (!isRequestStillCurrent('category', myToken)) return;
     
     if (!isRequestStillCurrent('category', myToken)) return;
@@ -3066,14 +3062,13 @@ async function loadAging() {
   sortBar.style.display = 'none';
   
   try {
-    const data = await fetchAllRows(() => supabase
-      .from('current_stock_invoices')
-      .select('id, paper_lot, supplier, paper_type, paper_category, width_mm, weight_kg, computed_remaining_kg, receive_date, price_per_kg')
-      .eq('computed_status', 'in_stock').not('receive_date', 'is', null));
+    const allStock = await fetchStockAsOf(currentMonth);
+    const data = allStock.filter(r => r.receive_date != null);
+    const asOfDate = asOfInfo(currentMonth).cap;
     if (!isRequestStillCurrent('aging', myToken)) return;
     
-    // โหลด outflow 30 วันล่าสุดสำหรับ sparkline trend
-    const today = new Date();
+    // โหลด outflow 30 วันล่าสุด (นับถอยจากวันที่อ้างอิงของเดือนที่เลือก) สำหรับ sparkline
+    const today = new Date(asOfDate + 'T00:00:00');
     const startDate = new Date(today);
     startDate.setDate(startDate.getDate() - 29);
     const startDateStr = startDate.toISOString().split('T')[0];
@@ -3082,7 +3077,7 @@ async function loadAging() {
       .from('paper_outflows')
       .select('paper_invoice_id, weight_kg, outflow_date')
       .eq('voided', false)
-      .gte('outflow_date', startDateStr));
+      .gte('outflow_date', startDateStr).lte('outflow_date', asOfDate));
     if (!isRequestStillCurrent('aging', myToken)) return;
     
     // จัด outflow เป็น Map<invoice_id, daily kg array (30 days)>
@@ -3101,7 +3096,7 @@ async function loadAging() {
     // Pre-compute fields for each row
     const withDays = [];
     for (const r of (data || [])) {
-      const d = daysSince(r.receive_date);
+      const d = daysSinceAsOf(r.receive_date, asOfDate);
       if (d === null) continue;
       const kg = parseFloat(r.computed_remaining_kg) || 0;
       const price = parseFloat(r.price_per_kg) || 0;
@@ -3632,10 +3627,11 @@ async function loadTrend() {
   if (!ctx) return;
   
   try {
+    // 12 เดือนย้อนหลัง โดยจบที่เดือนที่เลือก (ไม่ใช่เดือนปัจจุบันเสมอ)
     const months = [];
-    const now = new Date();
+    const [anchorY, anchorM] = currentMonth.split('-').map(Number);
     for (let i = 11; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const d = new Date(anchorY, anchorM - 1 - i, 1);
       months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
     }
     const start = startOfMonth(months[0]);
@@ -3643,7 +3639,7 @@ async function loadTrend() {
 
     const supFilter = $('#trend-supplier')?.value || 'all';
 
-    const today = new Date().toISOString().slice(0, 10);
+    const today = asOfInfo(currentMonth).cap;
 
     // รับเข้า: ใช้ effDate แบบเดียวกับตาราง Pivot (SCG = invoice_date, เจ้าอื่น = receive_date)
     // จึงต้องดึงทั้ง (receive_date ในช่วง) และ (SCG ที่ invoice_date ในช่วง) แล้ว merge
@@ -3775,10 +3771,8 @@ async function loadProjects() {
   const wrap = $('#projectTable');
   wrap.innerHTML = '<div class="loading-state"><span class="loading"></span></div>';
   try {
-    const data = await fetchAllRows(() => supabase
-      .from('current_stock_invoices')
-      .select('project_code, paper_type, weight_kg, computed_remaining_kg, price_per_kg')
-      .eq('computed_status', 'in_stock').eq('supplier', 'SCG').not('project_code', 'is', null));
+    const allStock = await fetchStockAsOf(currentMonth);
+    const data = allStock.filter(r => r.supplier === 'SCG' && r.project_code != null);
     if (!isRequestStillCurrent('projects', myToken)) return;
     
     const groups = new Map();
@@ -3829,10 +3823,7 @@ async function loadSupplierValue() {
   const wrap = $('#supplierValueTable');
   wrap.innerHTML = '<div class="loading-state"><span class="loading"></span></div>';
   try {
-    const data = await fetchAllRows(() => supabase
-      .from('current_stock_invoices')
-      .select('supplier, paper_type, weight_kg, computed_remaining_kg, price_per_kg')
-      .eq('computed_status', 'in_stock'));
+    const data = await fetchStockAsOf(currentMonth);
     if (!isRequestStillCurrent('supvalue', myToken)) return;
     
     // Group: supplier > paper_type
@@ -3972,7 +3963,8 @@ async function loadPriceCompare() {
       .select('supplier, paper_type, paper_category, project_code, weight_kg, price_per_kg, receive_date')
       .gt('price_per_kg', 0)
       .gt('weight_kg', 0)
-      .not('receive_date', 'is', null));
+      .not('receive_date', 'is', null)
+      .lte('receive_date', asOfInfo(currentMonth).cap));   // ไม่นับบิลหลังเดือนที่เลือก
     if (!isRequestStillCurrent('pricecompare', myToken)) return;
     
     if (!invoiceData || invoiceData.length === 0) {
@@ -4563,9 +4555,16 @@ async function loadInvoiceTab() {
         return `<option value="${m}">${monName} ${parseInt(y)+543}</option>`;
       }).join('');
     
-    // default: เลือก supplier แรก + เดือนล่าสุด
+    // default: เลือก supplier แรก
     if (suppliers.length > 0) supSel.value = suppliers[0];
-    if (months.length > 0) monSel.value = months[0];
+  }
+  
+  // เดือนตามตัวเลือกด้านบน (ถ้าเดือนนั้นไม่มีข้อมูล ค่อยถอยไปเดือนล่าสุดที่มี)
+  const optVals = [...monSel.options].map(o => o.value);
+  if (optVals.includes(currentMonth)) {
+    monSel.value = currentMonth;
+  } else if (!monSel.value && optVals.length > 1) {
+    monSel.value = optVals[1];
   }
   
   renderInvoiceList();
@@ -4865,6 +4864,15 @@ let _filter = { suppliers: new Set(), types: new Set(), widths: new Set() };
 // =================================================================
 let _asOfCache = { month: null, rows: null };
 
+// นับอายุถึงวันที่อ้างอิงของเดือนที่เลือก (ไม่ใช่ถึงวันนี้เสมอ)
+function daysSinceAsOf(dateStr, asOf) {
+  if (!dateStr) return null;
+  const a = new Date(dateStr + 'T00:00:00');
+  const b = new Date((asOf || new Date().toISOString().slice(0, 10)) + 'T00:00:00');
+  if (isNaN(a) || isNaN(b)) return null;
+  return Math.floor((b - a) / 86400000);
+}
+
 function asOfInfo(monthKey) {
   const monthEnd = endOfMonth(monthKey);
   const today = new Date().toISOString().slice(0, 10);
@@ -4935,6 +4943,21 @@ async function fetchStockAsOf(monthKey) {
 
   _asOfCache = { month: monthKey, rows };
   return rows;
+}
+
+function renderGlobalAsOf() {
+  const el = $('#globalAsOf');
+  if (!el) return;
+  const { isCurrentMonth, cap } = asOfInfo(currentMonth);
+  if (isCurrentMonth) {
+    el.style.background = '#dbeafe';
+    el.style.color = '#1e40af';
+    el.textContent = `ข้อมูล ณ ${formatDateTH(cap)}`;
+  } else {
+    el.style.background = '#fef3c7';
+    el.style.color = '#92400e';
+    el.textContent = `🕘 ย้อนหลัง ณ ${formatDateTH(cap)}`;
+  }
 }
 
 function renderAsOfBanner(elId, monthKey) {
@@ -5501,7 +5524,7 @@ function openStockDetailModal(supplier, paperType, widthMm) {
 
   // Render table
   const rows = matchingRolls.map((r, i) => {
-    const days = daysSince(r.receive_date);
+    const days = daysSinceAsOf(r.receive_date, asOfInfo(currentMonth).cap);
     const ageStyle = days !== null && days > 90 ? 'color:#dc2626; font-weight:700;' : '';
     return `<tr>
       <td class="center">${i + 1}</td>
@@ -5557,7 +5580,7 @@ function exportStockDetailCSV() {
     r.width_mm || '',
     r.computed_remaining_kg || 0,
     r.receive_date || '',
-    daysSince(r.receive_date) ?? '',
+    daysSinceAsOf(r.receive_date, asOfInfo(currentMonth).cap) ?? '',
     r.project_code || ''
   ]);
   const csv = [header, ...rows].map(row =>
@@ -5639,6 +5662,7 @@ function printStockDetail() {
 // ===== TAB 8: USAGE (ยอดใช้ N เดือน + Heatmap) =====
 // =================================================================
 let _usageCache = null;
+let _usageCacheMonth = null;
 let _usageChart = null;
 let _usageSupplierFilter = new Set();  // ว่าง = แสดงทุก supplier
 let _usageStockPivot = null;  // Map: sup -> Map: typ -> Map: wid -> { rolls, kg } (current in_stock)
@@ -5692,7 +5716,7 @@ function usageStockForSupplier(sup, typKeys, unit) {
 
 async function loadUsageTab() {
   const myToken = newRequestToken('usage');
-  if (!_usageCache) {
+  if (!_usageCache || _usageCacheMonth !== currentMonth) {
     $('#usage-table-wrap').innerHTML = '<div class="loading-state"><span class="loading"></span> โหลดข้อมูล...</div>';
     try {
       // โหลด outflows ที่ไม่ voided + stock คงเหลือปัจจุบัน พร้อมกัน
@@ -5700,15 +5724,14 @@ async function loadUsageTab() {
         fetchAllRows(() => supabase
           .from('paper_outflows')
           .select('paper_invoice_id, weight_kg, outflow_date, supplier_name, paper_type, width_mm, voided')
-          .eq('voided', false)),
-        fetchAllRows(() => supabase
-          .from('current_stock_invoices')
-          .select('supplier, paper_type, width_mm, computed_remaining_kg, computed_status')
-          .eq('computed_status', 'in_stock'))
+          .eq('voided', false)
+          .lte('outflow_date', asOfInfo(currentMonth).cap)),
+        fetchStockAsOf(currentMonth)
       ]);
       if (!isRequestStillCurrent('usage', myToken)) return;
       
       _usageCache = (outs || []).filter(o => o.outflow_date);
+      _usageCacheMonth = currentMonth;
       _usageStockPivot = buildUsageStockPivot(stockRows);
     } catch (err) {
       $('#usage-table-wrap').innerHTML = `<div class="loading-state" style="color:var(--danger);">❌ ${escapeHtml(err.message)}</div>`;
@@ -5826,7 +5849,8 @@ function renderUsageTable() {
   // ===== คำนวณ buckets (เดือน หรือ สัปดาห์) =====
   // months = array ของ "bucket key", monthLabels = ป้ายที่แสดง,
   // bucketKeyOf(dateStr) = map วันที่จ่ายออก -> bucket key, currentKey = bucket ปัจจุบัน
-  const today = new Date();
+  // ยึดวันที่อ้างอิงของเดือนที่เลือก แทนวันนี้ — bucket สุดท้ายจะจบที่เดือนนั้น
+  const today = new Date(asOfInfo(currentMonth).cap + 'T00:00:00');
   const months = [];
   const monthLabels = [];
   let bucketKeyOf;
@@ -6437,6 +6461,7 @@ $('#btnRefresh').addEventListener('click', () => {
   _stockCache = null;
   _stockCacheMonth = null;
   _usageCache = null;
+  _usageCacheMonth = null;
   _invoiceCache = null;
   loadActiveTab();
 });
