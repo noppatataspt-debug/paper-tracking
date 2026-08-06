@@ -810,6 +810,16 @@ body {
       </div>
     </div>
 
+    <div id="statSuspectCard" style="display:none; margin:0 0 14px; padding:12px 16px; background:#fef2f2; border:1.5px solid #fca5a5; border-radius:10px;">
+      <div style="font-weight:700; color:#991b1b; font-size:14px;">
+        🔍 มี <span id="statSuspect">0</span> ม้วนที่ยังไม่มีใบรับเข้าเกิน 7 วัน
+      </div>
+      <div style="font-size:12px; color:#7f1d1d; margin-top:4px;">
+        น่าจะพิมพ์เลขม้วนผิด — ตรวจสอบแล้วกด 🗑️ ลบทิ้ง หรือแก้ไขให้ถูกต้อง
+      </div>
+      <div style="font-size:12px; color:#991b1b; margin-top:6px; font-family:var(--mono); word-break:break-all;" id="statSuspectLots"></div>
+    </div>
+
     <div class="list-controls">
       <input type="text" id="searchInput" placeholder="🔍 ค้นหา lot...">
       <select id="filterSupplier" title="กรองตาม Supplier">
@@ -1130,6 +1140,23 @@ function getCurrentMachine() {
 }
 
 // ====== Helpers ======
+// pre-stock ที่ยังไม่มีใบรับเข้าเกินกี่วัน = น่าจะพิมพ์เลข lot ผิด (ปรับได้)
+const PRESTOCK_CHECK_DAYS = 7;
+
+function daysAgo(dateStr) {
+  if (!dateStr) return null;
+  const a = new Date(dateStr + 'T00:00:00');
+  const b = new Date(new Date().toISOString().slice(0, 10) + 'T00:00:00');
+  if (isNaN(a) || isNaN(b)) return null;
+  return Math.floor((b - a) / 86400000);
+}
+
+// แถวที่ยังผูกใบรับเข้าไม่ได้ และค้างเกินกำหนด → น่าสงสัยว่าเลข lot ผิด
+function isSuspectWrongLot(o) {
+  return !o.voided && !o.paper_invoice_id
+    && (daysAgo(o.outflow_date) ?? 0) > PRESTOCK_CHECK_DAYS;
+}
+
 function normalize(lot) {
   return (lot || '').toUpperCase().replace(/-/g, '').trim();
 }
@@ -2003,8 +2030,9 @@ function renderList() {
                     ${o.paper_type ? ` · ${escapeHtml(o.paper_type)}` : ''}
                     ${o.width_mm ? ` · ${o.width_mm}mm` : ''}
                     ${o.weight_kg ? ` · ${o.weight_kg}kg` : ''}
-                    ${o.outflow_reason === 'pre_stock' ? '<br><span class="outflow-prestock-tag">⚠️ รอลงข้อมูลรับเข้า</span>' : ''}
-                    ${(!o.paper_invoice_id && o.outflow_reason !== 'pre_stock') ? '<br><span class="outflow-prestock-tag" style="background:#fee2e2;color:#991b1b;border-color:#fca5a5;">🔗 ไม่ได้ผูกกับใบรับเข้า — ม้วนนี้จะค้างใน Stock</span>' : ''}
+                    ${(o.outflow_reason === 'pre_stock' && !isSuspectWrongLot(o)) ? '<br><span class="outflow-prestock-tag">⚠️ รอลงข้อมูลรับเข้า</span>' : ''}
+                    ${isSuspectWrongLot(o) ? `<br><span class="outflow-prestock-tag" style="background:#fee2e2;color:#991b1b;border-color:#fca5a5;">🔍 ผ่านมา ${daysAgo(o.outflow_date)} วันแล้วยังไม่มีใบรับเข้า — ตรวจสอบว่าเลขม้วนพิมพ์ผิดหรือไม่</span>` : ''}
+                    ${(!o.paper_invoice_id && o.outflow_reason !== 'pre_stock' && !isSuspectWrongLot(o)) ? '<br><span class="outflow-prestock-tag" style="background:#fee2e2;color:#991b1b;border-color:#fca5a5;">🔗 ไม่ได้ผูกกับใบรับเข้า — ม้วนนี้จะค้างใน Stock</span>' : ''}
                     ${dupIds.has(o.id) ? '<br><span class="outflow-duplicate-tag">🔴 Lot ซ้ำ — บันทึกมากกว่า 1 ครั้ง</span>' : ''}
                   </div>
                   <div>
@@ -2088,11 +2116,26 @@ function renderStats() {
   const todayList = allOutflows.filter(o => !o.voided && o.outflow_date === today);
   const monthList = allOutflows.filter(o => !o.voided && o.outflow_date >= monthStart);
   const preStockList = allOutflows.filter(o => !o.voided && o.outflow_reason === 'pre_stock');
+  const suspectList  = allOutflows.filter(isSuspectWrongLot);
   
   document.getElementById('statToday').textContent = todayList.length;
   document.getElementById('statTodayKg').textContent = Math.round(todayList.reduce((s, o) => s + (Number(o.weight_kg) || 0), 0));
   document.getElementById('statMonth').textContent = monthList.length;
   document.getElementById('statPreStock').textContent = preStockList.length;
+  
+  // การ์ดเตือน: ค้างเกินกำหนดโดยไม่มีใบรับเข้า = น่าจะเลข lot ผิด
+  const suspectCard = document.getElementById('statSuspectCard');
+  if (suspectCard) {
+    if (suspectList.length > 0) {
+      suspectCard.style.display = '';
+      document.getElementById('statSuspect').textContent = suspectList.length;
+      document.getElementById('statSuspectLots').textContent =
+        suspectList.slice(0, 5).map(o => o.paper_lot).join(', ')
+        + (suspectList.length > 5 ? ` +${suspectList.length - 5}` : '');
+    } else {
+      suspectCard.style.display = 'none';
+    }
+  }
 }
 
 window.voidOutflow = async function(id, lot) {
