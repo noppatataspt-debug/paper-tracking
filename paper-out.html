@@ -1455,8 +1455,21 @@ lotInput.addEventListener('keydown', e => {
   }
 });
 
+let lookupInFlight = 0;   // กันกดบันทึกระหว่าง lookup ยังไม่ตอบ (ต้นเหตุ paper_invoice_id หลุดเป็น null)
+
 async function doLookup(normLot) {
   if (!normLot) return;
+  lookupInFlight++;
+  updateSubmitState();
+  try {
+    await doLookupInner(normLot);
+  } finally {
+    lookupInFlight--;
+    updateSubmitState();
+  }
+}
+
+async function doLookupInner(normLot) {
   
   const box = document.getElementById('lookupBox');
   box.className = 'lookup-box show';
@@ -1583,9 +1596,11 @@ function clearLookup() {
 function updateSubmitState() {
   const btn = document.getElementById('btnSubmit');
   const lotValue = document.getElementById('lotInput').value.trim();
-  // Enable ถ้ามี lot ในช่อง + เลือกครบทั้ง mode + slitter
-  btn.disabled = !lotValue || !getCurrentMachine();
-  btn.textContent = isPreStock ? '📦 บันทึก Pre-stock' : '✓ ตัดออกจาก Stock';
+  // Enable ถ้ามี lot ในช่อง + เลือกครบทั้ง mode + slitter + lookup ตอบกลับแล้ว
+  btn.disabled = !lotValue || !getCurrentMachine() || lookupInFlight > 0;
+  btn.textContent = lookupInFlight > 0
+    ? '⏳ กำลังตรวจสอบ lot...'
+    : (isPreStock ? '📦 บันทึก Pre-stock' : '✓ ตัดออกจาก Stock');
 }
 
 // ====== Submit ======
@@ -1686,6 +1701,16 @@ document.getElementById('btnSubmit').addEventListener('click', async () => {
   isSubmitting = true;
   btn.disabled = true;
   btn.innerHTML = '<span class="loading"></span> กำลังบันทึก...';
+  
+  // Guard 4: state ต้องสอดคล้องกันก่อน insert
+  // (ไม่ใช่ pre-stock แต่ไม่มี currentInvoice = lookup ยังไม่เสร็จ/ล้มเหลว → อย่าเพิ่งบันทึก)
+  if (!isPreStock && !currentInvoice) {
+    isSubmitting = false;
+    btn.disabled = false;
+    updateSubmitState();
+    showToast('⚠️ ข้อมูล lot ยังไม่พร้อม กรุณากด Enter ที่ช่อง lot อีกครั้ง', 'error');
+    return;
+  }
   
   const payload = {
     paper_lot: lotRaw,
@@ -1979,6 +2004,7 @@ function renderList() {
                     ${o.width_mm ? ` · ${o.width_mm}mm` : ''}
                     ${o.weight_kg ? ` · ${o.weight_kg}kg` : ''}
                     ${o.outflow_reason === 'pre_stock' ? '<br><span class="outflow-prestock-tag">⚠️ รอลงข้อมูลรับเข้า</span>' : ''}
+                    ${(!o.paper_invoice_id && o.outflow_reason !== 'pre_stock') ? '<br><span class="outflow-prestock-tag" style="background:#fee2e2;color:#991b1b;border-color:#fca5a5;">🔗 ไม่ได้ผูกกับใบรับเข้า — ม้วนนี้จะค้างใน Stock</span>' : ''}
                     ${dupIds.has(o.id) ? '<br><span class="outflow-duplicate-tag">🔴 Lot ซ้ำ — บันทึกมากกว่า 1 ครั้ง</span>' : ''}
                   </div>
                   <div>

@@ -2668,11 +2668,11 @@ async function loadDetailPivot() {
       const [main, scgExtra] = await Promise.all([
         fetchAllRows(() => supabase
           .from('paper_invoices')
-          .select('id, supplier, paper_type, width_mm, weight_kg, price_per_kg, receive_date, invoice_date')
+          .select('id, paper_lot_normalized, supplier, paper_type, width_mm, weight_kg, price_per_kg, receive_date, invoice_date')
           .lte('receive_date', receiveCap)),
         fetchAllRows(() => supabase
           .from('paper_invoices')
-          .select('id, supplier, paper_type, width_mm, weight_kg, price_per_kg, receive_date, invoice_date')
+          .select('id, paper_lot_normalized, supplier, paper_type, width_mm, weight_kg, price_per_kg, receive_date, invoice_date')
           .eq('supplier', 'SCG')
           .lte('invoice_date', monthEnd)
           .gt('receive_date', monthEnd))
@@ -2692,17 +2692,23 @@ async function loadDetailPivot() {
     try {
       allOutflows = await fetchAllRows(() => supabase
         .from('paper_outflows')
-        .select('paper_invoice_id, weight_kg, outflow_date')
+        .select('paper_invoice_id, paper_lot_normalized, weight_kg, outflow_date')
         .eq('voided', false).lte('outflow_date', monthEnd));
     } catch (e2) { throw e2; }
     
     if (!isRequestStillCurrent('detail', myToken)) return;
     
     const outflowsByInvoice = new Map();
+    const outflowsByLot = new Map();   // fallback สำหรับแถวที่ผูก invoice ไม่ติด
     for (const o of (allOutflows || [])) {
-      if (!o.paper_invoice_id) continue;
-      if (!outflowsByInvoice.has(o.paper_invoice_id)) outflowsByInvoice.set(o.paper_invoice_id, []);
-      outflowsByInvoice.get(o.paper_invoice_id).push({ date: o.outflow_date, kg: parseFloat(o.weight_kg) || 0 });
+      const rec = { date: o.outflow_date, kg: parseFloat(o.weight_kg) || 0 };
+      if (o.paper_invoice_id) {
+        if (!outflowsByInvoice.has(o.paper_invoice_id)) outflowsByInvoice.set(o.paper_invoice_id, []);
+        outflowsByInvoice.get(o.paper_invoice_id).push(rec);
+      } else if (o.paper_lot_normalized) {
+        if (!outflowsByLot.has(o.paper_lot_normalized)) outflowsByLot.set(o.paper_lot_normalized, []);
+        outflowsByLot.get(o.paper_lot_normalized).push(rec);
+      }
     }
     
     const grouped = new Map();
@@ -2732,7 +2738,9 @@ async function loadDetailPivot() {
       const effDate = (sup === 'SCG' && inv.invoice_date) ? inv.invoice_date : (inv.receive_date || '');
 
       const cell = ensureGroup(sup, type, width);
-      const outs = outflowsByInvoice.get(inv.id) || [];
+      const outs = outflowsByInvoice.get(inv.id)
+                || (inv.paper_lot_normalized ? outflowsByLot.get(inv.paper_lot_normalized) : null)
+                || [];
 
       // ยอดต้นเดือน
       if (effDate <= prevMonthEnd) {
@@ -4881,7 +4889,7 @@ async function fetchStockAsOf(monthKey) {
     fetchAllRows(() => supabase.from('paper_invoices').select(COLS)
       .eq('supplier', 'SCG').lte('invoice_date', monthEnd).gt('receive_date', monthEnd)),
     fetchAllRows(() => supabase.from('paper_outflows')
-      .select('paper_invoice_id, weight_kg, outflow_date')
+      .select('paper_invoice_id, paper_lot_normalized, weight_kg, outflow_date')
       .eq('voided', false).lte('outflow_date', monthEnd))
   ]);
 
@@ -4895,11 +4903,17 @@ async function fetchStockAsOf(monthKey) {
   }
 
   // สรุป outflow ต่อ invoice (เฉพาะที่เกิดภายในสิ้นเดือนนั้น)
+  // แถวที่ผูก paper_invoice_id ไม่ติด ให้ fallback ไปเทียบด้วย paper_lot_normalized
+  // ไม่งั้นม้วนที่ตัดออกจริงแล้วจะค้างอยู่ใน stock ตลอดไป
   const outKg = new Map();
+  const outLot = new Set();
   for (const o of (outs || [])) {
-    if (!o.paper_invoice_id) continue;
-    outKg.set(o.paper_invoice_id,
-      (outKg.get(o.paper_invoice_id) || 0) + (parseFloat(o.weight_kg) || 0));
+    if (o.paper_invoice_id) {
+      outKg.set(o.paper_invoice_id,
+        (outKg.get(o.paper_invoice_id) || 0) + (parseFloat(o.weight_kg) || 0));
+    } else if (o.paper_lot_normalized) {
+      outLot.add(o.paper_lot_normalized);
+    }
   }
 
   // เหลือเฉพาะม้วนที่ยังอยู่ในคลัง ณ สิ้นเดือนนั้น
@@ -4908,6 +4922,7 @@ async function fetchStockAsOf(monthKey) {
   const rows = [];
   for (const inv of invoices) {
     if (outKg.has(inv.id)) continue;
+    if (inv.paper_lot_normalized && outLot.has(inv.paper_lot_normalized)) continue;
     const effDate = (inv.supplier === 'SCG' && inv.invoice_date)
       ? inv.invoice_date
       : (inv.receive_date || '');
@@ -5163,17 +5178,31 @@ async function searchByPaperLot() {
     const { monthEnd, cap, isCurrentMonth } = asOfInfo(currentMonth);
     const outInfo = new Map();   // invoice_id -> { firstDate, kg }
     const ids = found.map(r => r.id).filter(Boolean);
+    const lotKeys = found.map(r => r.paper_lot_normalized).filter(Boolean);
     if (ids.length) {
-      const outRows = await fetchAllRows(() => supabase
-        .from('paper_outflows')
-        .select('paper_invoice_id, weight_kg, outflow_date')
-        .eq('voided', false)
-        .in('paper_invoice_id', ids));
-      for (const o of (outRows || [])) {
-        const cur = outInfo.get(o.paper_invoice_id) || { firstDate: null, kg: 0 };
+      // ดึงทั้งแบบผูก invoice และแบบเทียบ lot — แถวที่ผูก id ไม่ติดจะได้ไม่ตกหล่น
+      const [byId, byLot] = await Promise.all([
+        fetchAllRows(() => supabase
+          .from('paper_outflows')
+          .select('paper_invoice_id, paper_lot_normalized, weight_kg, outflow_date')
+          .eq('voided', false)
+          .in('paper_invoice_id', ids)),
+        lotKeys.length ? fetchAllRows(() => supabase
+          .from('paper_outflows')
+          .select('paper_invoice_id, paper_lot_normalized, weight_kg, outflow_date')
+          .eq('voided', false)
+          .is('paper_invoice_id', null)
+          .in('paper_lot_normalized', lotKeys)) : Promise.resolve([])
+      ]);
+      const lotToId = new Map();
+      for (const r of found) if (r.paper_lot_normalized) lotToId.set(r.paper_lot_normalized, r.id);
+      for (const o of [...(byId || []), ...(byLot || [])]) {
+        const key = o.paper_invoice_id || lotToId.get(o.paper_lot_normalized);
+        if (!key) continue;
+        const cur = outInfo.get(key) || { firstDate: null, kg: 0 };
         cur.kg += parseFloat(o.weight_kg) || 0;
         if (!cur.firstDate || o.outflow_date < cur.firstDate) cur.firstDate = o.outflow_date;
-        outInfo.set(o.paper_invoice_id, cur);
+        outInfo.set(key, cur);
       }
     }
     // สถานะ ณ สิ้นเดือน: ยังไม่รับเข้า / in_stock / ตัดออกแล้ว
