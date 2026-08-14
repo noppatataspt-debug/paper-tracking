@@ -5917,6 +5917,29 @@ function renderUsageTable() {
     cell[m].kg += Number(o.weight_kg) || 0;
   }
   
+  // เติมแถวของ supplier/ประเภท/หน้ากว้าง ที่ "มีของในคลัง แต่ไม่เคยถูกตัดในช่วงที่ดู"
+  // เดิม pivot สร้างจาก paper_outflows ล้วน → ของที่ไม่เคยถูกใช้จะไม่มีแถว
+  // ทำให้ผลรวมแถวลูกไม่เท่ากับคอลัมน์ Stock ของแถวแม่ (และ dead stock มองไม่เห็น)
+  const stockOnlyKeys = new Set();
+  if (_usageStockPivot) {
+    for (const [sup, supMap] of _usageStockPivot) {
+      if (_usageSupplierFilter.size > 0 && !_usageSupplierFilter.has(sup)) continue;
+      for (const [typ, typMap] of supMap) {
+        for (const [wid, cell] of typMap) {
+          if (!cell || (!cell.kg && !cell.rolls)) continue;
+          if (!pivot.has(sup)) pivot.set(sup, new Map());
+          const sm = pivot.get(sup);
+          if (!sm.has(typ)) sm.set(typ, new Map());
+          const tm = sm.get(typ);
+          if (!tm.has(wid)) {
+            tm.set(wid, {});                       // ไม่มีการใช้ในช่วงนี้ → ทุกเดือนเป็น 0
+            stockOnlyKeys.add(`${sup}::${typ}::${wid}`);
+          }
+        }
+      }
+    }
+  }
+  
   if (pivot.size === 0) {
     $('#usage-table-wrap').innerHTML = '<div class="loading-state">ไม่พบข้อมูลในเงื่อนไขที่เลือก</div>';
     return;
@@ -6021,9 +6044,10 @@ function renderUsageTable() {
           const widRowMax = rowMaxMap.get(`${sup}::${typ}::${wid}`) || 0;
           let widTotal = 0;
           
+          const isStockOnly = stockOnlyKeys.has(`${sup}::${typ}::${wid}`);
           html += `<tr class="usage-row-width" data-parent="${typeId}" style="display:none;">
             <td></td>
-            <td class="usage-width-label">└ ${escapeHtml(wid)} mm</td>`;
+            <td class="usage-width-label">└ ${escapeHtml(wid)} mm${isStockOnly ? ' <span style="font-size:10px;color:#92400e;background:#fef3c7;padding:1px 6px;border-radius:999px;">ไม่มีการใช้</span>' : ''}</td>`;
           
           for (let i = 0; i < months.length; i++) {
             const mc = cell[months[i]];
