@@ -4987,6 +4987,21 @@ const MAT_PARAM_LABELS = {
 const MAT_NAME = { glue:'กาว', calcium:'แคลเซียม' };
 const matLabel = p => MAT_PARAM_LABELS[p] || p;
 
+// supplier normalize — COA ภาษาไทย/อังกฤษของรายเดียวกัน → ชื่อเดียว
+// (ต้องตรงกับ normalize_supplier_name() ใน Supabase และ material-in.html)
+const MAT_SUPPLIER_ALIASES = [
+  { canonical: 'Permaflex',   match: [/permaflex/i, /เปอร์มาเฟล็ก/, /เปอร์มาเฟลก/] },
+  { canonical: 'Bestak',      match: [/bestak/i, /เบสแท/] },
+  { canonical: 'Surint Omya', match: [/omya/i, /โอมย่า/, /สุรินทร์\s*โอ/] },
+];
+function normMatSupplier(name) {
+  if (!name) return name;
+  const s = String(name).trim().replace(/\s+/g, ' ');
+  if (!s) return s;
+  for (const a of MAT_SUPPLIER_ALIASES) if (a.match.some(re => re.test(s))) return a.canonical;
+  return s;
+}
+
 function matSpecFor(product, parameter) {
   return state.matSpecs.find(s => s.product === product && s.parameter === parameter) || null;
 }
@@ -5033,6 +5048,8 @@ async function loadMaterialView() {
       callRPCList('material_list_batches', { p_material_type: state.material }),
     ]);
     state.matSpecs = specs;
+    // normalize ตอนอ่าน — เผื่อยังมีข้อมูลเก่าที่ชื่อ supplier เป็นภาษาไทย/ชื่อยาว
+    batches.forEach(b => { b.supplier = normMatSupplier(b.supplier); });
     state.matBatches = batches;
     fillSelect($('#mat-supplier'), [...new Set(batches.map(b => b.supplier).filter(Boolean))].sort());
     refreshMatProductOptions();

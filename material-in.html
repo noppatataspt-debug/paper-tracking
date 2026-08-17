@@ -386,6 +386,26 @@ function specsForProduct(product) {
 function knownProducts() {
   return [...new Set(state.specs.map(s => s.product).filter(Boolean))].sort();
 }
+
+// supplier normalize ------------------------------------------
+// COA ภาษาไทย/อังกฤษของรายเดียวกัน → ชื่อเดียว (ต้องตรงกับ normalize_supplier_name() ใน Supabase)
+const SUPPLIER_ALIASES = [
+  { canonical: 'Permaflex',   match: [/permaflex/i, /เปอร์มาเฟล็ก/, /เปอร์มาเฟลก/] },
+  { canonical: 'Bestak',      match: [/bestak/i, /เบสแท/] },
+  { canonical: 'Surint Omya', match: [/omya/i, /โอมย่า/, /สุรินทร์\s*โอ/] },
+];
+function normSupplier(name) {
+  if (!name) return name;
+  const s = String(name).trim().replace(/\s+/g, ' ');
+  if (!s) return s;
+  for (const a of SUPPLIER_ALIASES) if (a.match.some(re => re.test(s))) return a.canonical;
+  return s;
+}
+function knownSuppliers() {
+  const fromData = (state.lotRows || []).map(r => r.supplier).filter(Boolean);
+  const fromMap  = SUPPLIER_ALIASES.map(a => a.canonical);
+  return [...new Set([...fromMap, ...fromData].map(normSupplier))].sort();
+}
 // param keys to show for a product (spec-driven, with fallback + extra keys from data)
 function paramKeysFor(product, extraKeys=[]) {
   const specRows = specsForProduct(product);
@@ -495,7 +515,7 @@ function addLotCard(parsed, filename) {
     </div>
     <div class="lot-body">
       <div class="grid">
-        <div><label class="fl">Supplier</label><input data-f="supplier" value="${escapeHtml(parsed.supplier||'')}"></div>
+        <div><label class="fl">Supplier</label><input data-f="supplier" list="suppliers-${id}" value="${escapeHtml(normSupplier(parsed.supplier)||'')}"></div>
         <div><label class="fl">Product</label><input data-f="product" list="products-${id}" value="${escapeHtml(parsed.product||'')}"></div>
         <div><label class="fl">Invoice / BOL No.</label><input data-f="invoice_no" value="${escapeHtml(parsed.invoice_no||'')}"></div>
         <div><label class="fl">PO No.</label><input data-f="po_no" value="${escapeHtml(parsed.po_no||'')}"></div>
@@ -505,6 +525,7 @@ function addLotCard(parsed, filename) {
         <div><label class="fl">Conclusion</label><input data-f="conclusion" value="${escapeHtml(parsed.conclusion||'')}"></div>
       </div>
       <datalist id="products-${id}">${knownProducts().map(p=>`<option value="${escapeHtml(p)}">`).join('')}</datalist>
+      <datalist id="suppliers-${id}">${knownSuppliers().map(s=>`<option value="${escapeHtml(s)}">`).join('')}</datalist>
 
       <label class="fl">Batch &amp; ค่าจาก COA (supplier)</label>
       <div class="batch-wrap"><table class="batch"><thead></thead><tbody></tbody></table></div>
@@ -604,7 +625,7 @@ function syncBatchInputs(card) {
 async function saveLotCard(card) {
   syncBatchInputs(card);
   const get = f => card.querySelector(`[data-f="${f}"]`).value.trim();
-  const product = get('product'), supplier = get('supplier');
+  const product = get('product'), supplier = normSupplier(get('supplier'));
   if (!supplier || !product) { showToast('กรุณากรอก Supplier และ Product', 'warning'); return; }
   const batches = card._batches.filter(b => (b.batch_no||'').trim() !== '');
   if (!batches.length) { showToast('ต้องมีอย่างน้อย 1 batch (กรอก Batch No.)', 'warning'); return; }
@@ -642,6 +663,8 @@ async function loadLots() {
   wrap.innerHTML = `<div class="loading"><div class="spinner"></div>กำลังโหลด...</div>`;
   try {
     const rows = await callRPCList('material_list_batches', { p_material_type: state.material });
+    // normalize ตอนอ่าน — เผื่อยังมีข้อมูลเก่าที่ชื่อ supplier เป็นภาษาไทย/ชื่อยาว
+    rows.forEach(r => { r.supplier = normSupplier(r.supplier); });
     state.lotRows = rows;
     // populate filter options
     const sups = [...new Set(rows.map(r => r.supplier).filter(Boolean))].sort();
