@@ -1812,6 +1812,36 @@ document.getElementById('btnSubmit').addEventListener('click', async () => {
   }
 });
 
+// ====== ตรวจ Lot ซ้ำทั้งฐานข้อมูล (ไม่ขึ้นกับ filter ช่วงเวลา) ======
+// filter ช่วงเวลาถูกใช้ตั้งแต่ระดับ query → แถวคู่แฝดที่อยู่นอกช่วงจะไม่ถูกดึงมาเลย
+// ทำให้นับในหน่วยความจำได้ 1 ครั้ง แล้วไม่ขึ้น tag ซ้ำ
+// ตัวนี้จึงถามฐานข้อมูลตรง ๆ เฉพาะ lot ที่กำลังแสดงอยู่
+const _dupInfo = new Map();      // lotKey -> [{ id, outflow_date, machine_id }, ...]
+let _dupFetching = false;
+
+async function fetchDupInfo(lotKeys) {
+  const missing = lotKeys.filter(k => k && !_dupInfo.has(k));
+  if (missing.length === 0) return false;
+  
+  const CHUNK = 150;               // กัน URL ยาวเกินของ PostgREST
+  for (let i = 0; i < missing.length; i += CHUNK) {
+    const chunk = missing.slice(i, i + CHUNK);
+    const { data, error } = await supabase
+      .from('paper_outflows')
+      .select('id, paper_lot_normalized, outflow_date, machine_id')
+      .eq('voided', false)
+      .in('paper_lot_normalized', chunk)
+      .order('outflow_date', { ascending: true });
+    if (error) throw error;
+    chunk.forEach(k => { if (!_dupInfo.has(k)) _dupInfo.set(k, []); });
+    (data || []).forEach(r => {
+      const k = (r.paper_lot_normalized || '').toUpperCase();
+      if (_dupInfo.has(k)) _dupInfo.get(k).push(r);
+    });
+  }
+  return true;
+}
+
 // ====== List View ======
 async function loadOutflows() {
   const list = document.getElementById('outflowList');
@@ -1870,6 +1900,7 @@ async function loadOutflows() {
   }
   
   allOutflows = all;
+  _dupInfo.clear();               // ล้าง cache ตรวจซ้ำ ให้สะท้อนรายการที่เพิ่ง insert/ยกเลิก
   populateFilterDropdowns();
   renderList();
   renderStats();
@@ -1962,18 +1993,44 @@ function renderList() {
   // หา paper_lot_normalized ที่ซ้ำกัน — นับข้ามวัน (ม้วนเดียวกันใช้ได้แค่ครั้งเดียว)
   // key = lot_normalized (ไม่ผูกกับวันแล้ว) → ถ้าเจอมากกว่า 1 row = ซ้ำ
   const dupIds = new Set();
+  const dupNote = new Map();       // id -> ข้อความบอกว่าซ้ำกี่ครั้ง เมื่อไหร่
   const lotCount = {};
+  const shownLots = new Set();
   filtered.forEach(o => {
     if (o.voided) return;
     const k = (o.paper_lot_normalized || '').toUpperCase();
     if (!k) return;
     lotCount[k] = (lotCount[k] || 0) + 1;
+    shownLots.add(k);
   });
   filtered.forEach(o => {
     if (o.voided) return;
     const k = (o.paper_lot_normalized || '').toUpperCase();
-    if (k && lotCount[k] > 1) dupIds.add(o.id);
+    if (!k) return;
+    // นับจากทั้งฐานข้อมูลถ้ามีข้อมูลแล้ว มิฉะนั้นใช้เท่าที่โหลดมา
+    const all = _dupInfo.get(k);
+    const total = all ? all.length : lotCount[k];
+    if (total > 1) {
+      dupIds.add(o.id);
+      if (all) {
+        const others = all.filter(r => r.id !== o.id);
+        const dates = others.map(r => fmtDate(r.outflow_date)).join(', ');
+        dupNote.set(o.id, `บันทึกแล้ว ${total} ครั้ง — อีกครั้งที่ ${dates}`);
+      }
+    }
   });
+  
+  // เติมข้อมูลจากฐานข้อมูลแล้ว re-render ครั้งเดียว (lot นอกช่วงเวลาที่เลือกจะถูกนับด้วย)
+  if (!_dupFetching && shownLots.size > 0) {
+    const need = [...shownLots].filter(k => !_dupInfo.has(k));
+    if (need.length > 0) {
+      _dupFetching = true;
+      fetchDupInfo(need)
+        .then(changed => { if (changed) renderList(); })
+        .catch(err => console.warn('dup check failed:', err))
+        .finally(() => { _dupFetching = false; });
+    }
+  }
 
   // วันนี้ (อิงรูปแบบเดียวกับทั้งแอป) — staff กด Undo ได้เฉพาะรายการของวันนี้
   const todayStr = new Date().toISOString().split('T')[0];
@@ -2033,7 +2090,7 @@ function renderList() {
                     ${(o.outflow_reason === 'pre_stock' && !isSuspectWrongLot(o)) ? '<br><span class="outflow-prestock-tag">⚠️ รอลงข้อมูลรับเข้า</span>' : ''}
                     ${isSuspectWrongLot(o) ? `<br><span class="outflow-prestock-tag" style="background:#fee2e2;color:#991b1b;border-color:#fca5a5;">🔍 ผ่านมา ${daysAgo(o.outflow_date)} วันแล้วยังไม่มีใบรับเข้า — ตรวจสอบว่าเลขม้วนพิมพ์ผิดหรือไม่</span>` : ''}
                     ${(!o.paper_invoice_id && o.outflow_reason !== 'pre_stock' && !isSuspectWrongLot(o)) ? '<br><span class="outflow-prestock-tag" style="background:#fee2e2;color:#991b1b;border-color:#fca5a5;">🔗 ไม่ได้ผูกกับใบรับเข้า — ม้วนนี้จะค้างใน Stock</span>' : ''}
-                    ${dupIds.has(o.id) ? '<br><span class="outflow-duplicate-tag">🔴 Lot ซ้ำ — บันทึกมากกว่า 1 ครั้ง</span>' : ''}
+                    ${dupIds.has(o.id) ? `<br><span class="outflow-duplicate-tag">🔴 Lot ซ้ำ — ${escapeHtml(dupNote.get(o.id) || 'บันทึกมากกว่า 1 ครั้ง')}</span>` : ''}
                   </div>
                   <div>
                     ${o.voided 
