@@ -466,6 +466,13 @@ body {
   font-size: 13px; cursor: pointer; font-weight: 600;
 }
 .outflow-undo:hover { background: var(--primary-light); color: var(--primary); border-color: var(--primary); }
+.outflow-recheck {
+  background: none; border: 1px solid var(--border-strong);
+  color: var(--text-dim); padding: 6px 10px; border-radius: 6px;
+  font-size: 13px; cursor: pointer; font-weight: 600; margin-right: 4px;
+}
+.outflow-recheck:hover { background: var(--info-light); color: var(--info); border-color: var(--info); }
+.outflow-recheck:disabled { opacity: .6; cursor: default; }
 
 @media (max-width: 700px) {
   .outflow-row { grid-template-columns: 1fr auto; gap: 4px; padding: 12px 14px; }
@@ -2093,6 +2100,9 @@ function renderList() {
                     ${dupIds.has(o.id) ? `<br><span class="outflow-duplicate-tag">🔴 Lot ซ้ำ — ${escapeHtml(dupNote.get(o.id) || 'บันทึกมากกว่า 1 ครั้ง')}</span>` : ''}
                   </div>
                   <div>
+                    ${(!o.voided && currentAdmin && !o.paper_invoice_id)
+                      ? `<button class="outflow-recheck" title="ตรวจสอบใหม่ว่าใบรับเข้า (paper-in) ของ lot นี้ถูกแก้ไข/บันทึกแล้วหรือยัง" onclick="window.recheckOutflowLot('${o.id}', this)">🔄 เช็คใหม่</button>`
+                      : ''}
                     ${o.voided 
                       ? `<span style="color:var(--text-muted);font-size:11px;">VOIDED</span>` 
                       : ((currentAdmin || o.outflow_date === todayStr)
@@ -2219,6 +2229,61 @@ window.voidOutflow = async function(id, lot) {
     loadTabBadge();
   } catch (err) {
     showToast('❌ ' + (err.message || 'ยกเลิกไม่สำเร็จ'), 'error');
+  }
+};
+
+// ตรวจสอบใหม่ว่า paper-in ของ lot นี้ถูกแก้ไข/บันทึกเข้ามาแล้วหรือยัง
+// (แก้ปัญหา: staff แก้ paper_invoices ผิด → แก้ให้ถูก แต่ paper_outflows เดิมยังไม่ถูกผูก
+//  จนกว่าจะลบแล้วบันทึกใหม่ — ปุ่มนี้ให้ re-lookup แล้วผูกให้โดยไม่ต้องลบ/สร้างใหม่)
+window.recheckOutflowLot = async function(id, btnEl) {
+  const record = allOutflows.find(o => o.id === id);
+  if (!record) return;
+
+  const normLot = record.paper_lot_normalized || normalize(record.paper_lot);
+  if (!normLot) return;
+
+  const originalLabel = btnEl ? btnEl.innerHTML : '';
+  if (btnEl) {
+    btnEl.disabled = true;
+    btnEl.innerHTML = '<span class="loading"></span>';
+  }
+
+  try {
+    const { data: invoice, error } = await supabase
+      .from('paper_invoices')
+      .select('id, supplier, paper_type, width_mm, weight_kg')
+      .eq('paper_lot_normalized', normLot)
+      .maybeSingle();
+
+    if (error) throw error;
+
+    if (!invoice) {
+      showToast('ยังไม่พบใบรับเข้า (paper-in) ของ lot นี้ในระบบ', 'error');
+      return;
+    }
+
+    await callAdminRPC('admin_update_outflow', {
+      p_outflow_id: id,
+      p_updates: {
+        paper_invoice_id: invoice.id,
+        supplier_name: invoice.supplier,
+        paper_type: invoice.paper_type,
+        width_mm: invoice.width_mm ? parseInt(invoice.width_mm) : null,
+        weight_kg: invoice.weight_kg,
+        outflow_reason: 'sale'
+      }
+    });
+
+    showToast('✓ พบใบรับเข้าแล้ว — เชื่อมโยง lot สำเร็จ', 'success');
+    loadOutflows();
+    loadTabBadge();
+  } catch (err) {
+    showToast('❌ ' + (err.message || 'ตรวจสอบไม่สำเร็จ'), 'error');
+  } finally {
+    if (btnEl && btnEl.isConnected) {
+      btnEl.disabled = false;
+      btnEl.innerHTML = originalLabel;
+    }
   }
 };
 
