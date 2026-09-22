@@ -3293,6 +3293,38 @@ function normalizeHeader(h) {
   return String(h || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
+// Header → { key, mult? } — ลอง HEADER_MAP ก่อน แล้วค่อยใช้กฎทั่วไป (รองรับ header รูปแบบใหม่ของ SCG
+// เช่น "RCT CD(N)", "Cobb's TestTop(120 sec)(g/m²)", "Thickness (mm)", "RollProductionDate")
+function mapCoaHeader(raw) {
+  const h = normalizeHeader(raw);
+  if (!h) return null;
+  if (HEADER_MAP[h]) return { key: HEADER_MAP[h] };
+  if (h.includes('batch'))          return { key: 'paper_lot' };
+  if (h.includes('productiondate')) return { key: 'production_date' };
+  if (h.startsWith('remark'))       return null;
+  if (h.startsWith('width'))        return { key: 'width_cm' };
+  if (h.startsWith('basisw') || h.startsWith('grammage') || h.startsWith('substance')) return { key: 'basis_weight' };
+  if (h.startsWith('rct') || h.startsWith('ringcrush')) return { key: 'rct' };
+  if (h.startsWith('cmt'))          return { key: 'cmt' };
+  if (h.startsWith('burst'))        return h.includes('kgcm') ? { key: 'burst', mult: 98.0665 } : { key: 'burst' };
+  if (h.startsWith('moisture'))     return { key: 'moisture' };
+  if (h.startsWith('caliper') || h.startsWith('thickness'))
+    return h.endsWith('mm') ? { key: 'caliper', mult: 1000 } : { key: 'caliper' };
+  if (h.startsWith('plybond'))      return h.includes('kgf') ? null : { key: 'plybond' };  // kg.f ≠ J/m²
+  const m = h.match(/^(tear|tensile|stretch)(md|cd)/);
+  if (m) return { key: `${m[1]}_${m[2]}` };
+  if (h.startsWith('cobb')) {
+    const bottom = /bottom|bs\d/.test(h);
+    let sec = null;
+    const ms = h.match(/(\d+)sec/), mm = h.match(/(ts|bs)(\d+)/);
+    if (ms) sec = parseInt(ms[1]); else if (mm) sec = parseInt(mm[2]) * 60;
+    if (sec == null || sec === 60) return { key: bottom ? 'cobb_bottom' : 'cobb_top' };
+    if (sec === 120)  return { key: bottom ? 'cobb_bs2' : 'cobb_ts2' };
+    if (sec === 1800 && !bottom) return { key: 'cobb_ts30' };
+  }
+  return null;
+}
+
 function parseDateDMY(s) {
   if (!s) return null;
   s = String(s).trim();
@@ -3359,9 +3391,14 @@ async function parseCSVFile(file) {
 
   // header is first row
   const rawHeaders = rows[0].map(h => String(h || '').trim());
-  const headers = rawHeaders.map(h => HEADER_MAP[normalizeHeader(h)] || null);
-  // unmapped — เฉพาะ header ที่ไม่ว่าง และ map ไม่ได้
-  const unmapped = rawHeaders.filter((h, i) => !headers[i] && h.trim());
+  const headerDefs = rawHeaders.map(h => mapCoaHeader(h));
+  const headers = headerDefs.map(d => d ? d.key : null);
+  // unmapped — เฉพาะ header ที่ไม่ว่าง และ map ไม่ได้ (ไม่นับ Remark)
+  const unmapped = rawHeaders.filter((h, i) => !headers[i] && h.trim() && !/^remark/i.test(h.trim()));
+  // column ที่เป็นค่าวัด (ใช้เช็คว่าแถวไหนเป็นแถวข้อมูลจริง)
+  const NON_PARAM = new Set(['paper_lot', 'production_date', 'paper_type', 'width_cm']);
+  const paramCols = headers.map((c, j) => (c && !NON_PARAM.has(c)) ? j : -1).filter(j => j >= 0);
+  let sheetType = null;  // SCG: แถวชื่อชนิดกระดาษใต้ header เช่น "KH250"
 
   // body
   const result = [];
@@ -3372,6 +3409,12 @@ async function parseCSVFile(file) {
     const lot = String(r[0] || '').trim();
     if (!lot) continue;
     if (lot.toLowerCase().includes('spec')) continue;  // skip "Minimum Spec." row
+    if (/^avg/i.test(lot)) continue;                    // skip "AVG.OF xxx" row (SCG)
+    if (/batch\s*number/i.test(lot)) continue;          // header ซ้ำ
+    if (paramCols.length && !paramCols.some(j => parseNum(r[j]) != null)) {
+      sheetType = lot;   // แถวที่ไม่มีค่าวัดเลย = ชื่อชนิดกระดาษ (SCG)
+      continue;
+    }
     stats.total++;
 
     const obj = {};
@@ -3382,9 +3425,15 @@ async function parseCSVFile(file) {
       if (col === 'production_date')  obj[col] = parseDateDMY(v);
       else if (col === 'paper_lot')   obj[col] = String(v || '').trim();
       else if (col === 'paper_type')  obj[col] = String(v || '').trim();
-      else                            obj[col] = parseNum(v);
+      else {
+        const n = parseNum(v);
+        const mult = headerDefs[j].mult;
+        const val = (n != null && mult) ? Math.round(n * mult * 100) / 100 : n;
+        if (val != null || obj[col] == null) obj[col] = val;
+      }
     }
     if (!obj.paper_lot) continue;
+    if (!obj.paper_type && sheetType) obj.paper_type = sheetType;
 
     // จัดการ paper_type
     let pt = obj.paper_type;
@@ -3427,12 +3476,22 @@ async function parseExcelFile(file) {
   await loadXLSX();
   const ab = await file.arrayBuffer();
   const wb = window.XLSX.read(ab, { type:'array' });
-  const sheet = wb.Sheets[wb.SheetNames[0]];
-  // sheet_to_csv → use parseCSVFile logic
-  const csv = window.XLSX.utils.sheet_to_csv(sheet);
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const fauxFile = Object.assign(blob, { name: file.name });
-  return parseCSVFile(fauxFile);
+  // อ่านทุก sheet (SCG แยก 1 sheet ต่อ 1 ชนิดกระดาษ) แล้วรวมผล
+  const merged = { rows: [], headers: [], unmapped: [], stats: { total: 0, skippedType: 0, naType: 0, validRows: 0 } };
+  for (const name of wb.SheetNames) {
+    const sheet = wb.Sheets[name];
+    // sheet_to_csv → use parseCSVFile logic
+    const csv = window.XLSX.utils.sheet_to_csv(sheet);
+    if (!csv.trim()) continue;
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const fauxFile = Object.assign(blob, { name: file.name });
+    const res = await parseCSVFile(fauxFile);
+    merged.rows.push(...(res.rows || []));
+    merged.headers.push(...(res.headers || []));
+    for (const u of (res.unmapped || [])) if (!merged.unmapped.includes(u)) merged.unmapped.push(u);
+    for (const k of Object.keys(merged.stats)) merged.stats[k] += res.stats?.[k] || 0;
+  }
+  return merged;
 }
 
 async function previewImport() {
