@@ -1668,9 +1668,18 @@ body {
     <div class="section">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
         <div class="section-title">📊 Trend รับเข้า-จ่ายออก (12 เดือนย้อนหลัง)</div>
-        <div style="display:flex;align-items:center;gap:8px;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <label style="font-size:13px;color:var(--text-dim);">หน่วย:</label>
+          <select id="trend-unit" class="filter-select">
+            <option value="kg">น้ำหนัก (kg)</option>
+            <option value="value">มูลค่า (฿)</option>
+          </select>
           <label style="font-size:13px;color:var(--text-dim);">Supplier:</label>
           <select id="trend-supplier" class="filter-select"><option value="all">ทุก Supplier</option></select>
+          <label style="font-size:13px;color:var(--text-dim);">โครงการ:</label>
+          <select id="trend-project" class="filter-select"><option value="all">ทุกโครงการ</option></select>
+          <label style="font-size:13px;color:var(--text-dim);">ประเภท:</label>
+          <select id="trend-type" class="filter-select"><option value="all">ทุกประเภท</option></select>
         </div>
       </div>
       <div class="trend-chart-wrap"><canvas id="trendChart"></canvas></div>
@@ -1841,6 +1850,13 @@ body {
           <select id="usage-unit" class="filter-select">
             <option value="kg">น้ำหนัก (kg)</option>
             <option value="rolls">จำนวนม้วน</option>
+            <option value="value">มูลค่า (฿)</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>โครงการ:</label>
+          <select id="usage-project" class="filter-select">
+            <option value="all">ทุกโครงการ</option>
           </select>
         </div>
         <div class="filter-group" style="flex:1; min-width: 240px;">
@@ -3620,6 +3636,50 @@ function exportAgingCSV(mode) {
 }
 
 // ===== TAB 4: TREND =====
+// ===== Invoice meta (ราคา/โครงการ/ประเภท ของทุกม้วน) — ใช้กับ Trend + ยอดใช้ =====
+// จ่ายออก (paper_outflows) ไม่มีราคา/โครงการ → ต้อง lookup จาก invoice ที่ผูกไว้
+let _invMetaCache = null;
+let _invMetaAt = 0;
+async function getInvoiceMeta() {
+  if (_invMetaCache && Date.now() - _invMetaAt < 10 * 60 * 1000) return _invMetaCache;
+  const rows = await fetchAllRows(() => supabase.from('paper_invoices')
+    .select('id, paper_lot_normalized, supplier, paper_type, project_code, price_per_kg'));
+  const byId = new Map(), byLot = new Map();
+  for (const r of (rows || [])) {
+    byId.set(r.id, r);
+    if (r.paper_lot_normalized) byLot.set(r.paper_lot_normalized, r);
+  }
+  _invMetaCache = { byId, byLot };
+  _invMetaAt = Date.now();
+  return _invMetaCache;
+}
+const NO_PROJECT = '__NONE__';
+function projKey(p) { return (p && String(p).trim()) ? String(p).trim() : NO_PROJECT; }
+function projLabel(p) { return p === NO_PROJECT ? '(ไม่มีโครงการ)' : p; }
+function sortProj(a, b) { return a === NO_PROJECT ? 1 : b === NO_PROJECT ? -1 : a.localeCompare(b); }
+
+// เติม <select> โดยคงค่าที่เลือกไว้ (ถ้ายังมีอยู่)
+function fillSelect(sel, allLabel, values, labelFn = v => v) {
+  if (!sel) return 'all';
+  const cur = sel.value;
+  sel.innerHTML = `<option value="all">${allLabel}</option>` +
+    values.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(labelFn(v))}</option>`).join('');
+  sel.value = values.includes(cur) ? cur : 'all';
+  return sel.value;
+}
+// มูลค่า (฿) ดูได้เฉพาะ manager — ตัด option ออกสำหรับ staff
+function enforceMoneyUnit(sel) {
+  if (!sel || isManager()) return;
+  const opt = sel.querySelector('option[value="value"]');
+  if (opt) opt.remove();
+}
+function fmtBahtShort(v) {
+  const a = Math.abs(v);
+  if (a >= 1e6) return '฿' + (v / 1e6).toFixed(2) + 'M';
+  if (a >= 1e3) return '฿' + Math.round(v / 1e3).toLocaleString() + 'K';
+  return '฿' + Math.round(v).toLocaleString();
+}
+
 async function loadTrend() {
   const myToken = newRequestToken('trend');
   const ctx = document.getElementById('trendChart');
@@ -3637,105 +3697,107 @@ async function loadTrend() {
     const start = startOfMonth(months[0]);
     const end = endOfMonth(months[months.length - 1]);
 
-    const supFilter = $('#trend-supplier')?.value || 'all';
+    enforceMoneyUnit($('#trend-unit'));
+    const unit = (isManager() && $('#trend-unit')?.value === 'value') ? 'value' : 'kg';
 
     const today = asOfInfo(currentMonth).cap;
 
     // รับเข้า: ใช้ effDate แบบเดียวกับตาราง Pivot (SCG = invoice_date, เจ้าอื่น = receive_date)
     // จึงต้องดึงทั้ง (receive_date ในช่วง) และ (SCG ที่ invoice_date ในช่วง) แล้ว merge
-    const [insMain, insScg] = await Promise.all([
-      fetchAllRows(() => supabase.from('paper_invoices')
-        .select('id, weight_kg, receive_date, invoice_date, supplier')
+    const INV_COLS = 'id, weight_kg, receive_date, invoice_date, supplier, paper_type, project_code, price_per_kg';
+    const [insMain, insScg, outs, stockRows, meta] = await Promise.all([
+      fetchAllRows(() => supabase.from('paper_invoices').select(INV_COLS)
         .gte('receive_date', start).lte('receive_date', end)),
-      fetchAllRows(() => supabase.from('paper_invoices')
-        .select('id, weight_kg, receive_date, invoice_date, supplier')
-        .eq('supplier', 'SCG').gte('invoice_date', start).lte('invoice_date', end))
+      fetchAllRows(() => supabase.from('paper_invoices').select(INV_COLS)
+        .eq('supplier', 'SCG').gte('invoice_date', start).lte('invoice_date', end)),
+      // จ่ายออก: ดึง paper_invoice_id มาด้วย เพื่อนับเฉพาะม้วนที่ผูก invoice (เหมือน Pivot)
+      fetchAllRows(() => supabase
+        .from('paper_outflows').select('weight_kg, outflow_date, supplier_name, paper_type, paper_invoice_id')
+        .gte('outflow_date', start).lte('outflow_date', end).eq('voided', false)),
+      // Stock ณ สิ้นเดือนที่เลือก (มี supplier/ประเภท/โครงการ/ราคา) — จุดเริ่มย้อนคำนวณ Net stock
+      fetchStockAsOf(currentMonth),
+      getInvoiceMeta()
     ]);
     if (!isRequestStillCurrent('trend', myToken)) return;
+
+    // แปลงทุกแหล่งเป็นรูปแบบเดียวกัน: { sup, proj, type, kg, price, month }
     const _seenInv = new Set();
-    const ins = [];
+    const insN = [];
     for (const r of [...(insMain || []), ...(insScg || [])]) {
       if (_seenInv.has(r.id)) continue;
       _seenInv.add(r.id);
-      ins.push(r);
+      const effDate = (r.supplier === 'SCG' && r.invoice_date) ? r.invoice_date : (r.receive_date || '');
+      if (!effDate || effDate > today) continue;   // ไม่นับบิลล่วงหน้า
+      insN.push({ sup: r.supplier, proj: projKey(r.project_code), type: r.paper_type || '(ไม่ระบุ)',
+                  kg: parseFloat(r.weight_kg) || 0, price: parseFloat(r.price_per_kg) || 0,
+                  month: effDate.slice(0, 7) });
     }
-
-    // จ่ายออก: ดึง paper_invoice_id มาด้วย เพื่อนับเฉพาะม้วนที่ผูก invoice (เหมือน Pivot)
-    const outs = await fetchAllRows(() => supabase
-      .from('paper_outflows').select('weight_kg, outflow_date, supplier_name, paper_invoice_id')
-      .gte('outflow_date', start).lte('outflow_date', end).eq('voided', false));
-    if (!isRequestStillCurrent('trend', myToken)) return;
-    
-    // ใช้ Net stock จริงปัจจุบัน เป็นจุดเริ่ม (เป๊ะที่จุดล่าสุด)
-    // กราฟจะใช้สูตร: stock_end_of_M = stock_end_of_(M+1) − in_(M+1) + out_(M+1)
-    // (ย้อนคำนวณจากสต๊อกจริงล่าสุด)
-    const stockNow = await fetchAllRows(() => supabase
-      .from('current_stock_invoices').select('computed_remaining_kg, supplier')
-      .eq('computed_status', 'in_stock'));
-    if (!isRequestStillCurrent('trend', myToken)) return;
-
-    // เติม dropdown supplier (รวมจากทั้งรับเข้า/จ่ายออก) คงค่าที่เลือกไว้
-    const supSet = new Set();
-    (ins || []).forEach(r => { if (r.supplier) supSet.add(r.supplier); });
-    (outs || []).forEach(r => { if (r.supplier_name) supSet.add(r.supplier_name); });
-    const supSel = $('#trend-supplier');
-    if (supSel) {
-      const sorted = [...supSet].sort();
-      const cur = supSel.value;
-      supSel.innerHTML = '<option value="all">ทุก Supplier</option>' +
-        sorted.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
-      supSel.value = sorted.includes(cur) ? cur : 'all';
+    const outsN = [];
+    for (const r of (outs || [])) {
+      if (!r.paper_invoice_id) continue;   // ข้าม pre_stock/ไม่ผูก invoice (เหมือน Pivot)
+      const inv = meta.byId.get(r.paper_invoice_id);
+      outsN.push({ sup: r.supplier_name, proj: projKey(inv?.project_code),
+                   type: inv?.paper_type || r.paper_type || '(ไม่ระบุ)',
+                   kg: parseFloat(r.weight_kg) || 0, price: parseFloat(inv?.price_per_kg) || 0,
+                   month: (r.outflow_date || '').slice(0, 7) });
     }
+    const stockN = (stockRows || []).map(r => ({
+      sup: r.supplier, proj: projKey(r.project_code), type: r.paper_type || '(ไม่ระบุ)',
+      kg: parseFloat(r.computed_remaining_kg) || 0, price: parseFloat(r.price_per_kg) || 0 }));
+    const allN = [...insN, ...outsN, ...stockN];
 
-    // filter ตาม supplier ที่เลือก
-    const insF   = supFilter === 'all' ? (ins || [])   : (ins || []).filter(r => r.supplier === supFilter);
-    const outsF  = supFilter === 'all' ? (outs || [])  : (outs || []).filter(r => r.supplier_name === supFilter);
-    const stockF = supFilter === 'all' ? (stockNow || []) : (stockNow || []).filter(r => r.supplier === supFilter);
+    // dropdown แบบ cascade: Supplier → โครงการ → ประเภท (คงค่าที่เลือกไว้)
+    const supFilter = fillSelect($('#trend-supplier'), 'ทุก Supplier',
+      [...new Set(allN.map(r => r.sup).filter(Boolean))].sort());
+    const bySup = allN.filter(r => supFilter === 'all' || r.sup === supFilter);
+    const projFilter = fillSelect($('#trend-project'), 'ทุกโครงการ',
+      [...new Set(bySup.map(r => r.proj))].sort(sortProj), projLabel);
+    const byProj = bySup.filter(r => projFilter === 'all' || r.proj === projFilter);
+    const typeFilter = fillSelect($('#trend-type'), 'ทุกประเภท',
+      [...new Set(byProj.map(r => r.type))].sort());
 
-    const currentStock = stockF.reduce((s, r) => s + parseFloat(r.computed_remaining_kg || 0), 0);
-    
+    const keep = r => (supFilter === 'all' || r.sup === supFilter)
+                   && (projFilter === 'all' || r.proj === projFilter)
+                   && (typeFilter === 'all' || r.type === typeFilter);
+    const metric = r => unit === 'value' ? r.kg * r.price : r.kg;
+
+    const currentStock = stockN.filter(keep).reduce((s, r) => s + metric(r), 0);
+
     const monthMap = new Map();
     for (const m of months) monthMap.set(m, { in: 0, out: 0 });
-    // รับเข้า: bucket ด้วย effDate (SCG=invoice_date, อื่น=receive_date) + ไม่นับบิลล่วงหน้า (cap วันนี้)
-    for (const r of insF) {
-      const effDate = (r.supplier === 'SCG' && r.invoice_date) ? r.invoice_date : (r.receive_date || '');
-      if (!effDate || effDate > today) continue;
-      const m = effDate.slice(0, 7);
-      if (monthMap.has(m)) monthMap.get(m).in += parseFloat(r.weight_kg || 0);
-    }
-    // จ่ายออก: นับเฉพาะม้วนที่ผูก invoice (ข้าม pre_stock/ไม่ผูก invoice) เหมือน Pivot
-    for (const r of outsF) {
-      if (!r.paper_invoice_id) continue;
-      const m = (r.outflow_date || '').slice(0, 7);
-      if (monthMap.has(m)) monthMap.get(m).out += parseFloat(r.weight_kg || 0);
-    }
-    
+    for (const r of insN.filter(keep))  if (monthMap.has(r.month)) monthMap.get(r.month).in  += metric(r);
+    for (const r of outsN.filter(keep)) if (monthMap.has(r.month)) monthMap.get(r.month).out += metric(r);
+
     const dataIn = months.map(m => Math.round(monthMap.get(m).in));
     const dataOut = months.map(m => Math.round(monthMap.get(m).out));
-    
+
+    const uLbl = unit === 'value' ? '฿' : 'kg';
+    const fmtTip = v => unit === 'value' ? '฿' + v.toLocaleString() : v.toLocaleString() + ' kg';
+    const fmtTick = v => unit === 'value' ? fmtBahtShort(v) : v.toLocaleString();
+
     if (!isRequestStillCurrent('trend', myToken)) return;
-    
+
     if (trendChart) trendChart.destroy();
     trendChart = new Chart(ctx, {
       type: 'bar',
       data: {
         labels: months,
         datasets: [
-          { label: 'รับเข้า (kg)', data: dataIn, backgroundColor: 'rgba(22, 163, 74, 0.7)', borderColor: 'rgb(22, 163, 74)', borderWidth: 1 },
-          { label: 'จ่ายออก (kg)', data: dataOut, backgroundColor: 'rgba(220, 38, 38, 0.7)', borderColor: 'rgb(220, 38, 38)', borderWidth: 1 }
+          { label: `รับเข้า (${uLbl})`, data: dataIn, backgroundColor: 'rgba(22, 163, 74, 0.7)', borderColor: 'rgb(22, 163, 74)', borderWidth: 1 },
+          { label: `จ่ายออก (${uLbl})`, data: dataOut, backgroundColor: 'rgba(220, 38, 38, 0.7)', borderColor: 'rgb(220, 38, 38)', borderWidth: 1 }
         ]
       },
       options: {
         responsive: true, maintainAspectRatio: false,
         plugins: {
           legend: { position: 'top' },
-          tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.raw.toLocaleString()} kg` } }
+          tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fmtTip(c.raw)}` } }
         },
-        scales: { y: { beginAtZero: true, ticks: { callback: v => v.toLocaleString() } } }
+        scales: { y: { beginAtZero: true, ticks: { callback: fmtTick } } }
       }
     });
-    
-    // Reverse: เริ่มจาก current stock (เดือนล่าสุด) → ย้อนกลับไป
+
+    // Reverse: เริ่มจาก stock ณ สิ้นเดือนที่เลือก → ย้อนกลับไป
     // stock_end_of_M = stock_end_of_(M+1) − in_(M+1) + out_(M+1)
     const cumNet = new Array(months.length);
     let running = currentStock;
@@ -3744,18 +3806,18 @@ async function loadTrend() {
       const m = months[i];
       running = running - monthMap.get(m).in + monthMap.get(m).out;
     }
-    
+
     if (cumulativeChart) cumulativeChart.destroy();
     cumulativeChart = new Chart(ctx2, {
       type: 'line',
       data: {
         labels: months,
-        datasets: [{ label: 'Net stock สะสม (kg)', data: cumNet, borderColor: 'rgb(37, 99, 235)', backgroundColor: 'rgba(37, 99, 235, 0.1)', tension: 0.3, fill: true }]
+        datasets: [{ label: `Net stock สะสม (${uLbl})`, data: cumNet, borderColor: 'rgb(37, 99, 235)', backgroundColor: 'rgba(37, 99, 235, 0.1)', tension: 0.3, fill: true }]
       },
       options: {
         responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.raw.toLocaleString()} kg` } } },
-        scales: { y: { ticks: { callback: v => v.toLocaleString() } } }
+        plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fmtTip(c.raw)}` } } },
+        scales: { y: { ticks: { callback: fmtTick } } }
       }
     });
   } catch (err) { console.error('Trend error:', err); }
@@ -5665,7 +5727,14 @@ let _usageCache = null;
 let _usageCacheMonth = null;
 let _usageChart = null;
 let _usageSupplierFilter = new Set();  // ว่าง = แสดงทุก supplier
-let _usageStockPivot = null;  // Map: sup -> Map: typ -> Map: wid -> { rolls, kg } (current in_stock)
+let _usageStockPivot = null;  // Map: sup -> Map: typ -> Map: wid -> { rolls, kg, value } (current in_stock)
+let _usageStockRows = null;   // stock rows ดิบ (ใช้สร้าง pivot ใหม่ตาม filter โครงการ)
+
+// อ่านค่าจาก cell ตามหน่วยที่เลือก
+function usagePick(cell, unit) {
+  if (!cell) return 0;
+  return unit === 'kg' ? cell.kg : unit === 'value' ? (cell.value || 0) : cell.rolls;
+}
 
 // สร้าง pivot ของ stock คงเหลือปัจจุบัน (supplier > type > width) จาก current_stock_invoices
 function buildUsageStockPivot(stockRows) {
@@ -5675,15 +5744,17 @@ function buildUsageStockPivot(stockRows) {
     const typ = r.paper_type || '(ไม่ระบุ)';
     const wid = r.width_mm ? `${r.width_mm}` : '(ไม่ระบุ)';
     const remaining = Number(r.computed_remaining_kg) || 0;
+    const price = Number(r.price_per_kg) || 0;
     
     if (!pivot.has(sup)) pivot.set(sup, new Map());
     const supMap = pivot.get(sup);
     if (!supMap.has(typ)) supMap.set(typ, new Map());
     const typMap = supMap.get(typ);
-    if (!typMap.has(wid)) typMap.set(wid, { rolls: 0, kg: 0 });
+    if (!typMap.has(wid)) typMap.set(wid, { rolls: 0, kg: 0, value: 0 });
     const cell = typMap.get(wid);
     cell.rolls++;
     cell.kg += remaining;
+    cell.value += remaining * price;
   }
   return pivot;
 }
@@ -5694,7 +5765,7 @@ function usageStockForType(sup, typ, unit) {
   const typMap = supMap && supMap.get(typ);
   if (!typMap) return 0;
   let total = 0;
-  for (const [, cell] of typMap) total += (unit === 'kg' ? cell.kg : cell.rolls);
+  for (const [, cell] of typMap) total += usagePick(cell, unit);
   return total;
 }
 
@@ -5703,8 +5774,7 @@ function usageStockForWidth(sup, typ, wid, unit) {
   const supMap = _usageStockPivot && _usageStockPivot.get(sup);
   const typMap = supMap && supMap.get(typ);
   const cell = typMap && typMap.get(wid);
-  if (!cell) return 0;
-  return unit === 'kg' ? cell.kg : cell.rolls;
+  return usagePick(cell, unit);
 }
 
 // รวม stock ปัจจุบันของทุก type ที่แสดงอยู่ใต้ supplier หนึ่ง (จำกัดเฉพาะ type ที่ปรากฏใน pivot การใช้งาน)
@@ -5720,19 +5790,35 @@ async function loadUsageTab() {
     $('#usage-table-wrap').innerHTML = '<div class="loading-state"><span class="loading"></span> โหลดข้อมูล...</div>';
     try {
       // โหลด outflows ที่ไม่ voided + stock คงเหลือปัจจุบัน พร้อมกัน
-      const [outs, stockRows] = await Promise.all([
+      const [outs, stockRows, meta] = await Promise.all([
         fetchAllRows(() => supabase
           .from('paper_outflows')
-          .select('paper_invoice_id, weight_kg, outflow_date, supplier_name, paper_type, width_mm, voided')
+          .select('paper_invoice_id, paper_lot_normalized, weight_kg, outflow_date, supplier_name, paper_type, width_mm, voided')
           .eq('voided', false)
           .lte('outflow_date', asOfInfo(currentMonth).cap)),
-        fetchStockAsOf(currentMonth)
+        fetchStockAsOf(currentMonth),
+        getInvoiceMeta()
       ]);
       if (!isRequestStillCurrent('usage', myToken)) return;
       
-      _usageCache = (outs || []).filter(o => o.outflow_date);
+      // ผูกราคา + โครงการ จาก invoice (ผูกด้วย id ก่อน, ไม่มีค่อยใช้ lot)
+      _usageCache = (outs || []).filter(o => o.outflow_date).map(o => {
+        const inv = (o.paper_invoice_id && meta.byId.get(o.paper_invoice_id))
+                 || (o.paper_lot_normalized && meta.byLot.get(o.paper_lot_normalized))
+                 || null;
+        return Object.assign(o, {
+          _price: inv ? (parseFloat(inv.price_per_kg) || 0) : 0,
+          _proj: projKey(inv?.project_code),
+        });
+      });
       _usageCacheMonth = currentMonth;
-      _usageStockPivot = buildUsageStockPivot(stockRows);
+      _usageStockRows = (stockRows || []).map(r => Object.assign({}, r, { _proj: projKey(r.project_code) }));
+      _usageStockPivot = buildUsageStockPivot(_usageStockRows);
+      
+      // dropdown โครงการ (จากทั้งยอดใช้และ stock)
+      const projVals = [...new Set([..._usageCache.map(o => o._proj), ..._usageStockRows.map(r => r._proj)])].sort(sortProj);
+      fillSelect($('#usage-project'), 'ทุกโครงการ', projVals, projLabel);
+      enforceMoneyUnit($('#usage-unit'));
     } catch (err) {
       $('#usage-table-wrap').innerHTML = `<div class="loading-state" style="color:var(--danger);">❌ ${escapeHtml(err.message)}</div>`;
       return;
@@ -5842,9 +5928,17 @@ function _weekLabelTh(monday) {
 
 function renderUsageTable() {
   const period = $('#usage-period').value;
-  const unit = $('#usage-unit').value;
+  let unit = $('#usage-unit').value;
+  if (unit === 'value' && !isManager()) unit = 'kg';
+  const projFilter = $('#usage-project') ? $('#usage-project').value : 'all';
   const granularity = ($('#usage-granularity') ? $('#usage-granularity').value : 'month');
   const isWeek = granularity === 'week';
+  
+  // stock ปัจจุบัน — สร้าง pivot ใหม่ตามโครงการที่เลือก
+  if (_usageStockRows) {
+    _usageStockPivot = buildUsageStockPivot(
+      projFilter === 'all' ? _usageStockRows : _usageStockRows.filter(r => r._proj === projFilter));
+  }
   
   // ===== คำนวณ buckets (เดือน หรือ สัปดาห์) =====
   // months = array ของ "bucket key", monthLabels = ป้ายที่แสดง,
@@ -5894,7 +5988,8 @@ function renderUsageTable() {
   
   // กรอง supplier
   const filteredData = _usageCache.filter(o => 
-    _usageSupplierFilter.size === 0 || _usageSupplierFilter.has(o.supplier_name));
+    (_usageSupplierFilter.size === 0 || _usageSupplierFilter.has(o.supplier_name)) &&
+    (projFilter === 'all' || o._proj === projFilter));
   
   // pivot — supplier × type × width × month
   const pivot = new Map();
@@ -5912,9 +6007,10 @@ function renderUsageTable() {
     const typMap = supMap.get(typ);
     if (!typMap.has(wid)) typMap.set(wid, {});
     const cell = typMap.get(wid);
-    if (!cell[m]) cell[m] = { rolls: 0, kg: 0 };
+    if (!cell[m]) cell[m] = { rolls: 0, kg: 0, value: 0 };
     cell[m].rolls++;
     cell[m].kg += Number(o.weight_kg) || 0;
+    cell[m].value += (Number(o.weight_kg) || 0) * (o._price || 0);
   }
   
   // เติมแถวของ supplier/ประเภท/หน้ากว้าง ที่ "มีของในคลัง แต่ไม่เคยถูกตัดในช่วงที่ดู"
@@ -5953,13 +6049,13 @@ function renderUsageTable() {
       const typTotalsByMonth = {};
       for (const [wid, cell] of typMap) {
         for (const m of months) {
-          const v = cell[m] ? (unit === 'kg' ? cell[m].kg : cell[m].rolls) : 0;
+          const v = usagePick(cell[m], unit);
           typTotalsByMonth[m] = (typTotalsByMonth[m] || 0) + v;
         }
         // width-level max
         let widMax = 0;
         for (const m of months) {
-          const v = cell[m] ? (unit === 'kg' ? cell[m].kg : cell[m].rolls) : 0;
+          const v = usagePick(cell[m], unit);
           if (v > widMax) widMax = v;
         }
         rowMaxMap.set(`${sup}::${typ}::${wid}`, widMax);
@@ -6010,7 +6106,7 @@ function renderUsageTable() {
       const typeMonthVals = months.map(m => {
         let total = 0;
         for (const [wid, cell] of typMap) {
-          if (cell[m]) total += (unit === 'kg' ? cell[m].kg : cell[m].rolls);
+          total += usagePick(cell[m], unit);
         }
         return total;
       });
@@ -6051,7 +6147,7 @@ function renderUsageTable() {
           
           for (let i = 0; i < months.length; i++) {
             const mc = cell[months[i]];
-            const v = mc ? (unit === 'kg' ? mc.kg : mc.rolls) : 0;
+            const v = usagePick(mc, unit);
             const intensity = widRowMax > 0 ? (v / widRowMax) : 0;
             const bgColor = heatColor(intensity);
             const textColor = heatTextColor(intensity);
@@ -6178,10 +6274,14 @@ function renderUsageChart(labels, values, unit) {
   
   // ถ้าหน่วย kg → แปลงเป็น tons (หาร 1000)
   // ถ้าหน่วยม้วน → แสดงตามจริง
+  // มูลค่า → แสดงเป็นล้านบาท
   const isKg = unit === 'kg';
-  const chartValues = isKg ? values.map(v => Math.round(v / 1000 * 100) / 100) : values.map(v => Math.round(v));
-  const labelText = isKg ? 'น้ำหนัก (Tons)' : 'จำนวนม้วน';
-  const unitSuffix = isKg ? ' Tons' : ' ม้วน';
+  const isVal = unit === 'value';
+  const chartValues = isKg  ? values.map(v => Math.round(v / 1000 * 100) / 100)
+                    : isVal ? values.map(v => Math.round(v / 1e6 * 100) / 100)
+                    : values.map(v => Math.round(v));
+  const labelText = isKg ? 'น้ำหนัก (Tons)' : isVal ? 'มูลค่า (ล้านบาท)' : 'จำนวนม้วน';
+  const unitSuffix = isKg ? ' Tons' : isVal ? ' ล้านบาท' : ' ม้วน';
   
   // Custom plugin สำหรับวาดเลขบน bar
   const dataLabelPlugin = {
@@ -6199,7 +6299,9 @@ function renderUsageChart(labels, values, unit) {
         meta.data.forEach((bar, idx) => {
           const value = dataset.data[idx];
           if (value > 0) {
-            const display = isKg ? value.toLocaleString('en-US', { maximumFractionDigits: 1 }) : value.toLocaleString();
+            const display = isKg ? value.toLocaleString('en-US', { maximumFractionDigits: 1 })
+                          : isVal ? value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                          : value.toLocaleString();
             ctx.fillText(display, bar.x, bar.y - 6);
           }
         });
@@ -6235,7 +6337,7 @@ function renderUsageChart(labels, values, unit) {
         y: { 
           beginAtZero: true, 
           ticks: { 
-            callback: v => v.toLocaleString() + (isKg ? ' T' : '') 
+            callback: v => v.toLocaleString() + (isKg ? ' T' : isVal ? ' M฿' : '') 
           } 
         }
       }
@@ -6487,6 +6589,8 @@ $('#btnRefresh').addEventListener('click', () => {
   _usageCache = null;
   _usageCacheMonth = null;
   _invoiceCache = null;
+  _invMetaCache = null;
+  _usageStockRows = null;
   loadActiveTab();
 });
 $('#btnPrint').addEventListener('click', openPrintModal);
@@ -6533,6 +6637,7 @@ $('#flt-paper-lots').addEventListener('keydown', e => {
 // Usage tab
 $('#usage-period').addEventListener('change', renderUsageTable);
 $('#usage-unit').addEventListener('change', renderUsageTable);
+$('#usage-project').addEventListener('change', renderUsageTable);
 $('#usage-export-csv').addEventListener('click', exportUsageCSV);
 const _usageShowStock = $('#usage-show-stock');
 if (_usageShowStock) {
@@ -6540,8 +6645,10 @@ if (_usageShowStock) {
     $('#usage-table-wrap').classList.toggle('usage-hide-stock-col', !_usageShowStock.checked);
   });
 }
-const _trendSup = $('#trend-supplier');
-if (_trendSup) _trendSup.addEventListener('change', loadTrend);
+for (const id of ['#trend-supplier', '#trend-project', '#trend-type', '#trend-unit']) {
+  const el = $(id);
+  if (el) el.addEventListener('change', loadTrend);
+}
 const _usageGran = $('#usage-granularity');
 if (_usageGran) _usageGran.addEventListener('change', () => {
   const sel = $('#usage-period');
