@@ -2298,8 +2298,9 @@ function scgCoaHeaderToField(raw) {
   // Caliper (μm) → "caliperm"   |  Caliper (mm) / Thickness (mm) → ×1000 เป็น μm
   if (h.startsWith('caliper') || h.startsWith('thickness'))
     return h.endsWith('mm') ? { key: 'caliper', mult: 1000 } : { key: 'caliper' };
-  // Plybond หน่วย kg.f ไม่ใช่ J/m² → ห้ามใส่ column plybond (จะเพี้ยนกราฟ) → เก็บ raw
-  if (h.startsWith('plybond'))      return h.includes('kgf') ? null : { key: 'plybond' };
+  // Plybond หน่วย kg.f (แรงดึง) ≠ J/m² (พลังงาน) → แยกเป็น plybond_kgf ห้ามปนกับ plybond
+  if (h.startsWith('plybond'))      return h.includes('kgf') ? { key: 'plybond_kgf' } : { key: 'plybond' };
+  if (h.startsWith('compression') && h.includes('md') && h.includes('kgf')) return { key: 'compression_md_kgf' };
   let m = h.match(/^(tear|tensile|stretch)(md|cd)/);
   if (m) return { key: `${m[1]}_${m[2]}` };
   if (h.startsWith('cobb')) {
@@ -2323,6 +2324,7 @@ const SCG_QA_FIELDS = [
   'cobb_top', 'cobb_bottom', 'cobb_ts2', 'cobb_bs2', 'cobb_ts30',
   'caliper', 'tear_md', 'tear_cd', 'tensile_md', 'tensile_cd',
   'stretch_md', 'stretch_cd', 'moisture',
+  'plybond_kgf', 'compression_md_kgf',   // MOG (หน่วย kg.f — แยกจาก plybond J/m²)
 ];
 
 function parseSCG_COA(rows, sheetName) {

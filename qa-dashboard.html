@@ -549,6 +549,8 @@
             <option value="tensile_cd">Tensile CD (kN/m)</option>
             <option value="stretch_md">Stretch MD (%)</option>
             <option value="stretch_cd">Stretch CD (%)</option>
+            <option value="plybond_kgf">Plybond แรงดึง (kg.f) — MOG</option>
+            <option value="compression_md_kgf">Compression MD (kg.f) — MOG</option>
             <option value="moisture">Moisture (%)</option>
           </select>
         </div>
@@ -954,6 +956,8 @@
             <option value="tensile_cd">Tensile CD (kN/m)</option>
             <option value="stretch_md">Stretch MD (%)</option>
             <option value="stretch_cd">Stretch CD (%)</option>
+            <option value="plybond_kgf">Plybond แรงดึง (kg.f) — MOG</option>
+            <option value="compression_md_kgf">Compression MD (kg.f) — MOG</option>
             <option value="moisture">Moisture (%)</option>
           </select>
         </div>
@@ -1382,6 +1386,8 @@ const PARAMS = {
   tensile_cd:   { label: 'Tensile CD',   unit: 'kN/m' },
   stretch_md:   { label: 'Stretch MD',   unit: '%'  },
   stretch_cd:   { label: 'Stretch CD',   unit: '%'  },
+  plybond_kgf:        { label: 'Plybond (แรงดึง)',   unit: 'kg.f' },
+  compression_md_kgf: { label: 'Compression MD',    unit: 'kg.f' },
   moisture:     { label: 'Moisture',     unit: '%'  },
 };
 
@@ -3310,7 +3316,9 @@ function mapCoaHeader(raw) {
   if (h.startsWith('moisture'))     return { key: 'moisture' };
   if (h.startsWith('caliper') || h.startsWith('thickness'))
     return h.endsWith('mm') ? { key: 'caliper', mult: 1000 } : { key: 'caliper' };
-  if (h.startsWith('plybond'))      return h.includes('kgf') ? null : { key: 'plybond' };  // kg.f ≠ J/m²
+  // Plybond kg.f = แรงดึง ≠ Plybond J/m² (พลังงาน) → แยก parameter
+  if (h.startsWith('plybond'))      return h.includes('kgf') ? { key: 'plybond_kgf' } : { key: 'plybond' };
+  if (h.startsWith('compression') && h.includes('md') && h.includes('kgf')) return { key: 'compression_md_kgf' };
   const m = h.match(/^(tear|tensile|stretch)(md|cd)/);
   if (m) return { key: `${m[1]}_${m[2]}` };
   if (h.startsWith('cobb')) {
